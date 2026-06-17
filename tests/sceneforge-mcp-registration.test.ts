@@ -33,5 +33,9 @@ describe('SceneForge MCP tools', () => {
 
     expect(JSON.stringify(server.tools.get('scene_submit_stage_draft')?.def)).toContain('artifactKey');
     expect(JSON.stringify(server.tools.get('scene_submit_stage_draft')?.def)).not.toContain('"path"');
+
+    const stageContextDef = JSON.stringify(server.tools.get('scene_get_stage_context')?.def);
+    expect(stageContextDef).toContain('runner');
+    expect(stageContextDef).toContain('selectedAssetIds');
   });
 });

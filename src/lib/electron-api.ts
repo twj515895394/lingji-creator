@@ -31,6 +31,7 @@ import type {
   UserPromptSeed,
 } from './prompts';
 import type { SceneApprovalPolicy, SceneArtifactDisplayModel, SceneStageId } from '../types/sceneforge';
+import type { SceneGetStageContextOptions } from '../../electron/sceneforge/scene-ipc-types';
 import type {
   SceneProjectState,
   SceneStageContext,
@@ -40,6 +41,8 @@ import type {
 import type { SceneArtifact } from '../../electron/sceneforge/artifacts/scene-artifact-store';
 import type { SceneValidationResult } from '../../electron/sceneforge/validators/scene-validator';
 import type { SceneState } from '../../electron/sceneforge/pipeline/scene-state-machine';
+
+export type { SceneGetStageContextOptions };
 
 export type {
   SceneProjectState,
@@ -331,6 +334,7 @@ export interface ElectronAPI {
   sceneGetStageContext: (
     projectDir: string,
     stage: SceneStageId,
+    options?: SceneGetStageContextOptions,
   ) => Promise<SceneStageContext>;
   sceneSubmitStageDraft: (
     input: SceneSubmitStageDraftInput,

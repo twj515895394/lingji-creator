@@ -1,6 +1,7 @@
 import { ipcMain } from 'electron';
 import { SceneForgeService, type SceneSubmitStageDraftInput } from './service';
 import type { SceneApprovalPolicy, SceneStageId } from './types';
+import type { SceneGetStageContextOptions } from './scene-ipc-types';
 
 const service = new SceneForgeService();
 
@@ -15,8 +16,13 @@ export function registerSceneForgeIpc(): void {
 
   ipcMain.handle(
     'sceneforge:get-stage-context',
-    async (_event, projectDir: string, stage: SceneStageId) => {
-      return service.getStageContext(projectDir, stage);
+    async (
+      _event,
+      projectDir: string,
+      stage: SceneStageId,
+      options?: SceneGetStageContextOptions,
+    ) => {
+      return service.getStageContext(projectDir, stage, options);
     },
   );
 

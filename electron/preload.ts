@@ -135,8 +135,11 @@ contextBridge.exposeInMainWorld('electronAPI', {
     ipcRenderer.invoke('create-scene-forge-project', projectDir),
   sceneGetProjectState: (projectDir: string) =>
     ipcRenderer.invoke('sceneforge:get-project-state', projectDir),
-  sceneGetStageContext: (projectDir: string, stage: string) =>
-    ipcRenderer.invoke('sceneforge:get-stage-context', projectDir, stage),
+  sceneGetStageContext: (
+    projectDir: string,
+    stage: string,
+    options?: import('../src/lib/electron-api').SceneGetStageContextOptions,
+  ) => ipcRenderer.invoke('sceneforge:get-stage-context', projectDir, stage, options),
   sceneSubmitStageDraft: (input: import('../src/lib/electron-api').SceneSubmitStageDraftInput) =>
     ipcRenderer.invoke('sceneforge:submit-stage-draft', input),
   sceneValidateStage: (projectDir: string, stage: string) =>

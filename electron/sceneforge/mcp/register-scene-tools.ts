@@ -53,11 +53,24 @@ export function registerSceneForgeMcpTools(server: McpServer): void {
       inputSchema: {
         projectDir: z.string().describe('SceneForge 项目目录'),
         stage: z.enum(['design', 'storyboard', 'video_prompts', 'export']),
+        runner: z
+          .enum(['manual_submit', 'direct_llm', 'acp_agent'])
+          .optional()
+          .describe('执行方式，用于应用 context-policy runnerOverrides'),
+        selectedAssetIds: z
+          .array(z.string())
+          .optional()
+          .describe('资产库选中 id（如 style.pixar_like）'),
       },
     },
-    async ({ projectDir, stage }) => {
+    async ({ projectDir, stage, runner, selectedAssetIds }) => {
       try {
-        return jsonResult(await service.getStageContext(projectDir, stage));
+        return jsonResult(
+          await service.getStageContext(projectDir, stage, {
+            runner,
+            selectedAssetIds,
+          }),
+        );
       } catch (error) {
         return errorResult(error);
       }
