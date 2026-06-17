@@ -1,0 +1,18 @@
+version: 1
+stage: design
+artifacts:
+  - artifactKey: master_reference_prompt
+    maxChars: 12000
+  - artifactKey: character_prompts
+    maxChars: 12000
+  - artifactKey: scene_prompts
+    maxChars: 8000
+  - artifactKey: design_prompts
+    maxChars: 8000
+  - artifactKey: prop_prompts
+    maxChars: 6000
+downstreamNotes:
+  storyboard:
+    continuityHint: design_master_and_characters_for_storyboard
+  video_prompts:
+    continuityHint: design_master_summary_for_video

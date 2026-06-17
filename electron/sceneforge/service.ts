@@ -11,6 +11,10 @@ import {
   setSceneApprovalPolicy,
 } from './pipeline/scene-approval-policy';
 import {
+  listHandoffCapableStages,
+  writeSceneStageHandoff,
+} from './pipeline/scene-handoff-writer';
+import {
   buildSceneStageContext,
   type BuildSceneStageContextOptions,
   type SceneStageContext,
@@ -167,6 +171,17 @@ function assertDraftArtifactKey(stage: SceneStageId, artifactKey: string): void 
   }
 }
 
+async function writeHandoffIfCapable(projectDir: string, stage: SceneStageId): Promise<void> {
+  if (!listHandoffCapableStages().includes(stage)) {
+    return;
+  }
+  try {
+    await writeSceneStageHandoff(projectDir, stage);
+  } catch {
+    // Handoff is best-effort until templates cover all approved stages.
+  }
+}
+
 export class SceneForgeService {
   async createProject(projectDir: string) {
     return createSceneForgeProject(projectDir);
@@ -223,7 +238,10 @@ export class SceneForgeService {
       return validation;
     }
     const policy = await resolveSceneApprovalPolicy(projectDir, stage);
-    await markSceneStageValidated(projectDir, stage, policy);
+    const state = await markSceneStageValidated(projectDir, stage, policy);
+    if (policy === 'auto_if_valid') {
+      await writeHandoffIfCapable(projectDir, stage);
+    }
     return validation;
   }
 
@@ -280,7 +298,9 @@ export class SceneForgeService {
   }
 
   async approveStage(projectDir: string, stage: SceneStageId) {
-    return approveSceneStage(projectDir, stage);
+    const state = await approveSceneStage(projectDir, stage);
+    await writeHandoffIfCapable(projectDir, stage);
+    return state;
   }
 
   async requestRevision(projectDir: string, stage: SceneStageId, note: string) {

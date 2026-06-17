@@ -93,8 +93,10 @@ describe('SceneForge Stage Context', () => {
       'performance.performance_direction',
     ]);
     expect(context.requiredInputs.find((i) => i.artifactId === 'design.prop_prompts')).toBeUndefined();
-    expect(context.warnings.length).toBeGreaterThan(0);
-    expect(context.warnings.some((w) => w.startsWith('handoff_missing_fallback'))).toBe(true);
+    const masterInput = context.requiredInputs.find(
+      (i) => i.artifactId === 'design.master_reference_prompt',
+    );
+    expect(masterInput?.source).toBe('handoff');
   });
 
   it('video prompts context follows policy without nine full core artifacts', async () => {

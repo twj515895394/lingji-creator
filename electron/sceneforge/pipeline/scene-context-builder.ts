@@ -1,4 +1,3 @@
-import fs from 'node:fs/promises';
 import path from 'node:path';
 import type { SceneStageId } from '../types';
 import type { SceneArtifact } from '../artifacts/scene-artifact-store';
@@ -9,6 +8,12 @@ import {
 import { buildSceneArtifactDisplayModel } from '../artifacts/scene-artifact-display-model';
 import { resolveSceneAssetsForStage, type SceneAssetSnippet } from '../assets/scene-asset-library';
 import { getSceneStageDefinition } from './scene-stage-definitions';
+import {
+  extractHandoffSliceContent,
+  readSceneStageHandoff,
+  sceneHandoffRelativePath,
+  type SceneHandoffDocument,
+} from './scene-handoff-writer';
 import {
   loadDefaultSceneContextPolicy,
   loadSceneContextPolicy,
@@ -78,24 +83,6 @@ function isCoreUpstreamStage(stage: SceneStageId): boolean {
   return CORE_UPSTREAM_STAGES.includes(stage);
 }
 
-function handoffPathForStage(fromStage: SceneStageId): string {
-  return path.posix.join('sceneforge', 'handoffs', `${fromStage}.handoff.json`);
-}
-
-async function readHandoffFile(
-  projectDir: string,
-  fromStage: SceneStageId,
-): Promise<Record<string, unknown> | null> {
-  const relativePath = handoffPathForStage(fromStage);
-  const absolute = path.join(projectDir, relativePath);
-  try {
-    const raw = await fs.readFile(absolute, 'utf8');
-    return JSON.parse(raw) as Record<string, unknown>;
-  } catch {
-    return null;
-  }
-}
-
 function isForbidden(
   policy: SceneContextPolicyDocument,
   fromStage: SceneStageId,
@@ -154,9 +141,10 @@ async function resolveArtifactSummary(
 async function resolveDeliveryContent(
   projectDir: string,
   artifact: SceneArtifact,
+  artifactKey: string,
   delivery: SceneContextDelivery,
   maxChars?: number,
-  handoff: Record<string, unknown> | null = null,
+  handoff: SceneHandoffDocument | null = null,
 ): Promise<{ content: string; source: SceneContextInputSource } | null> {
   if (delivery === 'pointer') {
     return { content: '', source: 'pointer' };
@@ -166,7 +154,11 @@ async function resolveDeliveryContent(
     if (!handoff) {
       return null;
     }
-    return { content: JSON.stringify(handoff), source: 'handoff' };
+    const slice = extractHandoffSliceContent(handoff, artifactKey);
+    if (!slice) {
+      return null;
+    }
+    return { content: slice, source: 'handoff' };
   }
 
   if (delivery === 'summary') {
@@ -206,7 +198,7 @@ async function resolvePolicyInput(
     return null;
   }
 
-  const handoff = await readHandoffFile(projectDir, fromStage);
+  const handoff = await readSceneStageHandoff(projectDir, fromStage);
   let effectiveDelivery: SceneContextDelivery = policyInput.delivery;
 
   if (policyInput.delivery === 'handoff_first') {
@@ -214,7 +206,7 @@ async function resolvePolicyInput(
       effectiveDelivery = 'handoff';
       handoffRefs.push({
         fromStage,
-        relativePath: handoffPathForStage(fromStage),
+        relativePath: sceneHandoffRelativePath(fromStage),
         policyInputId,
       });
     } else if (policyInput.fallback) {
@@ -228,13 +220,27 @@ async function resolvePolicyInput(
     }
   }
 
-  const resolved = await resolveDeliveryContent(
+  let resolved = await resolveDeliveryContent(
     projectDir,
     artifact,
+    artifactKey,
     effectiveDelivery,
     policyInput.maxChars,
     handoff,
   );
+
+  if (!resolved && effectiveDelivery === 'handoff' && policyInput.fallback) {
+    effectiveDelivery = policyInput.fallback;
+    warnings.push(`handoff_slice_missing_fallback:${policyInputId}:${effectiveDelivery}`);
+    resolved = await resolveDeliveryContent(
+      projectDir,
+      artifact,
+      artifactKey,
+      effectiveDelivery,
+      policyInput.maxChars,
+      null,
+    );
+  }
   if (!resolved) {
     return null;
   }

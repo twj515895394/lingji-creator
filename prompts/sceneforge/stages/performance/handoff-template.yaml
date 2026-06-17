@@ -1,0 +1,10 @@
+version: 1
+stage: performance
+artifacts:
+  - artifactKey: performance_direction
+    maxChars: 12000
+downstreamNotes:
+  storyboard:
+    performanceSummary: from_performance_direction
+  video_prompts:
+    performanceSummary: from_performance_direction

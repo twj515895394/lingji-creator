@@ -1,0 +1,14 @@
+version: 1
+stage: storyboard
+artifacts:
+  - artifactKey: storyboard_prompt_pack
+    maxChars: 16000
+  - artifactKey: control_board_prompts
+    maxChars: 8000
+  - artifactKey: style_board_prompts
+    maxChars: 8000
+  - artifactKey: master_board_prompt
+    maxChars: 8000
+downstreamNotes:
+  video_prompts:
+    continuityHint: storyboard_pack_for_video_prompts

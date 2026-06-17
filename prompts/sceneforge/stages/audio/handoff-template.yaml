@@ -1,0 +1,10 @@
+version: 1
+stage: audio
+artifacts:
+  - artifactKey: audio_design
+    maxChars: 12000
+downstreamNotes:
+  video_prompts:
+    segmentSoundMap: []
+    packAudioExecutionSummary: from_audio_design_summary
+    continuityHooks: []
