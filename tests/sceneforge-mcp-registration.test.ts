@@ -22,6 +22,7 @@ describe('SceneForge MCP tools', () => {
     expect([...server.tools.keys()]).toEqual(expect.arrayContaining([
       'scene_get_project_state',
       'scene_get_stage_context',
+      'scene_run_stage',
       'scene_submit_stage_draft',
       'scene_validate_stage',
       'scene_approve_stage',

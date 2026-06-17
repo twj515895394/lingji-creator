@@ -31,7 +31,8 @@ import type {
   UserPromptSeed,
 } from './prompts';
 import type { SceneApprovalPolicy, SceneArtifactDisplayModel, SceneStageId } from '../types/sceneforge';
-import type { SceneGetStageContextOptions } from '../../electron/sceneforge/scene-ipc-types';
+import type { SceneGetStageContextOptions, SceneRunStageIpcInput } from '../../electron/sceneforge/scene-ipc-types';
+import type { SceneStageRunnerResult } from '../../electron/sceneforge/pipeline/scene-stage-runner';
 import type {
   SceneProjectState,
   SceneStageContext,
@@ -41,6 +42,8 @@ import type {
 import type { SceneArtifact } from '../../electron/sceneforge/artifacts/scene-artifact-store';
 import type { SceneValidationResult } from '../../electron/sceneforge/validators/scene-validator';
 import type { SceneState } from '../../electron/sceneforge/pipeline/scene-state-machine';
+
+export type SceneRunStageInput = SceneRunStageIpcInput;
 
 export type { SceneGetStageContextOptions };
 
@@ -364,6 +367,7 @@ export interface ElectronAPI {
     manifestPath: string;
     artifactIds: string[];
   }>;
+  sceneRunStage: (input: SceneRunStageInput) => Promise<SceneStageRunnerResult>;
   saveProjectSection: (projectDir: string, section: string, data: string) => Promise<void>;
   scanProjectDirectory: (
     projectDir: string,

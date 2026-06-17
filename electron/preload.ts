@@ -156,6 +156,8 @@ contextBridge.exposeInMainWorld('electronAPI', {
     ipcRenderer.invoke('sceneforge:read-artifact', projectDir, artifactId),
   sceneExportPromptPack: (projectDir: string) =>
     ipcRenderer.invoke('sceneforge:export-prompt-pack', projectDir),
+  sceneRunStage: (input: import('../src/lib/electron-api').SceneRunStageInput) =>
+    ipcRenderer.invoke('sceneforge:run-stage', input),
   saveProjectSection: (projectDir: string, section: string, data: string) =>
     ipcRenderer.invoke('save-project-section', projectDir, section, data),
   scanProjectDirectory: (projectDir: string) =>

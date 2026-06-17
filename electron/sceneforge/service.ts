@@ -21,8 +21,8 @@ import {
   type SceneStageContextInput,
   type SceneStageContextOptions,
 } from './pipeline/scene-context-builder';
+import { createDefaultSceneStageRunner } from './pipeline/scene-stage-runner-factory';
 import {
-  createSceneStageRunner,
   type SceneStageRunnerResult,
   type SceneStageRunnerType,
 } from './pipeline/scene-stage-runner';
@@ -149,6 +149,7 @@ export interface SceneRunStageInput {
   stage: SceneStageId;
   runnerType: SceneStageRunnerType;
   manualArtifacts?: Record<string, string>;
+  selectedAssetIds?: string[];
 }
 
 function getStageDraftConfig(stage: SceneStageId) {
@@ -328,9 +329,10 @@ export class SceneForgeService {
   }
 
   async runStage(input: SceneRunStageInput): Promise<SceneStageRunnerResult> {
-    const runner = createSceneStageRunner(input.runnerType);
+    const runner = createDefaultSceneStageRunner(input.runnerType);
     const stageContext = await this.getStageContext(input.projectDir, input.stage, {
       runner: input.runnerType,
+      selectedAssetIds: input.selectedAssetIds,
     });
     return runner.run({
       projectDir: input.projectDir,

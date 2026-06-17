@@ -1,7 +1,7 @@
 import { ipcMain } from 'electron';
 import { SceneForgeService, type SceneSubmitStageDraftInput } from './service';
 import type { SceneApprovalPolicy, SceneStageId } from './types';
-import type { SceneGetStageContextOptions } from './scene-ipc-types';
+import type { SceneGetStageContextOptions, SceneRunStageIpcInput } from './scene-ipc-types';
 
 const service = new SceneForgeService();
 
@@ -79,5 +79,9 @@ export function registerSceneForgeIpc(): void {
 
   ipcMain.handle('sceneforge:export-prompt-pack', async (_event, projectDir: string) => {
     return service.exportPromptPack(projectDir);
+  });
+
+  ipcMain.handle('sceneforge:run-stage', async (_event, input: SceneRunStageIpcInput) => {
+    return service.runStage(input);
   });
 }

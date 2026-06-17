@@ -1,0 +1,5 @@
+requiredArtifacts:
+  - storyboard_prompt_pack
+  - control_board_prompts
+  - style_board_prompts
+  - master_board_prompt

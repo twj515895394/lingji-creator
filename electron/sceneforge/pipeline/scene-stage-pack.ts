@@ -4,6 +4,11 @@ import YAML from 'yaml';
 import type { SceneStageId } from '../types';
 import { isSceneStageId } from './scene-stage-definitions';
 
+export interface SceneStagePackAuxiliaryPaths {
+  contextPolicyPath: string | null;
+  handoffTemplatePath: string | null;
+}
+
 export interface SceneStagePack {
   stage: SceneStageId;
   sourceDir: string;
@@ -14,6 +19,7 @@ export interface SceneStagePack {
     requiredArtifacts: string[];
   };
   reviewChecklist: string[];
+  auxiliaryPaths: SceneStagePackAuxiliaryPaths;
 }
 
 export interface SceneStagePackSummary {
@@ -55,6 +61,27 @@ function parseReviewChecklist(raw: string): string[] {
     .filter((line) => line.startsWith('- '))
     .map((line) => line.replace(/^- /, '').trim())
     .filter(Boolean);
+}
+
+async function resolveAuxiliaryPaths(sourceDir: string): Promise<SceneStagePackAuxiliaryPaths> {
+  const contextPolicy = path.join(sourceDir, 'context-policy.yaml');
+  const handoffTemplate = path.join(sourceDir, 'handoff-template.yaml');
+  const exists = async (p: string) => {
+    try {
+      await fs.access(p);
+      return true;
+    } catch {
+      return false;
+    }
+  };
+  return {
+    contextPolicyPath: (await exists(contextPolicy))
+      ? path.join('prompts', 'sceneforge', 'stages', path.basename(sourceDir), 'context-policy.yaml')
+      : null,
+    handoffTemplatePath: (await exists(handoffTemplate))
+      ? path.join('prompts', 'sceneforge', 'stages', path.basename(sourceDir), 'handoff-template.yaml')
+      : null,
+  };
 }
 
 function parseOutputContract(raw: string): { requiredArtifacts: string[] } {
@@ -99,6 +126,7 @@ export async function loadSceneStagePack(stage: SceneStageId): Promise<SceneStag
       agentInstructions,
       outputContract: parseOutputContract(outputContractRaw),
       reviewChecklist: parseReviewChecklist(reviewChecklistRaw),
+      auxiliaryPaths: await resolveAuxiliaryPaths(sourceDir),
     };
   } catch (error) {
     if (error instanceof SceneStagePackError) {

@@ -35,5 +35,9 @@ describe('SceneForge IPC contract', () => {
     expect(mcp).toContain('scene_get_stage_context');
     expect(mcp).toContain('selectedAssetIds');
     expect(mcp).toContain('acp_agent');
+    expect(mcp).toContain('scene_run_stage');
+    expect(ipc).toContain('sceneforge:run-stage');
+    expect(preload).toContain('sceneRunStage');
+    expect(api).toContain('sceneRunStage');
   });
 });

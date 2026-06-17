@@ -196,6 +196,37 @@ export function registerSceneForgeMcpTools(server: McpServer): void {
   );
 
   server.registerTool(
+    'scene_run_stage',
+    {
+      title: '运行 SceneForge 阶段 Runner',
+      description:
+        'manual_submit 返回草稿 map 不写盘；direct_llm 调 LLM 生成草案；acp_agent MVP 返回会话简报或配置错误。',
+      inputSchema: {
+        projectDir: z.string(),
+        stage: z.enum(['design', 'storyboard', 'video_prompts']),
+        runnerType: z.enum(['manual_submit', 'direct_llm', 'acp_agent']),
+        selectedAssetIds: z.array(z.string()).optional(),
+        manualArtifacts: z.record(z.string(), z.string()).optional(),
+      },
+    },
+    async ({ projectDir, stage, runnerType, selectedAssetIds, manualArtifacts }) => {
+      try {
+        return jsonResult(
+          await service.runStage({
+            projectDir,
+            stage,
+            runnerType,
+            selectedAssetIds,
+            manualArtifacts,
+          }),
+        );
+      } catch (error) {
+        return errorResult(error);
+      }
+    },
+  );
+
+  server.registerTool(
     'scene_export_prompt_pack',
     {
       title: '导出 SceneForge Prompt Pack',
