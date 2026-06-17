@@ -35,7 +35,7 @@ const completeStoryboardDraft = {
 };
 
 describe('SceneForge Stage Context', () => {
-  it('exposes only approved design final artifacts and authorized support artifacts to storyboard', async () => {
+  it('exposes policy-driven design inputs and performance to storyboard after design approval', async () => {
     await service.submitDesignDraft(tmpDir, completeDesignDraft);
 
     await writeSceneArtifact({
@@ -73,10 +73,10 @@ describe('SceneForge Stage Context', () => {
     });
 
     const beforeApproval = await service.getStageContext(tmpDir, 'storyboard');
-    expect(beforeApproval.requiredInputs).toEqual([]);
-    expect(beforeApproval.optionalInputs.map((input) => input.artifactId)).toEqual([
+    expect(beforeApproval.requiredInputs.map((input) => input.artifactId)).toEqual([
       'performance.performance_direction',
     ]);
+    expect(beforeApproval.optionalInputs).toEqual([]);
 
     await service.approveStage(tmpDir, 'design');
     const context = await service.getStageContext(tmpDir, 'storyboard');
@@ -88,30 +88,50 @@ describe('SceneForge Stage Context', () => {
       'master_board_prompt',
     ]);
     expect(context.requiredInputs.map((input) => input.artifactId)).toEqual([
-      'design.design_prompts',
-      'design.character_prompts',
-      'design.scene_prompts',
-      'design.prop_prompts',
       'design.master_reference_prompt',
-    ]);
-    expect(context.optionalInputs.map((input) => input.artifactId)).toEqual([
+      'design.character_prompts',
       'performance.performance_direction',
     ]);
+    expect(context.requiredInputs.find((i) => i.artifactId === 'design.prop_prompts')).toBeUndefined();
+    expect(context.warnings.length).toBeGreaterThan(0);
+    expect(context.warnings.some((w) => w.startsWith('handoff_missing_fallback'))).toBe(true);
   });
 
-  it('exposes approved design and approved storyboard to video prompts without mixing unapproved storyboard drafts', async () => {
+  it('video prompts context follows policy without nine full core artifacts', async () => {
     await service.submitDesignDraft(tmpDir, completeDesignDraft);
     await service.approveStage(tmpDir, 'design');
     await service.submitStoryboardDraft(tmpDir, completeStoryboardDraft);
 
+    await writeSceneArtifact({
+      projectDir: tmpDir,
+      stage: 'audio',
+      artifactKey: 'audio_design',
+      kind: 'final',
+      title: '声音设计',
+      content: '# 声音设计\n\n配乐与音效。',
+      role: 'support_direction_asset',
+      coreAsset: false,
+      readableByDownstream: true,
+    });
+    await writeSceneArtifact({
+      projectDir: tmpDir,
+      stage: 'performance',
+      artifactKey: 'performance_direction',
+      kind: 'final',
+      title: '表演指导',
+      content: '# 表演指导\n\nVideo 阶段需要。',
+      role: 'support_direction_asset',
+      coreAsset: false,
+      readableByDownstream: true,
+    });
+
     const beforeStoryboardApproval = await service.getStageContext(tmpDir, 'video_prompts');
-    expect(beforeStoryboardApproval.requiredInputs.map((input) => input.stage)).toEqual([
-      'design',
-      'design',
-      'design',
-      'design',
-      'design',
-    ]);
+    expect(
+      beforeStoryboardApproval.requiredInputs.map((input) => input.artifactId).sort(),
+    ).toEqual(
+      ['audio.audio_design', 'design.master_reference_prompt', 'performance.performance_direction'].sort(),
+    );
+    expect(beforeStoryboardApproval.requiredInputs).toHaveLength(3);
 
     await service.approveStage(tmpDir, 'storyboard');
     const context = await service.getStageContext(tmpDir, 'video_prompts');
@@ -120,16 +140,18 @@ describe('SceneForge Stage Context', () => {
       'video_prompt_pack',
       'video_prompt_pack_cn',
     ]);
-    expect(context.requiredInputs.map((input) => input.artifactId)).toEqual([
-      'design.design_prompts',
-      'design.character_prompts',
-      'design.scene_prompts',
-      'design.prop_prompts',
-      'design.master_reference_prompt',
-      'storyboard.storyboard_prompt_pack',
-      'storyboard.control_board_prompts',
-      'storyboard.style_board_prompts',
-      'storyboard.master_board_prompt',
-    ]);
+
+    const requiredIds = context.requiredInputs.map((input) => input.artifactId);
+    expect(requiredIds).toContain('design.master_reference_prompt');
+    expect(requiredIds).toContain('storyboard.storyboard_prompt_pack');
+    expect(requiredIds).toContain('audio.audio_design');
+    expect(requiredIds).toContain('performance.performance_direction');
+    expect(requiredIds).not.toContain('design.prop_prompts');
+    expect(requiredIds).not.toContain('design.character_prompts');
+    expect(requiredIds.length).toBeLessThan(9);
+
+    const optionalIds = context.optionalInputs.map((input) => input.artifactId);
+    expect(optionalIds).toContain('design.design_prompts');
+    expect(optionalIds).not.toContain('design.prop_prompts');
   });
 });

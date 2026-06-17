@@ -11,16 +11,17 @@ import {
   setSceneApprovalPolicy,
 } from './pipeline/scene-approval-policy';
 import {
-  loadSceneStagePack,
-  summarizeSceneStagePack,
-  type SceneStagePackSummary,
-} from './pipeline/scene-stage-pack';
+  buildSceneStageContext,
+  type BuildSceneStageContextOptions,
+  type SceneStageContext,
+  type SceneStageContextInput,
+  type SceneStageContextOptions,
+} from './pipeline/scene-context-builder';
 import {
   createSceneStageRunner,
   type SceneStageRunnerResult,
   type SceneStageRunnerType,
 } from './pipeline/scene-stage-runner';
-import { getSceneStageDefinition } from './pipeline/scene-stage-definitions';
 import {
   approveSceneStage,
   markSceneStageDraftSubmitted,
@@ -33,10 +34,12 @@ import {
 import { createSceneForgeProject } from './project/scene-project-file';
 import { exportScenePromptPack } from './export/scene-prompt-pack-exporter';
 import { validateSceneStage, type SceneValidationResult } from './validators/scene-validator';
-import {
-  resolveSceneAssetsForStage,
-  type SceneAssetSnippet,
-} from './assets/scene-asset-library';
+
+export type {
+  SceneStageContext,
+  SceneStageContextInput,
+  SceneStageContextOptions,
+} from './pipeline/scene-context-builder';
 
 const DESIGN_ARTIFACT_KEYS = [
   'design_prompts',
@@ -111,35 +114,6 @@ export class SceneForgeServiceError extends Error {
     this.name = 'SceneForgeServiceError';
     this.code = code;
   }
-}
-
-export interface SceneStageContextInput {
-  stage: SceneStageId;
-  artifactId: string;
-  path: string;
-  title: string;
-  content: string;
-}
-
-export interface SceneStageContextAssetLibrary {
-  selectedAssets: string[];
-  snippets: SceneAssetSnippet[];
-}
-
-export interface SceneStageContext {
-  stage: SceneStageId;
-  requiredInputs: SceneStageContextInput[];
-  optionalInputs: SceneStageContextInput[];
-  outputContract: {
-    requiredArtifacts: string[];
-  };
-  stagePack?: SceneStagePackSummary;
-  assetLibrary?: SceneStageContextAssetLibrary;
-  forbiddenActions: string[];
-}
-
-export interface SceneStageContextOptions {
-  selectedAssetIds?: string[];
 }
 
 export interface SubmitStageDraftResult {
@@ -335,7 +309,9 @@ export class SceneForgeService {
 
   async runStage(input: SceneRunStageInput): Promise<SceneStageRunnerResult> {
     const runner = createSceneStageRunner(input.runnerType);
-    const stageContext = await this.getStageContext(input.projectDir, input.stage);
+    const stageContext = await this.getStageContext(input.projectDir, input.stage, {
+      runner: input.runnerType,
+    });
     return runner.run({
       projectDir: input.projectDir,
       stage: input.stage,
@@ -350,89 +326,10 @@ export class SceneForgeService {
     stage: SceneStageId,
     options?: SceneStageContextOptions,
   ): Promise<SceneStageContext> {
-    const state = await readSceneState(projectDir);
-    const artifacts = await listSceneArtifacts(projectDir);
-    const requiredInputs: SceneStageContextInput[] = [];
-    const optionalInputs: SceneStageContextInput[] = [];
-    let stagePack: SceneStagePackSummary | undefined;
-
-    try {
-      stagePack = summarizeSceneStagePack(await loadSceneStagePack(stage));
-    } catch {
-      stagePack = undefined;
-    }
-
-    const upstreamCoreStages: SceneStageId[] =
-      stage === 'storyboard'
-        ? ['design']
-        : stage === 'video_prompts'
-          ? ['design', 'storyboard']
-          : [];
-
-    for (const upstreamStage of upstreamCoreStages) {
-      if (state.stages[upstreamStage]?.status !== 'approved') continue;
-      for (const artifactKey of getSceneStageDefinition(upstreamStage).requiredArtifacts) {
-        const artifact = artifacts.find(
-          (item) =>
-            item.id === `${upstreamStage}.${artifactKey}` &&
-            item.kind === 'final' &&
-            item.role === 'core_generation_asset' &&
-            item.coreAsset &&
-            item.readableByDownstream,
-        );
-        if (!artifact) continue;
-        const { content } = await readSceneArtifact(projectDir, artifact.id);
-        requiredInputs.push({
-          stage: artifact.stage,
-          artifactId: artifact.id,
-          path: artifact.path,
-          title: artifact.title,
-          content,
-        });
-      }
-    }
-
-    const supportArtifacts = artifacts.filter(
-      (artifact) =>
-        artifact.kind === 'final' &&
-        artifact.role === 'support_direction_asset' &&
-        artifact.readableByDownstream &&
-        artifact.usedBy.includes(stage),
-    );
-
-    for (const artifact of supportArtifacts) {
-      const { content } = await readSceneArtifact(projectDir, artifact.id);
-      optionalInputs.push({
-        stage: artifact.stage,
-        artifactId: artifact.id,
-        path: artifact.path,
-        title: artifact.title,
-        content,
-      });
-    }
-
-    const selectedAssetIds = options?.selectedAssetIds ?? [];
-    let assetLibrary: SceneStageContextAssetLibrary | undefined;
-    if (selectedAssetIds.length > 0) {
-      const snippets = await resolveSceneAssetsForStage({ stage, selectedAssetIds });
-      assetLibrary = { selectedAssets: selectedAssetIds, snippets };
-    }
-
-    return {
-      stage,
-      requiredInputs,
-      optionalInputs,
-      outputContract: {
-        requiredArtifacts: stagePack?.outputContract.requiredArtifacts ?? getSceneStageDefinition(stage).requiredArtifacts,
-      },
-      stagePack,
-      assetLibrary,
-      forbiddenActions: [
-        'do_not_modify_state_file',
-        'do_not_modify_manifest_directly',
-        'do_not_read_unlisted_project_files',
-        'do_not_advance_stage_directly',
-      ],
+    const buildOptions: BuildSceneStageContextOptions = {
+      selectedAssetIds: options?.selectedAssetIds,
+      runner: options?.runner,
     };
+    return buildSceneStageContext(projectDir, stage, buildOptions);
   }
 }

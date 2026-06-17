@@ -55,8 +55,11 @@ describe('SceneForgeService design flow', () => {
     expect(state.stages.design.status).toBe('approved');
 
     const context = await service.getStageContext(tmpDir, 'storyboard');
-    expect(context.requiredInputs.map((input) => input.artifactId)).toEqual(submit.artifactIds);
-    expect(context.requiredInputs[0].content).toContain('设定图提示词');
+    expect(context.requiredInputs.map((input) => input.artifactId)).toEqual([
+      'design.master_reference_prompt',
+      'design.character_prompts',
+    ]);
+    expect(context.requiredInputs[0].content).toContain('总参考图');
   });
 
   it('does not approve a design draft that failed validation', async () => {
