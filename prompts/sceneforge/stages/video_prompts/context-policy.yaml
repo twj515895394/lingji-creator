@@ -1,0 +1,81 @@
+version: 1
+stage: video_prompts
+consumerRunners:
+  - manual_submit
+  - direct_llm
+  - acp_agent
+
+inputs:
+  - id: storyboard_pack
+    fromStage: storyboard
+    artifactKey: storyboard_prompt_pack
+    delivery: handoff_first
+    fallback: full
+    required: true
+
+  - id: audio_plan
+    fromStage: audio
+    artifactKey: audio_design
+    delivery: handoff_first
+    fallback: full
+    required: true
+
+  - id: performance_sheet
+    fromStage: performance
+    artifactKey: performance_direction
+    delivery: full
+    required: true
+
+  - id: design_master
+    fromStage: design
+    artifactKey: master_reference_prompt
+    delivery: full
+    required: true
+
+  - id: design_summary
+    fromStage: design
+    artifactKey: design_prompts
+    delivery: handoff_first
+    fallback: summary
+    required: false
+
+  - id: storyboard_control_board
+    fromStage: storyboard
+    artifactKey: control_board_prompts
+    delivery: handoff_first
+    fallback: summary
+    required: false
+
+  - id: storyboard_style_board
+    fromStage: storyboard
+    artifactKey: style_board_prompts
+    delivery: handoff_first
+    fallback: summary
+    required: false
+
+  - id: storyboard_master_board
+    fromStage: storyboard
+    artifactKey: master_board_prompt
+    delivery: handoff_first
+    fallback: summary
+    required: false
+
+optionalInputs:
+  - id: design_characters_snippet
+    fromStage: design
+    artifactKey: character_prompts
+    delivery: summary
+    maxChars: 6000
+
+assetLibrary:
+  allowSelectedStyleProfile: true
+
+forbidden:
+  - fromStage: design
+    artifactKey: prop_prompts
+
+runnerOverrides:
+  acp_agent:
+    maxTotalChars: 120000
+  direct_llm:
+    maxTotalChars: 200000

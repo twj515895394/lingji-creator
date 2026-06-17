@@ -1,0 +1,35 @@
+version: 1
+stage: design
+consumerRunners:
+  - manual_submit
+  - direct_llm
+  - acp_agent
+
+inputs:
+  - id: story_direction
+    fromStage: story
+    artifactKey: story_direction
+    delivery: handoff_first
+    fallback: summary
+    required: false
+
+  - id: asset_plan
+    fromStage: assets
+    artifactKey: asset_plan
+    delivery: handoff_first
+    fallback: summary
+    required: false
+
+  - id: reference_notes
+    fromStage: reference
+    artifactKey: reference_notes
+    delivery: handoff_first
+    fallback: summary
+    required: false
+
+assetLibrary:
+  allowSelectedStyleProfile: true
+
+forbidden: []
+
+runnerOverrides: {}

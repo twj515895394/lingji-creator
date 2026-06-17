@@ -1,0 +1,10 @@
+version: 1
+description: Global defaults for SceneForge stage context assembly
+
+runnerOverrides:
+  acp_agent:
+    maxTotalChars: 120000
+  direct_llm:
+    maxTotalChars: 200000
+  manual_submit:
+    maxTotalChars: 250000
