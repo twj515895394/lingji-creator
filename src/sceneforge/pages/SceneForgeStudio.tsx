@@ -3,6 +3,7 @@ import { AlertTriangle, CheckCircle2, CircleDashed, FileText, Film, Image } from
 import type { SceneApprovalPolicy, SceneArtifactCopyBlock, SceneArtifactDisplayModel, SceneStageId } from '../../types/sceneforge';
 import type { SceneArtifact, SceneProjectState, SceneValidationResult } from '../../lib/electron-api';
 import { ArtifactCopyPanel, type SceneCopyFeedback } from '../components/artifacts/ArtifactCopyPanel';
+import { StageRunPanel } from '../components/stage-run/StageRunPanel';
 import { copyPlainTextToClipboard } from '../lib/scene-copy';
 import styles from './SceneForgeStudio.module.css';
 
@@ -369,6 +370,13 @@ export function SceneForgeStudio({ projectDir = null }: SceneForgeStudioProps) {
                 Validator failed：{validation.errors[0]?.message ?? '阶段校验未通过。'}
               </div>
             )}
+
+            <StageRunPanel
+              projectDir={projectDir}
+              stage={selectedStage}
+              stageTitle={selectedStageMeta.title}
+              onRunError={(message) => setErrorMessage(message)}
+            />
 
             <div className={styles.actionRow}>
               <button type="button" onClick={() => void handleValidate()}>

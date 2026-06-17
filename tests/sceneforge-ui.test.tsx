@@ -28,6 +28,10 @@ describe('SceneForgeStudio', () => {
     expect(html).toContain('Design Prompts');
     expect(html).toContain('Storyboard Prompts');
     expect(html).toContain('Video Prompt Packs');
+    expect(html).toContain('执行方式');
+    expect(html).toContain('运行本阶段');
+    expect(html).toContain('data-testid="scene-stage-run-panel"');
+    expect(html).toContain('scene-run-stage-button');
   });
 });
 

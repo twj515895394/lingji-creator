@@ -10,6 +10,7 @@ export const PIPELINE_TASK_KINDS = [
   'export_video',
   'import_video_source',
   'scene_stage',
+  'scene_run',
   'scene_validate',
   'scene_export',
 ] as const;

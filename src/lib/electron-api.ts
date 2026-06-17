@@ -45,7 +45,7 @@ import type { SceneState } from '../../electron/sceneforge/pipeline/scene-state-
 
 export type SceneRunStageInput = SceneRunStageIpcInput;
 
-export type { SceneGetStageContextOptions };
+export type { SceneGetStageContextOptions, SceneStageRunnerResult };
 
 export type {
   SceneProjectState,

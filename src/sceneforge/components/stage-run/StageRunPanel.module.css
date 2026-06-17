@@ -1,0 +1,79 @@
+.runButton {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  height: 32px;
+  border: 1px solid color-mix(in srgb, var(--color-system-blue) 35%, var(--color-border));
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--color-system-blue) 10%, var(--color-surface));
+  color: var(--color-text-primary);
+  padding: 0 12px;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.runButton:disabled {
+  opacity: 0.48;
+  cursor: not-allowed;
+}
+
+.panel {
+  margin-top: 16px;
+  border: 1px solid var(--color-border);
+  border-radius: 8px;
+  padding: 12px;
+  background: var(--color-window-bg);
+}
+
+.header h3 {
+  margin: 0 0 4px;
+  font-size: 14px;
+}
+
+.header p {
+  margin: 0;
+  font-size: 12px;
+  color: var(--color-text-secondary);
+}
+
+.controls {
+  margin-top: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.label {
+  font-size: 12px;
+  color: var(--color-text-secondary);
+}
+
+.controls select {
+  height: 32px;
+  border: 1px solid var(--color-border);
+  border-radius: 8px;
+  background: var(--color-surface);
+  color: var(--color-text-primary);
+  padding: 0 10px;
+}
+
+.hint {
+  margin: 0;
+  font-size: 12px;
+  color: var(--color-text-tertiary);
+  line-height: 1.45;
+}
+
+.successHint {
+  margin: 10px 0 0;
+  font-size: 12px;
+  color: var(--color-text-secondary);
+  line-height: 1.45;
+}
+
+.errorHint {
+  margin: 8px 0 0;
+  font-size: 12px;
+  color: var(--color-system-red, #ff3b30);
+}
