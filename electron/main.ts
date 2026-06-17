@@ -75,6 +75,7 @@ import { HeadlessAcpProvider, type HeadlessAcpProviderEvent } from './acp/headle
 import { registerConversationIpc } from './conversations/ipc';
 import { registerMcpIpc } from './mcp/ipc';
 import { registerScriptHistoryIpc } from './script-history/ipc';
+import { registerSceneForgeIpc } from './sceneforge/ipc';
 import {
   appendAutoRunEvent,
   getAutoRunLogDir,
@@ -85,6 +86,7 @@ import {
 } from './telemetry/auto-run-logger';
 import { startMcpServer, stopMcpServer } from './mcp/server';
 import { loadProjectFile, saveProjectSection } from './project-file';
+import { createSceneForgeProject } from './sceneforge/project/scene-project-file';
 import {
   scanProjectDirectory,
   importProject,
@@ -1171,6 +1173,12 @@ ipcMain.handle('delete-card-media-assets', async (_event, args: { projectDir: st
 
 ipcMain.handle('load-project', async (_event, projectDir: string) => {
   const data = await loadProjectFile(projectDir);
+  setActiveProjectPath(projectDir);
+  return JSON.stringify(data, null, 2);
+});
+
+ipcMain.handle('create-scene-forge-project', async (_event, projectDir: string) => {
+  const data = await createSceneForgeProject(projectDir);
   setActiveProjectPath(projectDir);
   return JSON.stringify(data, null, 2);
 });
@@ -2356,6 +2364,7 @@ registerAgentIpc(() => mainWindow);
 registerConversationIpc(() => mainWindow);
 registerMcpIpc(() => mainWindow);
 registerScriptHistoryIpc();
+registerSceneForgeIpc();
 
 // 设置 macOS 系统菜单栏应用名称
 app.setName('灵机剪影');

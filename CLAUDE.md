@@ -330,6 +330,16 @@ Claude ACP 连接时会向用户项目目录写入 / 更新 `CLAUDE.md` 中的 M
 
 禁止为新耗时任务新增独立进度弹窗、顶部条或孤立内联进度组件。编辑器内部打字机和审阅光标属于内容反馈，可以保留。
 
+## SceneForge Studio 扩展约束（二开模块）
+
+SceneForge 是 Lingji Cut 内的**独立创作模块**，与口播/时间线/Remotion 主链路并列，不是替代关系。
+
+- **代码边界**：优先在 `electron/sceneforge/`、`src/sceneforge/`、`prompts/sceneforge/`、`tests/sceneforge-*` 内实现；共享契约用 `src/types/sceneforge.ts`，`project.json` 仅扩展可选 `sceneforge` 段。
+- **低侵入**：通过注册扩展点接入（IPC、MCP、`AppPage` 路由、项目类型），避免散改时间线、脚本工作台、Remotion 导出、TTS 等 Cut 核心文件；若必须改 `App.tsx` / `electron/main.ts`，改动应限于注册与路由分支。
+- **单一职责**：阶段上下文、handoff、runner、pack 加载等拆为独立模块（例如 `scene-context-builder.ts`、`scene-handoff-writer.ts`），避免 `SceneForgeService` 或单页组件承担过多职责。
+- **单文件规模**：建议单文件 **≤800 行**；接近或超过时按职责拆分并补测试。
+- **详细说明**：见 `docs/sceneforge/2026-06-17-sceneforge-engineering-constraints.md`；Phase 2 设计与计划在 `docs/sceneforge/2026-06-17-sceneforge-phase2-overview.md`。
+
 ## 高风险改动清单
 
 以下改动需要先做影响面分析：
@@ -364,3 +374,18 @@ Claude ACP 连接时会向用户项目目录写入 / 更新 `CLAUDE.md` 中的 M
 - 项目文件格式变更是否考虑迁移。
 - AI/Agent 密钥是否没有进入源码。
 - 最终说明是否如实写明运行了什么验证、没运行什么验证。
+
+## 代理技能
+
+### 问题追踪器
+
+问题和 PRD 作为 Markdown 文件存储在本地的 `.scratch/` 目录中。参见 `docs/agents/issue-tracker.md`。
+
+### 分类标签
+
+使用默认分类标签（如 `needs-triage`、`ready-for-agent` 等）。参见 `docs/agents/triage-labels.md`。
+
+### 领域文档
+
+使用单一上下文布局，根目录下包含 `CONTEXT.md` 及 `docs/adr/` 目录。参见 `docs/agents/domain.md`。
+

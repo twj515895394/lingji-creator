@@ -1,0 +1,6 @@
+requiredArtifacts:
+  - design_prompts
+  - character_prompts
+  - scene_prompts
+  - prop_prompts
+  - master_reference_prompt

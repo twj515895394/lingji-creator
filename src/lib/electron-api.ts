@@ -30,8 +30,37 @@ import type {
   UserPromptEntry,
   UserPromptSeed,
 } from './prompts';
+import type { SceneApprovalPolicy, SceneArtifactDisplayModel, SceneStageId } from '../types/sceneforge';
+import type {
+  SceneProjectState,
+  SceneStageContext,
+  SceneSubmitStageDraftInput,
+  SubmitStageDraftResult,
+} from '../../electron/sceneforge/service';
+import type { SceneArtifact } from '../../electron/sceneforge/artifacts/scene-artifact-store';
+import type { SceneValidationResult } from '../../electron/sceneforge/validators/scene-validator';
+import type { SceneState } from '../../electron/sceneforge/pipeline/scene-state-machine';
 
-export type AppPage = 'welcome' | 'setup' | 'editor' | 'script-workbench' | 'settings' | 'auto-run';
+export type {
+  SceneProjectState,
+  SceneStageContext,
+  SceneSubmitStageDraftInput,
+  SubmitStageDraftResult,
+  SceneArtifact,
+  SceneArtifactDisplayModel,
+  SceneValidationResult,
+  SceneState,
+};
+
+export type AppPage =
+  | 'welcome'
+  | 'setup'
+  | 'editor'
+  | 'script-workbench'
+  | 'settings'
+  | 'auto-run'
+  | 'sceneforge-setup'
+  | 'sceneforge-studio';
 
 export interface FileEntry {
   name: string;
@@ -297,6 +326,40 @@ export interface ElectronAPI {
   saveAIAnalysis: (projectDir: string, data: string) => Promise<string>;
   loadAIAnalysis: (projectDir: string) => Promise<string | null>;
   loadProject: (projectDir: string) => Promise<string>;
+  createSceneForgeProject: (projectDir: string) => Promise<string>;
+  sceneGetProjectState: (projectDir: string) => Promise<SceneProjectState>;
+  sceneGetStageContext: (
+    projectDir: string,
+    stage: SceneStageId,
+  ) => Promise<SceneStageContext>;
+  sceneSubmitStageDraft: (
+    input: SceneSubmitStageDraftInput,
+  ) => Promise<SubmitStageDraftResult>;
+  sceneValidateStage: (
+    projectDir: string,
+    stage: SceneStageId,
+  ) => Promise<SceneValidationResult>;
+  sceneApproveStage: (projectDir: string, stage: SceneStageId) => Promise<SceneState>;
+  sceneRequestRevision: (
+    projectDir: string,
+    stage: SceneStageId,
+    note: string,
+  ) => Promise<SceneState>;
+  sceneSetApprovalPolicy: (
+    projectDir: string,
+    stage: SceneStageId,
+    policy: SceneApprovalPolicy,
+  ) => Promise<unknown>;
+  sceneListArtifacts: (projectDir: string) => Promise<SceneArtifact[]>;
+  sceneReadArtifact: (
+    projectDir: string,
+    artifactId: string,
+  ) => Promise<{ artifact: SceneArtifact; content: string; displayModel: SceneArtifactDisplayModel | null }>;
+  sceneExportPromptPack: (projectDir: string) => Promise<{
+    exportDir: string;
+    manifestPath: string;
+    artifactIds: string[];
+  }>;
   saveProjectSection: (projectDir: string, section: string, data: string) => Promise<void>;
   scanProjectDirectory: (
     projectDir: string,

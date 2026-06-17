@@ -131,6 +131,28 @@ contextBridge.exposeInMainWorld('electronAPI', {
   loadAIAnalysis: (projectDir: string) => ipcRenderer.invoke('load-ai-analysis', projectDir),
   loadProject: (projectDir: string) =>
     ipcRenderer.invoke('load-project', projectDir),
+  createSceneForgeProject: (projectDir: string) =>
+    ipcRenderer.invoke('create-scene-forge-project', projectDir),
+  sceneGetProjectState: (projectDir: string) =>
+    ipcRenderer.invoke('sceneforge:get-project-state', projectDir),
+  sceneGetStageContext: (projectDir: string, stage: string) =>
+    ipcRenderer.invoke('sceneforge:get-stage-context', projectDir, stage),
+  sceneSubmitStageDraft: (input: import('../src/lib/electron-api').SceneSubmitStageDraftInput) =>
+    ipcRenderer.invoke('sceneforge:submit-stage-draft', input),
+  sceneValidateStage: (projectDir: string, stage: string) =>
+    ipcRenderer.invoke('sceneforge:validate-stage', projectDir, stage),
+  sceneApproveStage: (projectDir: string, stage: string) =>
+    ipcRenderer.invoke('sceneforge:approve-stage', projectDir, stage),
+  sceneRequestRevision: (projectDir: string, stage: string, note: string) =>
+    ipcRenderer.invoke('sceneforge:request-revision', projectDir, stage, note),
+  sceneSetApprovalPolicy: (projectDir: string, stage: string, policy: string) =>
+    ipcRenderer.invoke('sceneforge:set-approval-policy', projectDir, stage, policy),
+  sceneListArtifacts: (projectDir: string) =>
+    ipcRenderer.invoke('sceneforge:list-artifacts', projectDir),
+  sceneReadArtifact: (projectDir: string, artifactId: string) =>
+    ipcRenderer.invoke('sceneforge:read-artifact', projectDir, artifactId),
+  sceneExportPromptPack: (projectDir: string) =>
+    ipcRenderer.invoke('sceneforge:export-prompt-pack', projectDir),
   saveProjectSection: (projectDir: string, section: string, data: string) =>
     ipcRenderer.invoke('save-project-section', projectDir, section, data),
   scanProjectDirectory: (projectDir: string) =>

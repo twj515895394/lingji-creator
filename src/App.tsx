@@ -18,6 +18,7 @@ import { Editor } from './pages/Editor';
 import { ScriptWorkbench } from './pages/ScriptWorkbench';
 import { Settings } from './pages/Settings';
 import { Setup } from './pages/Setup';
+import { SceneForgeStudio } from './sceneforge/pages/SceneForgeStudio';
 import { AutoRunController } from './components/AutoRunController';
 import { ImportProjectDialog } from './components/ImportProjectDialog';
 import { AppErrorBoundary } from './components/AppErrorBoundary';
@@ -410,6 +411,19 @@ export default function App() {
         // 而不是之前打开过的旧项目目录（会造成旧项目被空数据覆盖）。
         setProjectDir(projectDir);
 
+        if (projectData.type === 'sceneforge') {
+          clearAIAnalysis();
+          setCoverCandidates([]);
+          useAIStore
+            .getState()
+            .loadProjectStylePresetId(projectData.stylePresetId ?? undefined);
+          await window.electronAPI.addRecentProject(projectDir);
+          void syncWorkspaceState();
+          setSetupError(null);
+          setPage(resolveProjectLandingPage(projectData));
+          return;
+        }
+
         // timeline 段
         if (projectData.timeline) {
           setTimeline(projectData.timeline);
@@ -608,6 +622,27 @@ export default function App() {
   const handleOpenImportProject = useCallback(() => {
     setImportProjectDialogOpen(true);
   }, []);
+
+  const handleCreateSceneForgeProject = useCallback(async () => {
+    const projectDir = await window.electronAPI.selectProjectDirectory();
+    if (!projectDir) {
+      return;
+    }
+
+    try {
+      const raw = await window.electronAPI.createSceneForgeProject(projectDir);
+      const projectData = JSON.parse(raw) as ProjectData;
+
+      setProjectDir(projectDir);
+      await window.electronAPI.addRecentProject(projectDir);
+      void syncWorkspaceState();
+      setSetupError(null);
+      setPage(resolveProjectLandingPage(projectData));
+    } catch (error) {
+      console.error('创建 SceneForge 项目失败:', error);
+      setSetupError('创建 SceneForge 项目失败，请确认目录可写。');
+    }
+  }, [setPage, syncWorkspaceState]);
 
   const handleImportProjectComplete = useCallback(
     async (result: ImportProjectResult) => {
@@ -1138,7 +1173,7 @@ export default function App() {
               transition={pageTransition.transition}
               style={{ height: '100%', minHeight: 0 }}
             >
-              {page === 'welcome' || page === 'setup' ? (
+              {page === 'welcome' || page === 'setup' || page === 'sceneforge-setup' ? (
                 <Setup
                   busy={isSettingUp}
                   errorMessage={setupError}
@@ -1151,11 +1186,14 @@ export default function App() {
                   onOpenSettings={() => setPage('settings')}
                   onDouyinImport={handleDouyinImport}
                   onImportProject={handleOpenImportProject}
+                  onCreateSceneForgeProject={handleCreateSceneForgeProject}
                 />
               ) : page === 'settings' ? (
                 <Settings onBack={() => setPage(previousPage)} />
               ) : page === 'auto-run' ? (
                 <AutoRunController setPage={setPage} />
+              ) : page === 'sceneforge-studio' ? (
+                <SceneForgeStudio projectDir={currentProjectDir} />
               ) : (
                 <>
                   {/* 写稿工作台和编辑器保持同时挂载，用 display 切换，避免重新挂载引起的布局振荡 */}

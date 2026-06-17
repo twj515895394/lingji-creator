@@ -42,6 +42,25 @@ describe('electron menu actions', () => {
     expect(source).toContain('getVideoImportStatus');
   });
 
+  it('declares the SceneForge project creation bridge across renderer, preload and main', () => {
+    const apiSource = readFileSync(
+      new URL('../src/lib/electron-api.ts', import.meta.url),
+      'utf8',
+    );
+    const preloadSource = readFileSync(
+      new URL('../electron/preload.ts', import.meta.url),
+      'utf8',
+    );
+    const mainSource = readFileSync(
+      new URL('../electron/main.ts', import.meta.url),
+      'utf8',
+    );
+
+    expect(apiSource).toContain('createSceneForgeProject');
+    expect(preloadSource).toContain('create-scene-forge-project');
+    expect(mainSource).toContain('create-scene-forge-project');
+  });
+
   it('no longer exposes the deprecated html-card import bridge', () => {
     const source = readFileSync(
       new URL('../src/lib/electron-api.ts', import.meta.url),

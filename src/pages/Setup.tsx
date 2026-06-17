@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { m } from 'framer-motion';
-import { Plus, FileText, Music, Video, FolderOpen, FolderSearch, FolderInput, CheckCircle2, AlertCircle, Link, Loader2 } from 'lucide-react';
+import { Plus, FileText, Music, Video, FolderOpen, FolderSearch, FolderInput, CheckCircle2, AlertCircle, Link, Loader2, Sparkles } from 'lucide-react';
 import { springs } from '../ui/lib/motion';
 import { getFileNameFromPath } from '../lib/utils';
 import type { RecentProjectEntry } from '../lib/electron-api';
@@ -62,6 +62,8 @@ interface SetupProps {
   ) => Promise<void>;
   /** 导入项目回调：打开导入项目向导（处理跨机器项目目录识别与路径修复） */
   onImportProject: () => void;
+  /** 创建 SceneForge Prompt Pack 项目 */
+  onCreateSceneForgeProject: () => Promise<void> | void;
 }
 
 interface ScanResult {
@@ -82,6 +84,7 @@ export function Setup({
   onOpenSettings,
   onDouyinImport,
   onImportProject,
+  onCreateSceneForgeProject,
 }: SetupProps) {
   // ── 音频导入弹窗状态 ──
   const [importDialogOpen, setImportDialogOpen] = useState(false);
@@ -375,6 +378,16 @@ export function Setup({
               <FolderInput size={22} strokeWidth={1.5} />
             </div>
             <span className={styles.quickItemLabel}>导入项目</span>
+          </button>
+          <button
+            type="button"
+            className={styles.quickItem}
+            onClick={onCreateSceneForgeProject}
+          >
+            <div className={styles.quickItemIcon}>
+              <Sparkles size={22} strokeWidth={1.5} />
+            </div>
+            <span className={styles.quickItemLabel}>SceneForge 工作台</span>
           </button>
         </div>
 

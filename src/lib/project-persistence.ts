@@ -2,6 +2,7 @@ import type { WorkbenchStage } from './script-workbench-stage';
 import type { TimelineData } from '../types';
 import type { AIAnalysisResult, CoverCandidate } from '../types/ai';
 import type { AutoWorkflowParams } from '../store/ai';
+import type { SceneProjectMeta } from '../types/sceneforge';
 
 export interface ProjectScriptState {
   templateId: string;
@@ -38,9 +39,11 @@ export interface ProjectData {
   version: 1;
   createdAt: string;
   updatedAt: string;
+  type?: 'lingji_video' | 'sceneforge';
   timeline: TimelineData | null;
   aiAnalysis: ProjectAIAnalysis;
   script: ProjectScriptState;
+  sceneforge?: SceneProjectMeta;
   workflowMeta?: ProjectWorkflowMeta;
   /** 项目级默认风格预设 id；缺省继承全局 */
   stylePresetId?: string;

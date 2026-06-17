@@ -9,6 +9,9 @@ export const PIPELINE_TASK_KINDS = [
   'generate_motion',
   'export_video',
   'import_video_source',
+  'scene_stage',
+  'scene_validate',
+  'scene_export',
 ] as const;
 
 export type PipelineTaskKind = (typeof PIPELINE_TASK_KINDS)[number];
@@ -78,4 +81,7 @@ export const CANCELABLE_KINDS: ReadonlySet<PipelineTaskKind> = new Set<PipelineT
   'generate_cards',
   'generate_motion',
   'import_video_source',
+  'scene_stage',
+  'scene_validate',
+  'scene_export',
 ]);

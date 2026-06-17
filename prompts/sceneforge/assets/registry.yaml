@@ -1,0 +1,38 @@
+version: 1
+assets:
+  - id: style.pixar_like
+    type: style_profile
+    title: Pixar-like 3D
+    files:
+      profile: style-profiles/pixar_like/profile.md
+      visual: style-profiles/pixar_like/visual_language.md
+      camera: style-profiles/pixar_like/camera_language.md
+      lighting: style-profiles/pixar_like/lighting_language.md
+      performance: style-profiles/pixar_like/performance_language.md
+      rhythm: style-profiles/pixar_like/rhythm_language.md
+      negative: style-profiles/pixar_like/negative_constraints.md
+    usedBy: [design, performance, storyboard, video_prompts]
+  - id: cinematic.shot_language
+    type: methodology
+    title: Shot Language Library
+    files:
+      main: cinematic-language/shot-language-library.md
+    usedBy: [storyboard, video_prompts]
+  - id: storyboard.methodology_index
+    type: methodology
+    title: Storyboard Methodology Index
+    files:
+      main: storyboard-methodology/index.md
+    usedBy: [storyboard]
+  - id: adaptation.idea_seed
+    type: methodology
+    title: Adaptation Idea Seed Library
+    files:
+      main: adaptation/adaptation-idea-seed-library.md
+    usedBy: [story, design]
+  - id: animation.contrast_comedy
+    type: methodology
+    title: Contrast Comedy Library
+    files:
+      main: animation-stylization/contrast-comedy-library.md
+    usedBy: [performance, video_prompts]

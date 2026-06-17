@@ -13,6 +13,7 @@ import { getActiveProjectPath } from '../context';
 import { loadRecentProjects } from '../../recent-projects';
 import { registerGenerationTools } from '../headless-generation';
 import { registerCardTools } from '../card-tools';
+import { registerSceneForgeMcpTools } from '../../sceneforge/mcp/register-scene-tools';
 
 function jsonResult(data: unknown) {
   return {
@@ -221,4 +222,5 @@ export function registerPipelineMcpTools(
 
   registerGenerationTools(server, getMainWindow, getUserDataPath);
   registerCardTools(server, getMainWindow, getUserDataPath);
+  registerSceneForgeMcpTools(server);
 }

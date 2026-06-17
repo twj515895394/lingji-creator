@@ -55,4 +55,23 @@ describe('resolveProjectLandingPage', () => {
       ),
     ).toBe('script-workbench');
   });
+
+  it('routes SceneForge projects to the SceneForge Studio', () => {
+    expect(
+      resolveProjectLandingPage(
+        createProjectData({
+          type: 'sceneforge',
+          sceneforge: {
+            version: 1,
+            projectRoot: 'sceneforge',
+            pipelineId: 'reference_remake',
+            currentStage: 'design',
+            status: 'ready',
+            coreArtifacts: { design: null, storyboard: null, videoPrompts: null },
+            lastExportPath: null,
+          },
+        }),
+      ),
+    ).toBe('sceneforge-studio');
+  });
 });
