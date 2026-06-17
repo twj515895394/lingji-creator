@@ -1,7 +1,7 @@
 # SceneForge Studio Phase 2 文档总览
 
 > 日期：2026-06-17  
-> 状态：已定稿（approved）  
+> 状态：Phase 2 实施完成（本地，Issues 13–21）；Issue 20 Studio 点跑待维护者 HITL 确认。  
 > 前置：Issues 01–12（核心闭环）已完成本地实现，见 `.scratch/sceneforge-studio/issues/01`–`12`。
 
 ## 1. Phase 2 目标（一句话）
@@ -62,8 +62,13 @@ Wave D — Studio 执行 UX + 回归（HITL 验收）
 5. D4（缺口与后续）  
 6. 实施计划  
 
-## 6. 下一步
+## 6. 实施状态（2026-06-17）
 
-- [x] 设计定稿（2026-06-17）
-- [x] Issues 13–21：`.scratch/sceneforge-studio/issues/` + [`PRD-phase2-runners.md`](../../.scratch/sceneforge-studio/PRD-phase2-runners.md)
-- [ ] 按 13 → 21 实施；Issue 20 人工验收 Studio 执行 UX
+- [x] 设计定稿
+- [x] Issues 13–21 本地实现（分支 `codex/sceneforge-studio-core`）
+- [x] Wave A：context-policy、SceneContextBuilder、handoff、MCP runner 参数
+- [x] Wave B：P0 stage pack（design/storyboard/video_prompts/performance/audio）
+- [x] Wave C：direct_llm、acp MVP、sceneRunStage IPC/MCP
+- [x] Wave D：`StageRunPanel` + task-progress；集成测试 `sceneforge-phase2-integration.test.ts`
+- [ ] **HITL**：Electron 内试跑「运行本阶段」+ 复制/审批（Issue 20）
+- [ ] **P2 后置**：支撑链全 SOP、script pack、支撑阶段 Studio、ZIP 导出、scene_start_stage 自动链（见 D4 §3）
