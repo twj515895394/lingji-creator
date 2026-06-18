@@ -1,0 +1,127 @@
+.overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: color-mix(in srgb, var(--color-window-bg) 72%, transparent);
+}
+
+.panel {
+  width: min(440px, calc(100vw - var(--space-8)));
+  padding: var(--space-6);
+  border: 1px solid var(--color-separator);
+  border-radius: var(--radius-lg);
+  background: var(--color-panel-bg);
+  color: var(--color-text-primary);
+  box-shadow: 0 24px 48px color-mix(in srgb, var(--color-window-bg) 40%, transparent);
+}
+
+.title {
+  margin: 0 0 var(--space-3);
+  font-size: var(--font-size-2xl);
+  font-weight: 600;
+  line-height: var(--line-height-tight);
+}
+
+.lead {
+  margin: 0 0 var(--space-5);
+  font-size: var(--font-size-lg);
+  line-height: var(--line-height-normal);
+  color: var(--color-text-secondary);
+}
+
+.options {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  margin-bottom: var(--space-5);
+}
+
+.option {
+  display: flex;
+  gap: var(--space-3);
+  align-items: flex-start;
+  width: 100%;
+  padding: var(--space-4);
+  margin: 0;
+  border: 1px solid var(--color-separator);
+  border-radius: var(--radius-md);
+  background: var(--color-window-bg);
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+  transition:
+    border-color 120ms ease,
+    background 120ms ease,
+    box-shadow 120ms ease;
+}
+
+.option:hover {
+  border-color: color-mix(in srgb, var(--color-selection-blue) 35%, var(--color-separator));
+}
+
+.optionSelected {
+  border-color: var(--color-selection-blue);
+  background: color-mix(in srgb, var(--color-selection-blue) 10%, var(--color-window-bg));
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--color-selection-blue) 25%, transparent);
+}
+
+.optionIndicator {
+  flex-shrink: 0;
+  width: 18px;
+  height: 18px;
+  margin-top: 2px;
+  border-radius: 50%;
+  border: 2px solid var(--color-text-disabled);
+  display: grid;
+  place-items: center;
+  transition: border-color 120ms ease;
+}
+
+.optionSelected .optionIndicator {
+  border-color: var(--color-selection-blue);
+}
+
+.optionDot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: transparent;
+  transform: scale(0);
+  transition:
+    transform 120ms ease,
+    background 120ms ease;
+}
+
+.optionSelected .optionDot {
+  background: var(--color-selection-blue);
+  transform: scale(1);
+}
+
+.optionCopy {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  min-width: 0;
+}
+
+.optionTitle {
+  font-size: var(--font-size-lg);
+  font-weight: 600;
+  line-height: var(--line-height-tight);
+  color: var(--color-text-primary);
+}
+
+.optionDetail {
+  font-size: var(--font-size-md);
+  line-height: var(--line-height-normal);
+  color: var(--color-text-secondary);
+}
+
+.actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: var(--space-3);
+}

@@ -131,8 +131,8 @@ contextBridge.exposeInMainWorld('electronAPI', {
   loadAIAnalysis: (projectDir: string) => ipcRenderer.invoke('load-ai-analysis', projectDir),
   loadProject: (projectDir: string) =>
     ipcRenderer.invoke('load-project', projectDir),
-  createSceneForgeProject: (projectDir: string) =>
-    ipcRenderer.invoke('create-scene-forge-project', projectDir),
+  createSceneForgeProject: (projectDir: string, entryPath?: string) =>
+    ipcRenderer.invoke('create-scene-forge-project', projectDir, entryPath),
   sceneGetProjectState: (projectDir: string) =>
     ipcRenderer.invoke('sceneforge:get-project-state', projectDir),
   sceneGetStageContext: (

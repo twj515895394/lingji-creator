@@ -14,6 +14,7 @@ export interface SceneStageRunnerResult {
   runnerType: SceneStageRunnerType;
   stage: SceneStageId;
   artifacts: Record<string, string>;
+  requiredArtifacts?: string[];
 }
 
 export class SceneStageRunnerNotImplementedError extends Error {

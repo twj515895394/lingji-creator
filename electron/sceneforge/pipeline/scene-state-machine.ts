@@ -219,7 +219,9 @@ export async function approveSceneStage(
   assertStage(stage);
   const currentState = await readSceneState(projectDir);
   const currentStage = currentState.stages[stage] ?? createDefaultStageState();
-  if (currentStage.status !== 'waiting_approval') {
+  const approvable =
+    currentStage.status === 'waiting_approval' || currentStage.status === 'validated';
+  if (!approvable) {
     throw new SceneStateMachineError(
       'SCENE_STAGE_NOT_VALIDATED',
       `${stage} 阶段尚未通过校验，不能审批。`,

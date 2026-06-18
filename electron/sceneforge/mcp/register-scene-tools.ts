@@ -2,6 +2,20 @@ import { z } from 'zod';
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { SceneForgeService } from '../service';
 
+const SUBMIT_VALIDATE_APPROVE_STAGES = [
+  'design',
+  'storyboard',
+  'video_prompts',
+  'source_intake',
+  'topic_gate',
+  'reference',
+  'story',
+  'assets',
+  'script',
+  'performance',
+  'audio',
+] as const;
+
 const service = new SceneForgeService();
 
 function jsonResult(data: unknown) {
@@ -84,7 +98,7 @@ export function registerSceneForgeMcpTools(server: McpServer): void {
       description: '提交单个阶段产物草案。工具不接受任意文件路径，产物由 Artifact Store 写入。',
       inputSchema: {
         projectDir: z.string().describe('SceneForge 项目目录'),
-        stage: z.enum(['design', 'storyboard', 'video_prompts']),
+        stage: z.enum(SUBMIT_VALIDATE_APPROVE_STAGES),
         artifactKey: z.string().describe('阶段产物 key'),
         content: z.string().describe('Markdown 内容'),
       },
@@ -109,7 +123,7 @@ export function registerSceneForgeMcpTools(server: McpServer): void {
       description: '运行阶段 Validator，并按审批策略推进状态。',
       inputSchema: {
         projectDir: z.string(),
-        stage: z.enum(['design', 'storyboard', 'video_prompts']),
+        stage: z.enum(SUBMIT_VALIDATE_APPROVE_STAGES),
       },
     },
     async ({ projectDir, stage }) => {
@@ -128,7 +142,7 @@ export function registerSceneForgeMcpTools(server: McpServer): void {
       description: '审批已通过校验且等待人工审批的阶段。',
       inputSchema: {
         projectDir: z.string(),
-        stage: z.enum(['design', 'storyboard', 'video_prompts']),
+        stage: z.enum(SUBMIT_VALIDATE_APPROVE_STAGES),
       },
     },
     async ({ projectDir, stage }) => {
@@ -203,7 +217,7 @@ export function registerSceneForgeMcpTools(server: McpServer): void {
         'manual_submit 返回草稿 map 不写盘；direct_llm 调 LLM 生成草案；acp_agent MVP 返回会话简报或配置错误。',
       inputSchema: {
         projectDir: z.string(),
-        stage: z.enum(['design', 'storyboard', 'video_prompts']),
+        stage: z.enum(SUBMIT_VALIDATE_APPROVE_STAGES),
         runnerType: z.enum(['manual_submit', 'direct_llm', 'acp_agent']),
         selectedAssetIds: z.array(z.string()).optional(),
         manualArtifacts: z.record(z.string(), z.string()).optional(),

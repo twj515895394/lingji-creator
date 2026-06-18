@@ -1,0 +1,76 @@
+.root {
+  margin: var(--space-4) var(--space-6) var(--space-5);
+  padding-top: var(--space-4);
+  border-top: 1px solid var(--color-separator);
+}
+
+.track {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  flex-wrap: wrap;
+}
+
+.step {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.stepDot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--color-separator);
+  flex-shrink: 0;
+}
+
+.stepActive .stepDot {
+  background: var(--color-selection-blue);
+}
+
+.stepIconDone {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  background: color-mix(in srgb, var(--color-success, #32d74b) 18%, transparent);
+  color: var(--color-success, #32d74b);
+  flex-shrink: 0;
+}
+
+.connector {
+  width: 24px;
+  height: 1px;
+  background: var(--color-separator);
+  flex-shrink: 0;
+}
+
+.stepBtn {
+  width: auto !important;
+  flex: 0 0 auto;
+  min-width: 96px;
+}
+
+.btnPassed {
+  width: auto !important;
+  flex: 0 0 auto;
+  min-width: 96px;
+  border-color: color-mix(in srgb, var(--color-success, #32d74b) 45%, var(--color-separator)) !important;
+  background: color-mix(in srgb, var(--color-success, #32d74b) 12%, var(--color-panel-bg)) !important;
+  color: var(--color-text-primary) !important;
+  cursor: default;
+}
+
+.btnFailed {
+  border-color: color-mix(in srgb, var(--color-danger, #ff453a) 40%, var(--color-separator)) !important;
+}
+
+.hint {
+  margin: var(--space-2) 0 0;
+  font-size: var(--font-size-sm);
+  color: var(--color-text-secondary);
+  max-width: 52ch;
+}

@@ -30,7 +30,7 @@ import type {
   UserPromptEntry,
   UserPromptSeed,
 } from './prompts';
-import type { SceneApprovalPolicy, SceneArtifactDisplayModel, SceneStageId } from '../types/sceneforge';
+import type { SceneApprovalPolicy, SceneArtifactDisplayModel, SceneEntryPath, SceneStageId } from '../types/sceneforge';
 import type { SceneGetStageContextOptions, SceneRunStageIpcInput } from '../../electron/sceneforge/scene-ipc-types';
 import type { SceneStageRunnerResult } from '../../electron/sceneforge/pipeline/scene-stage-runner';
 import type {
@@ -332,7 +332,7 @@ export interface ElectronAPI {
   saveAIAnalysis: (projectDir: string, data: string) => Promise<string>;
   loadAIAnalysis: (projectDir: string) => Promise<string | null>;
   loadProject: (projectDir: string) => Promise<string>;
-  createSceneForgeProject: (projectDir: string) => Promise<string>;
+  createSceneForgeProject: (projectDir: string, entryPath?: SceneEntryPath) => Promise<string>;
   sceneGetProjectState: (projectDir: string) => Promise<SceneProjectState>;
   sceneGetStageContext: (
     projectDir: string,

@@ -16,6 +16,10 @@ export const SCENE_STAGE_IDS = [
   'export',
 ] as const;
 
+export const SCENE_ENTRY_PATHS = ['source_intake', 'topic_gate'] as const;
+
+export type SceneEntryPath = (typeof SCENE_ENTRY_PATHS)[number];
+
 export const SCENE_APPROVAL_POLICIES = ['required', 'optional', 'auto_if_valid', 'skip'] as const;
 
 export type SceneStageId = (typeof SCENE_STAGE_IDS)[number];
@@ -47,6 +51,8 @@ export interface SceneProjectMeta {
   version: 1;
   projectRoot: 'sceneforge';
   pipelineId: 'reference_remake' | 'original_scene' | 'prompt_pack_only';
+  /** 创建时选择的项目起点；缺省 topic_gate */
+  entryPath?: SceneEntryPath;
   currentStage: SceneStageId | null;
   status: 'ready' | 'in_progress' | 'completed';
   coreArtifacts: SceneCoreArtifactRefs;

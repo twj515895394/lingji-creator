@@ -1,38 +1,56 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
-import { AlertTriangle, CheckCircle2, CircleDashed, FileText, Film, Image } from 'lucide-react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { SceneApprovalPolicy, SceneArtifactCopyBlock, SceneArtifactDisplayModel, SceneStageId } from '../../types/sceneforge';
 import type { SceneArtifact, SceneProjectState, SceneValidationResult } from '../../lib/electron-api';
-import { ArtifactCopyPanel, type SceneCopyFeedback } from '../components/artifacts/ArtifactCopyPanel';
+import { Alert } from '../../ui';
 import { StageRunPanel } from '../components/stage-run/StageRunPanel';
+import { SceneExportWorkspace } from '../components/workspace/SceneExportWorkspace';
+import { SceneAdaptationDirectionPanel } from '../components/workspace/SceneAdaptationDirectionPanel';
+import { SceneGateConfirmPanel } from '../components/workspace/SceneGateConfirmPanel';
+import { SceneSupportPlaceholderWorkspace } from '../components/workspace/SceneSupportPlaceholderWorkspace';
+import {
+  ScenePrepSupportWorkspace,
+  isPrepSupportSubmitStage,
+} from '../components/workspace/ScenePrepSupportWorkspace';
+import { SceneCoreMvpPlaceholder } from '../components/workspace/SceneCoreMvpPlaceholder';
+import { getPrepSupportConfig } from '../lib/scene-prep-support-stages';
+import { SceneIntakeBriefForm } from '../components/workspace/SceneIntakeBriefForm';
+import { SceneGateBriefForm } from '../components/workspace/SceneGateBriefForm';
+import { buildScenePipelineGroups, getSceneStageDefinitionLite } from '../lib/scene-pipeline-ui';
+import { getRecommendedStartStage, stagesCompletedForNav } from '../lib/scene-entry-path';
+import {
+  parseAdaptationDirectionsFromMarkdown,
+  parseAdaptationSelectionFromArtifact,
+  parseGateHITLFromArtifacts,
+} from '../lib/scene-hitl-markdown';
+import { getStageReadiness, getWorkspaceTemplateForStage, readinessLabel } from '../lib/scene-stage-capabilities';
 import { copyPlainTextToClipboard } from '../lib/scene-copy';
+import { ResizeHandle } from '../../components/ResizeHandle';
+import { InspectorSection } from '../../ui/patterns/InspectorSection';
+import { getNextPipelineStage } from '../lib/scene-stage-nav';
+import { SceneStageFlowActions } from '../components/workspace/SceneStageFlowActions';
+import { useSceneForgeStudioLayout } from '../hooks/useSceneForgeStudioLayout';
+import { SceneForgeStudioHeader } from '../components/studio/SceneForgeStudioHeader';
+import { SceneForgeStudioPipelineSidebar } from '../components/studio/SceneForgeStudioPipelineSidebar';
+import { SceneForgeStudioInspector, type SceneInspectorTab } from '../components/studio/SceneForgeStudioInspector';
+import type { SceneCopyFeedback } from '../components/artifacts/ArtifactCopyPanel';
 import styles from './SceneForgeStudio.module.css';
 
-const coreStages = [
-  {
-    id: 'design',
-    title: '设定图提示词',
-    subtitle: 'Design Prompts',
-    description: '角色、场景、道具与总参考图提示词',
-    icon: Image,
-    expectedCoreCount: 5,
-  },
-  {
-    id: 'storyboard',
-    title: '故事板提示词',
-    subtitle: 'Storyboard Prompts',
-    description: '故事板、控制板与风格板提示词',
-    icon: FileText,
-    expectedCoreCount: 4,
-  },
-  {
-    id: 'video_prompts',
-    title: '视频提示词包',
-    subtitle: 'Video Prompt Packs',
-    description: '可交付到视频模型的分段提示词包',
-    icon: Film,
-    expectedCoreCount: 2,
-  },
-] as const;
+const CORE_STUDIO_STAGES = new Set<SceneStageId>(['design', 'storyboard', 'video_prompts']);
+const SUPPORT_SUBMIT_STAGES = new Set<SceneStageId>([
+  'source_intake',
+  'topic_gate',
+  'reference',
+  'story',
+  'assets',
+  'script',
+  'performance',
+  'audio',
+]);
+const CORE_EXPECTED_COUNTS: Partial<Record<SceneStageId, number>> = {
+  design: 5,
+  storyboard: 4,
+  video_prompts: 2,
+};
 
 const policyOptions: Array<{ value: SceneApprovalPolicy; label: string; description: string }> = [
   { value: 'required', label: 'Required', description: '必审' },
@@ -41,10 +59,8 @@ const policyOptions: Array<{ value: SceneApprovalPolicy; label: string; descript
   { value: 'skip', label: 'Skip', description: '跳过审批' },
 ];
 
-const inspectorTabs = ['Preview', 'Structure', 'Trace', 'Raw', 'Copy'] as const;
 const riskyPolicies: SceneApprovalPolicy[] = ['auto_if_valid', 'skip'];
 
-const STAGE_DONE_STATUSES = new Set(['validated', 'waiting_approval', 'approved', 'completed']);
 
 function isCoreFinalArtifact(artifact: SceneArtifact): boolean {
   return (
@@ -74,8 +90,8 @@ interface SceneForgeStudioProps {
 }
 
 export function SceneForgeStudio({ projectDir = null }: SceneForgeStudioProps) {
-  const [selectedStage, setSelectedStage] = useState<SceneStageId>('design');
-  const [selectedTab, setSelectedTab] = useState<(typeof inspectorTabs)[number]>('Preview');
+  const [selectedStage, setSelectedStage] = useState<SceneStageId>('topic_gate');
+  const [selectedTab, setSelectedTab] = useState<SceneInspectorTab>('Preview');
   const [projectState, setProjectState] = useState<SceneProjectState | null>(null);
   const [selectedArtifactId, setSelectedArtifactId] = useState<string | null>(null);
   const [artifactContent, setArtifactContent] = useState<string>('');
@@ -83,14 +99,63 @@ export function SceneForgeStudio({ projectDir = null }: SceneForgeStudioProps) {
   const [copyFeedback, setCopyFeedback] = useState<SceneCopyFeedback>(null);
   const [validation, setValidation] = useState<SceneValidationResult | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [flowBusy, setFlowBusy] = useState<'validate' | 'continue' | null>(null);
+  const [sourceMaterialMarkdown, setSourceMaterialMarkdown] = useState('');
+  const [topicBriefMarkdown, setTopicBriefMarkdown] = useState('');
+  const [gateConfirmationsMarkdown, setGateConfirmationsMarkdown] = useState('');
+  const [adaptationSelectionMarkdown, setAdaptationSelectionMarkdown] = useState('');
+  const [prepSupportMarkdown, setPrepSupportMarkdown] = useState('');
 
-  const selectedStageMeta = coreStages.find((stage) => stage.id === selectedStage) ?? coreStages[0];
+  const selectedStageMeta = useMemo(() => {
+    const lite = getSceneStageDefinitionLite(selectedStage);
+    return {
+      id: lite.id,
+      title: lite.titleZh,
+      subtitle: lite.displayName,
+      expectedCoreCount: CORE_EXPECTED_COUNTS[selectedStage] ?? 0,
+    };
+  }, [selectedStage]);
+
+  const pipelineGroups = useMemo(() => {
+    const statuses: Partial<Record<SceneStageId, import('../../types/sceneforge').SceneStageStatus>> = {};
+    if (projectState?.state.stages) {
+      for (const [id, runtime] of Object.entries(projectState.state.stages)) {
+        if (runtime?.status) {
+          statuses[id as SceneStageId] = runtime.status;
+        }
+      }
+    }
+    return buildScenePipelineGroups(statuses);
+  }, [projectState?.state.stages]);
+
+  const entryStageSynced = useRef(false);
+
+  useEffect(() => {
+    if (!projectState?.entryPath || entryStageSynced.current) {
+      return;
+    }
+    entryStageSynced.current = true;
+    setSelectedStage(getRecommendedStartStage(projectState.entryPath));
+  }, [projectState?.entryPath]);
   const selectedArtifact = useMemo<SceneArtifact | null>(() => {
     return projectState?.artifacts.find((artifact) => artifact.id === selectedArtifactId) ?? null;
   }, [projectState?.artifacts, selectedArtifactId]);
-  const currentPolicy = projectState?.approvalPolicies[selectedStage] ?? 'required';
+  const currentPolicy =
+    projectState?.approvalPolicies[selectedStage] ??
+    getSceneStageDefinitionLite(selectedStage).defaultApprovalPolicy;
   const stageState = projectState?.state.stages[selectedStage];
-  const canApprove = stageState?.status === 'waiting_approval' && validation?.status !== 'failed';
+  const stageStatus = stageState?.status;
+
+  const canContinueStage = useMemo(() => {
+    if (!stageStatus || validation?.status === 'failed') return false;
+    return (
+      stageStatus === 'waiting_approval' ||
+      stageStatus === 'validated' ||
+      stageStatus === 'approved' ||
+      stageStatus === 'completed' ||
+      stageStatus === 'skipped'
+    );
+  }, [stageStatus, validation?.status]);
 
   const refreshProjectState = useCallback(async () => {
     if (!projectDir || typeof window === 'undefined' || !window.electronAPI?.sceneGetProjectState) {
@@ -107,6 +172,178 @@ export function SceneForgeStudio({ projectDir = null }: SceneForgeStudioProps) {
   useEffect(() => {
     void refreshProjectState();
   }, [refreshProjectState]);
+
+  useEffect(() => {
+    if (!projectDir || !projectState?.artifacts.length) {
+      setSourceMaterialMarkdown('');
+      setTopicBriefMarkdown('');
+      setGateConfirmationsMarkdown('');
+      setAdaptationSelectionMarkdown('');
+      setPrepSupportMarkdown('');
+      return;
+    }
+    const load = async (id: string, setter: (v: string) => void) => {
+      if (!projectState.artifacts.some((a) => a.id === id)) {
+        setter('');
+        return;
+      }
+      try {
+        const { content } = await window.electronAPI.sceneReadArtifact(projectDir, id);
+        setter(content);
+      } catch {
+        setter('');
+      }
+    };
+    void load('source_intake.source_material', setSourceMaterialMarkdown);
+    void load('topic_gate.topic_brief', setTopicBriefMarkdown);
+    void load('topic_gate.gate_confirmations', setGateConfirmationsMarkdown);
+    void load('source_intake.adaptation_selection', setAdaptationSelectionMarkdown);
+  }, [projectDir, projectState?.artifacts]);
+
+  useEffect(() => {
+    if (!projectDir || !isPrepSupportSubmitStage(selectedStage)) {
+      setPrepSupportMarkdown('');
+      return;
+    }
+    const config = getPrepSupportConfig(selectedStage);
+    if (!config) {
+      setPrepSupportMarkdown('');
+      return;
+    }
+    const artifactId = `${selectedStage}.${config.artifactKey}`;
+    if (!projectState?.artifacts.some((a) => a.id === artifactId)) {
+      setPrepSupportMarkdown('');
+      return;
+    }
+    void window.electronAPI
+      .sceneReadArtifact(projectDir, artifactId)
+      .then((result) => setPrepSupportMarkdown(result.content))
+      .catch(() => setPrepSupportMarkdown(''));
+  }, [projectDir, projectState?.artifacts, selectedStage]);
+
+  const completedStages = useMemo(() => {
+    const statuses: Partial<Record<SceneStageId, import('../../types/sceneforge').SceneStageStatus>> = {};
+    if (projectState?.state.stages) {
+      for (const [id, runtime] of Object.entries(projectState.state.stages)) {
+        if (runtime?.status) statuses[id as SceneStageId] = runtime.status;
+      }
+    }
+    return stagesCompletedForNav(statuses);
+  }, [projectState?.state.stages]);
+
+  const gateNavContext = useMemo(
+    () => ({
+      topicBrief: topicBriefMarkdown,
+      gateConfirmations: gateConfirmationsMarkdown || null,
+    }),
+    [gateConfirmationsMarkdown, topicBriefMarkdown],
+  );
+
+  const intakeAdaptation = useMemo(() => {
+    const directions = parseAdaptationDirectionsFromMarkdown(sourceMaterialMarkdown);
+    return parseAdaptationSelectionFromArtifact(adaptationSelectionMarkdown, directions);
+  }, [adaptationSelectionMarkdown, sourceMaterialMarkdown]);
+
+  const gateHitl = useMemo(
+    () => parseGateHITLFromArtifacts(topicBriefMarkdown, gateConfirmationsMarkdown || null),
+    [gateConfirmationsMarkdown, topicBriefMarkdown],
+  );
+
+  const entryPath = projectState?.entryPath ?? 'topic_gate';
+
+  const validatePassedForStage =
+    stageState?.status === 'validated' ||
+    stageState?.status === 'waiting_approval' ||
+    stageState?.status === 'approved' ||
+    stageState?.status === 'completed' ||
+    validation?.status === 'passed';
+
+  const gateReadyToValidate =
+    selectedStage !== 'topic_gate' ||
+    (gateHitl.styleConfirmed && gateHitl.decision !== 'drop');
+
+  const gateValidateHint =
+    selectedStage === 'topic_gate' && !gateHitl.styleConfirmed
+      ? '请先完成上方「确认风格并继续」。'
+      : selectedStage === 'topic_gate' && gateHitl.decision === 'drop'
+        ? '已放弃选题，无法继续校验推进。'
+        : undefined;
+
+  const intakeReadyToValidate =
+    selectedStage !== 'source_intake' ||
+    intakeAdaptation.directions.length === 0 ||
+    intakeAdaptation.status === 'selected';
+
+  const intakeValidateHint =
+    selectedStage === 'source_intake' &&
+    intakeAdaptation.directions.length > 0 &&
+    intakeAdaptation.status !== 'selected'
+      ? '请先确认改编方向。'
+      : undefined;
+
+  const flowCanValidate = gateReadyToValidate && intakeReadyToValidate;
+  const flowValidateHint = gateValidateHint ?? intakeValidateHint;
+  const flowCanContinue =
+    selectedStage === 'topic_gate' && gateHitl.decision === 'drop'
+      ? false
+      : canContinueStage;
+
+  const handleValidate = async () => {
+    if (!projectDir || !flowCanValidate || validatePassedForStage) return;
+    setFlowBusy('validate');
+    try {
+      const result = await window.electronAPI.sceneValidateStage(projectDir, selectedStage);
+      setValidation(result);
+      await refreshProjectState();
+    } finally {
+      setFlowBusy(null);
+    }
+  };
+
+  const handleContinueStage = async () => {
+    if (!projectDir || !flowCanContinue) return;
+    const stageAtApprove = selectedStage;
+    const statusNow = projectState?.state.stages[stageAtApprove]?.status;
+
+    if (statusNow === 'approved' || statusNow === 'completed' || statusNow === 'skipped') {
+      const next = getNextPipelineStage(stageAtApprove);
+      if (next) {
+        setSelectedStage(next);
+        setValidation(null);
+        setCopyFeedback(null);
+        const nextId = preferredCoreArtifactId(projectState?.artifacts ?? [], next);
+        if (nextId) {
+          setSelectedArtifactId(nextId);
+          setSelectedTab('Preview');
+        } else {
+          setSelectedArtifactId(null);
+        }
+      }
+      return;
+    }
+
+    setFlowBusy('continue');
+    try {
+      await window.electronAPI.sceneApproveStage(projectDir, stageAtApprove);
+      await refreshProjectState();
+      const next = getNextPipelineStage(stageAtApprove);
+      if (next) {
+        setSelectedStage(next);
+        setValidation(null);
+        setCopyFeedback(null);
+        const artifacts = projectState?.artifacts ?? [];
+        const nextId = preferredCoreArtifactId(artifacts, next);
+        if (nextId) {
+          setSelectedArtifactId(nextId);
+          setSelectedTab('Preview');
+        } else {
+          setSelectedArtifactId(null);
+        }
+      }
+    } finally {
+      setFlowBusy(null);
+    }
+  };
 
   useEffect(() => {
     if (!projectDir || !selectedArtifactId || typeof window === 'undefined') {
@@ -179,21 +416,12 @@ export function SceneForgeStudio({ projectDir = null }: SceneForgeStudioProps) {
     await refreshProjectState();
   };
 
-  const handleValidate = async () => {
-    if (!projectDir) return;
-    const result = await window.electronAPI.sceneValidateStage(projectDir, selectedStage);
-    setValidation(result);
-    await refreshProjectState();
-  };
-
-  const handleApprove = async () => {
-    if (!projectDir || !canApprove) return;
-    await window.electronAPI.sceneApproveStage(projectDir, selectedStage);
-    await refreshProjectState();
-  };
-
   const stageArtifacts = projectState?.artifacts.filter((artifact) => artifact.stage === selectedStage) ?? [];
   const stageCoreFinals = coreFinalArtifactsForStage(projectState?.artifacts ?? [], selectedStage);
+
+  const workspaceTemplate = getWorkspaceTemplateForStage(selectedStage);
+
+  const layout = useSceneForgeStudioLayout();
 
   const previewText =
     displayModel?.summary ||
@@ -203,104 +431,76 @@ export function SceneForgeStudio({ projectDir = null }: SceneForgeStudioProps) {
 
   return (
     <main className={styles.page}>
-      <section className={styles.header}>
-        <div>
-          <p className={styles.eyebrow}>提示词包项目 · Prompt Pack Project</p>
-          <h1>SceneForge Studio</h1>
-        </div>
-        <div className={styles.statusPill}>
-          <CircleDashed size={14} />
-          已就绪
-        </div>
-      </section>
+      <SceneForgeStudioHeader />
 
-      <section className={styles.shell} aria-label="SceneForge Studio 工作台">
-        <aside className={styles.pipeline} aria-label="流程阶段">
-          <div className={styles.panelHeader}>
-            <span>流程阶段</span>
-          </div>
-          <div className={styles.stageList}>
-            {coreStages.map((stage, index) => {
-              const Icon = stage.icon;
-              const status = projectState?.state.stages[stage.id]?.status ?? (index === 0 ? 'ready' : 'ready');
-              const finals = coreFinalArtifactsForStage(projectState?.artifacts ?? [], stage.id);
-              const showFinalEntries = STAGE_DONE_STATUSES.has(status) && finals.length > 0;
-              return (
-                <div key={stage.id} className={styles.stageGroup}>
-                  <button
-                    type="button"
-                    className={`${styles.stageButton} ${selectedStage === stage.id ? styles.stageButtonActive : ''}`}
-                    onClick={() => selectStage(stage.id)}
-                  >
-                    <span className={styles.stageIcon}>
-                      <Icon size={16} />
-                    </span>
-                    <span className={styles.stageText}>
-                      <span>{stage.title}</span>
-                      <em>{stage.subtitle}</em>
-                      <small>{stage.description}</small>
-                    </span>
-                    {status === 'approved' || status === 'waiting_approval' ? (
-                      <CheckCircle2 className={styles.readyIcon} size={15} />
-                    ) : (
-                      <CircleDashed className={styles.pendingIcon} size={15} />
-                    )}
-                  </button>
-                  {showFinalEntries ? (
-                    <ul className={styles.stageArtifactLinks} aria-label={`${stage.title} 核心产物`}>
-                      {finals.map((artifact) => (
-                        <li key={artifact.id}>
-                          <button
-                            type="button"
-                            className={
-                              artifact.id === selectedArtifactId
-                                ? styles.stageArtifactLinkActive
-                                : styles.stageArtifactLink
-                            }
-                            onClick={() => {
-                              selectStage(stage.id);
-                              selectArtifact(artifact.id);
-                            }}
-                          >
-                            {artifact.title}
-                          </button>
-                        </li>
-                      ))}
-                    </ul>
-                  ) : null}
-                </div>
-              );
-            })}
-          </div>
-        </aside>
+      <section
+        className={styles.shell}
+        aria-label="SceneForge Studio 工作台"
+        style={{ gridTemplateColumns: layout.shellGridColumns }}
+      >
+        <SceneForgeStudioPipelineSidebar
+          pipelineGroups={pipelineGroups}
+          selectedStage={selectedStage}
+          entryPath={entryPath}
+          completedStages={completedStages}
+          gateNavContext={gateNavContext}
+          onSelectStage={selectStage}
+        />
+
+        <ResizeHandle
+          axis="x"
+          direction="grow"
+          value={layout.sidebarWidth}
+          min={layout.sidebarMin}
+          max={layout.sidebarMax}
+          onChange={layout.setSidebarWidth}
+          ariaLabel="调整流程侧栏宽度"
+          thickness={layout.handleThickness}
+        />
 
         <section className={styles.workspace} aria-label="当前阶段工作区">
           <div className={styles.panelHeader}>
             <span>当前阶段工作区</span>
           </div>
           <div className={styles.workspaceBody}>
-            <h2>{selectedStageMeta.title}</h2>
-            <p>当前阶段通过受控服务提交、校验和审批。下游只能读取已审批的最终产物。</p>
-            <div className={styles.summaryGrid}>
-              <div>
-                <span>当前阶段</span>
-                <strong>{selectedStage}</strong>
-              </div>
-              <div>
-                <span>审批策略</span>
-                <strong>{currentPolicy}</strong>
-              </div>
-              <div>
-                <span>核心产物</span>
-                <strong>
-                  {stageCoreFinals.length} / {selectedStageMeta.expectedCoreCount}
-                </strong>
-              </div>
-            </div>
+            <header className={styles.stageHero}>
+              <h2 className={styles.stageHeroTitle}>{selectedStageMeta.title}</h2>
+              <p className={styles.stageHeroLead}>
+                {CORE_STUDIO_STAGES.has(selectedStage)
+                  ? '受控提交、校验与审批；下游仅读取已审批产物。'
+                  : SUPPORT_SUBMIT_STAGES.has(selectedStage)
+                    ? '填写并保存后写入本地产物库，再校验与审批。'
+                    : workspaceTemplate === 'export'
+                      ? '导出已通过校验的核心产物清单。'
+                      : workspaceTemplate === 'support'
+                        ? '由 Agent / MCP 推进本阶段。'
+                        : '等待专用工作区或 Agent 推进。'}
+              </p>
+            </header>
 
-            {stageCoreFinals.length > 0 ? (
-              <section className={styles.coreOverview} aria-label="核心产物概览" data-testid="scene-core-overview">
-                <h3>核心产物概览</h3>
+            {CORE_STUDIO_STAGES.has(selectedStage) ? (
+              <InspectorSection title="阶段概览" className={styles.workspaceSection}>
+                <div className={styles.summaryGrid}>
+                  <div>
+                    <span className={styles.summaryLabel}>阶段 ID</span>
+                    <strong className={styles.summaryValue}>{selectedStage}</strong>
+                  </div>
+                  <div>
+                    <span className={styles.summaryLabel}>就绪</span>
+                    <strong className={styles.summaryValue}>{readinessLabel(getStageReadiness(selectedStage))}</strong>
+                  </div>
+                  <div>
+                    <span className={styles.summaryLabel}>核心产物</span>
+                    <strong className={styles.summaryValue}>
+                      {stageCoreFinals.length} / {selectedStageMeta.expectedCoreCount}
+                    </strong>
+                  </div>
+                </div>
+              </InspectorSection>
+            ) : null}
+
+            {CORE_STUDIO_STAGES.has(selectedStage) && stageCoreFinals.length > 0 ? (
+              <InspectorSection title="核心产物概览" className={styles.workspaceSection}>
                 <div className={styles.coreChipRow}>
                   {stageCoreFinals.map((artifact) => (
                     <button
@@ -336,11 +536,104 @@ export function SceneForgeStudio({ projectDir = null }: SceneForgeStudioProps) {
                       ))}
                   </ul>
                 ) : null}
-              </section>
-            ) : (
+              </InspectorSection>
+            ) : CORE_STUDIO_STAGES.has(selectedStage) ? (
               <p className={styles.emptyCopy}>提交并校验通过后，核心 final 产物会出现在这里。</p>
+            ) : SUPPORT_SUBMIT_STAGES.has(selectedStage) ? null : workspaceTemplate === 'support' ? null : workspaceTemplate === 'export' ? (
+              <p className={styles.emptyCopy}>导出阶段见下方「导出核心产物包」。</p>
+            ) : (
+              <p className={styles.emptyCopy}>
+                「{selectedStageMeta.title}」请使用 Agent 工具推进，或等待专用工作区。
+              </p>
             )}
 
+            {selectedStage === 'source_intake' ? (
+              <>
+                <SceneIntakeBriefForm
+                  projectDir={projectDir}
+                  initialMarkdown={sourceMaterialMarkdown}
+                  onSubmitted={() => void refreshProjectState()}
+                  onError={(message) => setErrorMessage(message)}
+                />
+                {intakeAdaptation.directions.length > 0 && intakeAdaptation.status !== 'selected' ? (
+                  <SceneAdaptationDirectionPanel
+                    projectDir={projectDir}
+                    directions={intakeAdaptation.directions}
+                    selectedId={intakeAdaptation.selectedId}
+                    onConfirmed={() => void refreshProjectState()}
+                    onError={(message) => setErrorMessage(message)}
+                  />
+                ) : null}
+              </>
+            ) : null}
+
+            {selectedStage === 'topic_gate' ? (
+              <>
+                <InspectorSection title="选题简报" className={styles.workspaceSection}>
+                  <SceneGateBriefForm
+                    projectDir={projectDir}
+                    initialMarkdown={topicBriefMarkdown}
+                    onSubmitted={() => void refreshProjectState()}
+                    onError={(message) => setErrorMessage(message)}
+                  />
+                </InspectorSection>
+                <InspectorSection title="风格与决策" className={styles.workspaceSection}>
+                  <SceneGateConfirmPanel
+                    projectDir={projectDir}
+                    gateState={gateHitl}
+                    topicBriefMarkdown={topicBriefMarkdown}
+                    onSubmitted={() => void refreshProjectState()}
+                    onError={(message) => setErrorMessage(message)}
+                  />
+                </InspectorSection>
+              </>
+            ) : null}
+
+            {isPrepSupportSubmitStage(selectedStage) ? (
+              <ScenePrepSupportWorkspace
+                projectDir={projectDir}
+                stage={selectedStage}
+                stageTitle={selectedStageMeta.title}
+                initialContent={prepSupportMarkdown}
+                onSubmitted={() => void refreshProjectState()}
+                onError={(message) => setErrorMessage(message)}
+              />
+            ) : null}
+
+            {workspaceTemplate === 'support' && !isPrepSupportSubmitStage(selectedStage) ? (
+              <SceneSupportPlaceholderWorkspace stage={selectedStage} stageTitle={selectedStageMeta.title} />
+            ) : null}
+
+            {workspaceTemplate === 'export' ? (
+              <SceneExportWorkspace
+                projectDir={projectDir}
+                onError={(message) => setErrorMessage(message)}
+              />
+            ) : null}
+
+            {SUPPORT_SUBMIT_STAGES.has(selectedStage) ? (
+              <SceneStageFlowActions
+                canValidate={flowCanValidate}
+                validateDisabledReason={flowValidateHint}
+                validatePassed={validatePassedForStage}
+                validateFailed={validation?.status === 'failed'}
+                canContinue={flowCanContinue}
+                continueDisabledReason={
+                  !validatePassedForStage
+                    ? '请先通过 Validate。'
+                    : !flowCanContinue
+                      ? '校验通过后方可 Continue。'
+                      : undefined
+                }
+                onValidate={() => void handleValidate()}
+                onContinue={() => void handleContinueStage()}
+                validateBusy={flowBusy === 'validate'}
+                continueBusy={flowBusy === 'continue'}
+              />
+            ) : null}
+
+            {CORE_STUDIO_STAGES.has(selectedStage) ? (
+              <>
             <section className={styles.policyPanel} aria-label="审批策略">
               <div>
                 <h3>审批策略</h3>
@@ -359,16 +652,19 @@ export function SceneForgeStudio({ projectDir = null }: SceneForgeStudioProps) {
             </section>
 
             {(currentPolicy === 'auto_if_valid' || currentPolicy === 'skip') && (
-              <div className={styles.warningLine}>
-                <AlertTriangle size={14} />
-                核心阶段正在使用高风险审批策略，请确认下游返工成本。
-              </div>
+              <Alert
+                variant="warning"
+                title="高风险审批策略"
+                description="核心阶段正在使用自动推进或跳过审批，请确认下游返工成本。"
+              />
             )}
 
             {validation?.status === 'failed' && (
-              <div className={styles.errorBox}>
-                Validator failed：{validation.errors[0]?.message ?? '阶段校验未通过。'}
-              </div>
+              <Alert
+                variant="error"
+                title="校验未通过"
+                description={validation.errors[0]?.message ?? '阶段校验未通过。'}
+              />
             )}
 
             <StageRunPanel
@@ -376,106 +672,65 @@ export function SceneForgeStudio({ projectDir = null }: SceneForgeStudioProps) {
               stage={selectedStage}
               stageTitle={selectedStageMeta.title}
               onRunError={(message) => setErrorMessage(message)}
+              onSubmitted={() => void refreshProjectState()}
             />
 
-            <div className={styles.actionRow}>
-              <button type="button" onClick={() => void handleValidate()}>
-                Validate
-              </button>
-              <button
-                type="button"
-                disabled={!canApprove}
-                title={!canApprove ? '阶段必须先通过校验并进入 waiting_approval。' : undefined}
-                onClick={() => void handleApprove()}
-              >
-                Approve &amp; Continue
-              </button>
-            </div>
+            {CORE_STUDIO_STAGES.has(selectedStage) ? (
+              <SceneCoreMvpPlaceholder
+                projectDir={projectDir}
+                stage={selectedStage}
+                onSubmitted={() => void refreshProjectState()}
+                onError={(message) => setErrorMessage(message)}
+              />
+            ) : null}
 
-            {errorMessage && <div className={styles.errorBox}>{errorMessage}</div>}
+            <SceneStageFlowActions
+              canValidate={Boolean(projectDir)}
+              validatePassed={validatePassedForStage}
+              validateFailed={validation?.status === 'failed'}
+              canContinue={canContinueStage}
+              continueDisabledReason={!validatePassedForStage ? '请先通过 Validate。' : undefined}
+              onValidate={() => void handleValidate()}
+              onContinue={() => void handleContinueStage()}
+              validateBusy={flowBusy === 'validate'}
+              continueBusy={flowBusy === 'continue'}
+            />
+              </>
+            ) : null}
+
+            {errorMessage ? (
+              <div className={styles.alertStack}>
+                <Alert variant="error" title="操作失败" description={errorMessage} dismissible onDismiss={() => setErrorMessage(null)} />
+              </div>
+            ) : null}
           </div>
         </section>
 
-        <aside className={styles.inspector} aria-label="产物检查器">
-          <div className={styles.panelHeader}>
-            <span>产物检查器</span>
-          </div>
-          <div className={styles.inspectorBody}>
-            <div className={styles.artifactList}>
-              {stageArtifacts.length === 0 ? (
-                <p className={styles.emptyTitle}>尚未选择产物</p>
-              ) : (
-                stageArtifacts.map((artifact) => (
-                  <button
-                    key={artifact.id}
-                    type="button"
-                    className={artifact.id === selectedArtifactId ? styles.artifactButtonActive : styles.artifactButton}
-                    data-testid="scene-inspector-artifact"
-                    onClick={() => selectArtifact(artifact.id)}
-                  >
-                    {artifact.title}
-                  </button>
-                ))
-              )}
-            </div>
-            <div className={styles.inspectorTabs} role="tablist" aria-label="Artifact Inspector tabs">
-              {inspectorTabs.map((tab) => (
-                <button
-                  key={tab}
-                  type="button"
-                  className={selectedTab === tab ? styles.tabActive : styles.tab}
-                  onClick={() => setSelectedTab(tab)}
-                >
-                  {tab}
-                </button>
-              ))}
-            </div>
-            {selectedArtifact ? (
-              <div className={styles.artifactPreview} data-testid="scene-artifact-inspector">
-                <h3>{selectedArtifact.title}</h3>
-                <p>{selectedArtifact.id}</p>
-                {selectedTab === 'Copy' ? (
-                  <ArtifactCopyPanel
-                    displayModel={displayModel}
-                    rawContent={artifactContent}
-                    feedback={copyFeedback}
-                    onCopyBlock={handleCopyBlock}
-                    onCopyRaw={handleCopyRaw}
-                  />
-                ) : selectedTab === 'Raw' ? (
-                  <>
-                    <button
-                      type="button"
-                      className={styles.rawCopyButton}
-                      data-testid="scene-copy-raw"
-                      onClick={() => void handleCopyRaw()}
-                    >
-                      复制全文 Markdown
-                    </button>
-                    {copyFeedback?.blockId === (selectedArtifactId ?? 'raw') && copyFeedback.status === 'success' ? (
-                      <span className={styles.rawFeedback} data-testid="scene-copy-feedback">
-                        已复制
-                      </span>
-                    ) : null}
-                    <pre>{artifactContent}</pre>
-                  </>
-                ) : selectedTab === 'Trace' ? (
-                  <pre>{JSON.stringify(selectedArtifact, null, 2)}</pre>
-                ) : selectedTab === 'Structure' ? (
-                  <pre>
-                    {displayModel
-                      ? JSON.stringify(displayModel.sections, null, 2)
-                      : selectedArtifact.path}
-                  </pre>
-                ) : (
-                  <pre>{previewText}</pre>
-                )}
-              </div>
-            ) : (
-              <p className={styles.emptyCopy}>核心产物生成后，会在这里查看预览、结构、追踪和原始内容。</p>
-            )}
-          </div>
-        </aside>
+        <ResizeHandle
+          axis="x"
+          direction="shrink"
+          value={layout.inspectorWidth}
+          min={layout.inspectorMin}
+          max={layout.inspectorMax}
+          onChange={layout.setInspectorWidth}
+          ariaLabel="调整产物检查器宽度"
+          thickness={layout.handleThickness}
+        />
+
+        <SceneForgeStudioInspector
+          stageArtifacts={stageArtifacts}
+          selectedArtifact={selectedArtifact}
+          selectedArtifactId={selectedArtifactId}
+          selectedTab={selectedTab}
+          onSelectTab={setSelectedTab}
+          onSelectArtifact={selectArtifact}
+          artifactContent={artifactContent}
+          displayModel={displayModel}
+          previewText={previewText}
+          copyFeedback={copyFeedback}
+          onCopyBlock={(block) => void handleCopyBlock(block)}
+          onCopyRaw={() => void handleCopyRaw()}
+        />
       </section>
     </main>
   );

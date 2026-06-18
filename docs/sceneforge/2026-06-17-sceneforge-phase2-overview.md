@@ -1,7 +1,7 @@
 # SceneForge Studio Phase 2 文档总览
 
 > 日期：2026-06-17  
-> 状态：Phase 2 实施完成（本地，Issues 13–21）；Issue 20 Studio 点跑待维护者 HITL 确认。  
+> 状态：Phase 2 实施完成（本地，Issues 13–21）；**P0 工坊 UI/全链侧栏**见 `.scratch/sceneforge-studio-p0/`（2026-06-17 本地完成，handoff：`.handoff/handoff-20260617-195100.md`）。Issue 20 Studio 点跑待维护者 HITL 确认。  
 > 前置：Issues 01–12（核心闭环）已完成本地实现，见 `.scratch/sceneforge-studio/issues/01`–`12`。
 
 ## 1. Phase 2 目标（一句话）
@@ -70,5 +70,7 @@ Wave D — Studio 执行 UX + 回归（HITL 验收）
 - [x] Wave B：P0 stage pack（design/storyboard/video_prompts/performance/audio）
 - [x] Wave C：direct_llm、acp MVP、sceneRunStage IPC/MCP
 - [x] Wave D：`StageRunPanel` + task-progress；集成测试 `sceneforge-phase2-integration.test.ts`
-- [ ] **HITL**：Electron 内试跑「运行本阶段」+ 复制/审批（Issue 20）
-- [ ] **P2 后置**：支撑链全 SOP、script pack、支撑阶段 Studio、ZIP 导出、scene_start_stage 自动链（见 D4 §3）
+- [ ] **HITL**：Electron 内试跑「运行本阶段」+ 复制/审批（Issue 20）；intake/gate **卡片式确认**仍为 P1
+- [x] **MVP 流水线闭环**（支撑链 reference/story/assets + core 提交衔接）：ADR-0002、`docs/sceneforge/2026-06-18-sceneforge-mvp-pipeline-closure-design.md`、`.scratch/sceneforge-studio-mvp-closure/issues/`（2026-06-18 实现）
+- [x] **P0 工坊包**（产品名、13 阶段侧栏、entryPath、贴边 Shell、intake/gate Markdown submit、支撑占位、export）— 见 handoff `20260617-195100`
+- [ ] **P2 后置**：支撑链全 SOP、script pack、支撑阶段 Studio 表单、ZIP 导出、scene_start_stage 自动链（见 D4 §3）

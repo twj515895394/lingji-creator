@@ -334,6 +334,11 @@ Claude ACP 连接时会向用户项目目录写入 / 更新 `CLAUDE.md` 中的 M
 
 SceneForge 是 Lingji Cut 内的**独立创作模块**，与口播/时间线/Remotion 主链路并列，不是替代关系。
 
+- **用户可见产品名**：**视频内容创作工坊**（勿再以「Prompt Pack 项目」作为主标签）。交付物含分段视频模型提示词，但产品定义是 AI 视频内容创作流水线。
+- **UI 与 Cut 一致**：SceneForge 页面必须遵循根目录 `DESIGN.md`；复用 `src/ui/components`、`src/ui/primitives`、`src/ui/patterns`（如 `Button`、`Tabs`、`Alert`、`InspectorSection`、`SettingsPageHeader`）。布局对齐 Editor：贴边三栏、`--color-panel-bg` + `--color-separator` 列分隔、约 40px 列头；**禁止**在 `src/sceneforge/**/*.module.css` 新增硬编码 `font-size`/`font-weight`（使用 `src/ui/styles/tokens.css` 变量）。子面板（如 `StageRunPanel`）同样遵守。
+- **P0 产品与交互设计**：见 `.scratch/sceneforge-studio-p0/`（`PRD.md`、`DESIGN.md`、`PROBLEM-ANALYSIS.md`、`issues/`）。**入口路径与 Studio HITL 写回**：`docs/adr/0001-sceneforge-entry-path-and-studio-hitl.md`。
+- **MVP 流水线闭环**（reference/story/assets 提交 + core 运行后提交）：`docs/adr/0002-sceneforge-support-chain-mvp-and-core-submit.md`、`docs/sceneforge/2026-06-18-sceneforge-mvp-pipeline-closure-design.md`、实施包 `.scratch/sceneforge-studio-mvp-closure/`（`issues/01`–`05`）。
+- **下一批（P1–P4）**：`.scratch/sceneforge-next-batch/`（PRD、设计 `docs/sceneforge/2026-06-18-sceneforge-next-batch-design.md`、issues 06–09）；ADR 附录 `docs/adr/0002-appendix-production-support-mvp.md`；**P5 UI 债** issue 10 延后。
 - **代码边界**：优先在 `electron/sceneforge/`、`src/sceneforge/`、`prompts/sceneforge/`、`tests/sceneforge-*` 内实现；共享契约用 `src/types/sceneforge.ts`，`project.json` 仅扩展可选 `sceneforge` 段。
 - **低侵入**：通过注册扩展点接入（IPC、MCP、`AppPage` 路由、项目类型），避免散改时间线、脚本工作台、Remotion 导出、TTS 等 Cut 核心文件；若必须改 `App.tsx` / `electron/main.ts`，改动应限于注册与路由分支。
 - **单一职责**：阶段上下文、handoff、runner、pack 加载等拆为独立模块（例如 `scene-context-builder.ts`、`scene-handoff-writer.ts`），避免 `SceneForgeService` 或单页组件承担过多职责。

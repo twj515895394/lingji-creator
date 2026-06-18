@@ -62,7 +62,7 @@ interface SetupProps {
   ) => Promise<void>;
   /** 导入项目回调：打开导入项目向导（处理跨机器项目目录识别与路径修复） */
   onImportProject: () => void;
-  /** 创建 SceneForge Prompt Pack 项目 */
+  /** 创建视频内容创作工坊（SceneForge）项目 */
   onCreateSceneForgeProject: () => Promise<void> | void;
 }
 
@@ -387,7 +387,7 @@ export function Setup({
             <div className={styles.quickItemIcon}>
               <Sparkles size={22} strokeWidth={1.5} />
             </div>
-            <span className={styles.quickItemLabel}>SceneForge 工作台</span>
+            <span className={styles.quickItemLabel}>视频内容创作工坊</span>
           </button>
         </div>
 

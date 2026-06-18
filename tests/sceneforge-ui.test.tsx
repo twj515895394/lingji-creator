@@ -1,42 +1,47 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { renderToStaticMarkup } from 'react-dom/server';
+import { StageRunPanel } from '../src/sceneforge/components/stage-run/StageRunPanel';
 import { SceneForgeStudio } from '../src/sceneforge/pages/SceneForgeStudio';
 import { Setup } from '../src/pages/Setup';
 
 describe('SceneForgeStudio', () => {
-  it('renders the empty Studio shell with core stage entries', () => {
+  it('renders the Studio shell with pipeline and inspector', () => {
     const html = renderToStaticMarkup(<SceneForgeStudio />);
 
-    expect(html).toContain('SceneForge Studio');
+    expect(html).toContain('视频内容创作工坊');
+    expect(html).toContain('创作流水线');
     expect(html).toContain('流程阶段');
     expect(html).toContain('当前阶段工作区');
     expect(html).toContain('产物检查器');
-    expect(html).toContain('审批策略');
-    expect(html).toContain('Approve &amp; Continue');
-    expect(html).toContain('Preview');
-    expect(html).toContain('Structure');
-    expect(html).toContain('Trace');
-    expect(html).toContain('Raw');
-    expect(html).toContain('Copy');
-    expect(html).toContain('Required');
-    expect(html).toContain('Optional');
-    expect(html).toContain('Auto if valid');
-    expect(html).toContain('Skip');
+    expect(html).toContain('选题闸门');
     expect(html).toContain('设定图提示词');
-    expect(html).toContain('故事板提示词');
-    expect(html).toContain('视频提示词包');
-    expect(html).toContain('Design Prompts');
-    expect(html).toContain('Storyboard Prompts');
-    expect(html).toContain('Video Prompt Packs');
-    expect(html).toContain('执行方式');
-    expect(html).toContain('运行本阶段');
-    expect(html).toContain('data-testid="scene-stage-run-panel"');
-    expect(html).toContain('scene-run-stage-button');
+    expect(html).toContain('分镜提示词');
+    expect(html).toContain('视频提示词');
+    expect(html).toContain('data-testid="scene-pipeline-sidebar"');
+    expect(html).toContain('Validate');
+    expect(html).toContain('Continue');
+    expect(html).toContain('data-testid="scene-stage-flow-actions"');
+  });
+
+  it('renders the core stage runner controls', () => {
+    vi.stubGlobal('window', { electronAPI: { sceneRunStage: vi.fn() } });
+    try {
+      const html = renderToStaticMarkup(
+        <StageRunPanel projectDir="/tmp/sceneforge-project" stage="design" stageTitle="设定图提示词" />,
+      );
+
+      expect(html).toContain('执行方式');
+      expect(html).toContain('data-testid="scene-stage-run-panel"');
+      expect(html).toContain('data-testid="scene-runner-select"');
+      expect(html).toContain('data-testid="scene-run-stage-button"');
+    } finally {
+      vi.unstubAllGlobals();
+    }
   });
 });
 
 describe('Setup SceneForge entry', () => {
-  it('renders a SceneForge project creation entry', () => {
+  it('renders video workshop creation entry', () => {
     const noopAsync = async () => undefined;
     const html = renderToStaticMarkup(
       <Setup
@@ -54,6 +59,6 @@ describe('Setup SceneForge entry', () => {
       />,
     );
 
-    expect(html).toContain('SceneForge');
+    expect(html).toContain('视频内容创作工坊');
   });
 });

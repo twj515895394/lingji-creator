@@ -29,8 +29,8 @@ const pageTitleMap: Record<Exclude<AppPage, 'editor'>, string> = {
   'script-workbench': 'AI 写稿工作台',
   settings: '系统设置',
   'auto-run': '一键成稿',
-  'sceneforge-setup': 'SceneForge',
-  'sceneforge-studio': 'SceneForge 工作台',
+  'sceneforge-setup': '视频内容创作工坊',
+  'sceneforge-studio': '视频内容创作工坊',
 };
 
 const pageStatusMap: Record<Exclude<AppPage, 'editor'>, string> = {
@@ -39,8 +39,8 @@ const pageStatusMap: Record<Exclude<AppPage, 'editor'>, string> = {
   'script-workbench': '脚本创作流程',
   settings: '全局配置',
   'auto-run': '一键成稿运行中',
-  'sceneforge-setup': '提示词包项目创建',
-  'sceneforge-studio': '提示词包工作台',
+  'sceneforge-setup': '新建工坊项目',
+  'sceneforge-studio': '视频内容创作流水线',
 };
 
 export function Toolbar({

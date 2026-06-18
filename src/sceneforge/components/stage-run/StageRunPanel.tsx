@@ -3,6 +3,8 @@ import { Play } from 'lucide-react';
 import type { SceneStageId } from '../../../types/sceneforge';
 import type { SceneRunStageInput, SceneStageRunnerResult } from '../../../lib/electron-api';
 import { useTaskProgressStore } from '../../../store/task-progress';
+import { Alert, Button } from '../../../ui';
+import { SceneRunDraftReview } from './SceneRunDraftReview';
 import styles from './StageRunPanel.module.css';
 
 export type SceneStageRunnerType = SceneRunStageInput['runnerType'];
@@ -36,12 +38,21 @@ export interface StageRunPanelProps {
   disabled?: boolean;
   onRunComplete?: (result: SceneStageRunnerResult) => void;
   onRunError?: (message: string) => void;
+  onSubmitted?: () => void;
 }
 
 function extractErrorMessage(error: unknown): string {
   if (error && typeof error === 'object' && 'message' in error) {
     const msg = (error as { message?: unknown }).message;
-    if (typeof msg === 'string' && msg.trim()) return msg;
+    if (typeof msg === 'string' && msg.trim()) {
+      if (
+        msg.includes('SCENE_DIRECT_LLM_NO_SETTINGS') ||
+        msg.includes('未找到应用 LLM 设置')
+      ) {
+        return `${msg} 请打开应用「设置 → AI」，配置 LLM Provider 与 API Key 后再试 Direct LLM。`;
+      }
+      return msg;
+    }
   }
   if (error instanceof Error) return error.message;
   return '阶段运行失败。';
@@ -54,13 +65,62 @@ export function StageRunPanel({
   disabled = false,
   onRunComplete,
   onRunError,
+  onSubmitted,
 }: StageRunPanelProps) {
   const [runnerType, setRunnerType] = useState<SceneStageRunnerType>('manual_submit');
   const [running, setRunning] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
   const [lastHint, setLastHint] = useState<string | null>(null);
   const [errorLocal, setErrorLocal] = useState<string | null>(null);
+  const [pendingArtifacts, setPendingArtifacts] = useState<Record<string, string> | null>(null);
+  const [pendingRequiredKeys, setPendingRequiredKeys] = useState<string[]>([]);
 
   const canRun = Boolean(projectDir && window.electronAPI?.sceneRunStage) && !disabled && !running;
+
+  const handleSubmitDraft = async () => {
+    if (!projectDir || !pendingArtifacts || !window.electronAPI?.sceneSubmitStageDraft) {
+      return;
+    }
+    const coreStages = new Set<SceneStageId>(['design', 'storyboard', 'video_prompts']);
+    if (!coreStages.has(stage)) {
+      onRunError?.('当前阶段不支持从运行结果批量提交。');
+      return;
+    }
+    const missingKeys = pendingRequiredKeys.filter((key) => !pendingArtifacts[key]?.trim());
+    if (pendingRequiredKeys.length === 0 || missingKeys.length > 0) {
+      setErrorLocal(`草案不完整，缺少或为空：${missingKeys.join('、')}`);
+      return;
+    }
+    setSubmitting(true);
+    setErrorLocal(null);
+    try {
+      const artifacts = pendingRequiredKeys.map((artifactKey) => ({
+        artifactKey,
+        content: pendingArtifacts[artifactKey],
+      }));
+      const result = await window.electronAPI.sceneSubmitStageDraft({
+        projectDir,
+        stage: stage as 'design' | 'storyboard' | 'video_prompts',
+        artifacts,
+      });
+      if (result.validation.status === 'failed') {
+        const msg = result.validation.errors[0]?.message ?? '提交后校验未通过';
+        setErrorLocal(msg);
+        onRunError?.(msg);
+      } else {
+        setLastHint(`已提交 ${artifacts.length} 个产物到产物库。`);
+        setPendingArtifacts(null);
+        setPendingRequiredKeys([]);
+        onSubmitted?.();
+      }
+    } catch (error) {
+      const message = extractErrorMessage(error);
+      setErrorLocal(message);
+      onRunError?.(message);
+    } finally {
+      setSubmitting(false);
+    }
+  };
 
   const handleRun = async () => {
     if (!projectDir || !window.electronAPI?.sceneRunStage) {
@@ -86,6 +146,8 @@ export function StageRunPanel({
     setRunning(true);
     setLastHint(null);
     setErrorLocal(null);
+    setPendingArtifacts(null);
+    setPendingRequiredKeys([]);
 
     try {
       taskStore.updateTask(taskId, {
@@ -100,10 +162,15 @@ export function StageRunPanel({
       const keys = Object.keys(result.artifacts).filter((k) => !k.startsWith('__'));
       const summary =
         keys.length > 0
-          ? `已生成 ${keys.length} 个草案字段，请校验后提交。`
+          ? `已生成 ${keys.length} 个草案字段，请点击下方「提交草案到产物库」。`
           : result.artifacts.__acp_session_brief
             ? 'ACP 简报已生成，请按 Agent 说明通过 MCP 提交。'
             : '运行完成，无草案内容。';
+
+      if (keys.length > 0) {
+        setPendingArtifacts(result.artifacts);
+        setPendingRequiredKeys(result.requiredArtifacts ?? keys);
+      }
 
       setLastHint(summary);
       taskStore.completeTask(taskId);
@@ -144,9 +211,10 @@ export function StageRunPanel({
           ))}
         </select>
         <p className={styles.hint}>{selectedHint}</p>
-        <button
+        <Button
           type="button"
-          className={styles.runButton}
+          variant="primary"
+          size="sm"
           data-testid="scene-run-stage-button"
           disabled={!canRun}
           title={!projectDir ? '需要已打开的 SceneForge 项目' : undefined}
@@ -154,10 +222,26 @@ export function StageRunPanel({
         >
           <Play size={14} aria-hidden />
           {running ? '运行中…' : '运行本阶段'}
-        </button>
+        </Button>
       </div>
+      {pendingArtifacts ? (
+        <SceneRunDraftReview
+          artifacts={pendingArtifacts}
+          requiredKeys={pendingRequiredKeys}
+          submitting={submitting || running}
+          onSubmit={() => void handleSubmitDraft()}
+          onDiscard={() => {
+            setPendingArtifacts(null);
+            setPendingRequiredKeys([]);
+            setLastHint('已放弃本次生成草案。');
+            setErrorLocal(null);
+          }}
+        />
+      ) : null}
       {lastHint ? <p className={styles.successHint}>{lastHint}</p> : null}
-      {errorLocal ? <p className={styles.errorHint}>{errorLocal}</p> : null}
+      {errorLocal ? (
+        <Alert variant="error" title="运行失败" description={errorLocal} className={styles.runAlert} />
+      ) : null}
     </section>
   );
 }

@@ -24,7 +24,8 @@ describe('createSceneForgeProject', () => {
       version: 1,
       projectRoot: 'sceneforge',
       pipelineId: 'reference_remake',
-      currentStage: 'design',
+      currentStage: 'topic_gate',
+      entryPath: 'topic_gate',
       status: 'ready',
       coreArtifacts: { design: null, storyboard: null, videoPrompts: null },
       lastExportPath: null,
@@ -40,7 +41,7 @@ describe('createSceneForgeProject', () => {
       await fs.readFile(path.join(tmpDir, 'project.json'), 'utf-8'),
     );
     expect(persisted.type).toBe('sceneforge');
-    expect(persisted.sceneforge.currentStage).toBe('design');
+    expect(persisted.sceneforge.currentStage).toBe('topic_gate');
   });
 
   it('keeps SceneForge project.json compatible with loadProjectFile', async () => {

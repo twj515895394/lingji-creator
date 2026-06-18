@@ -19,6 +19,8 @@ import { ScriptWorkbench } from './pages/ScriptWorkbench';
 import { Settings } from './pages/Settings';
 import { Setup } from './pages/Setup';
 import { SceneForgeStudio } from './sceneforge/pages/SceneForgeStudio';
+import { SceneForgeCreateDialog } from './sceneforge/components/SceneForgeCreateDialog';
+import type { SceneEntryPath } from './types/sceneforge';
 import { AutoRunController } from './components/AutoRunController';
 import { ImportProjectDialog } from './components/ImportProjectDialog';
 import { AppErrorBoundary } from './components/AppErrorBoundary';
@@ -618,31 +620,44 @@ export default function App() {
 
   // ── 导入项目（跨机器项目目录识别与路径修复）──
   const [importProjectDialogOpen, setImportProjectDialogOpen] = useState(false);
+  const [sceneForgeCreateOpen, setSceneForgeCreateOpen] = useState(false);
+  const [sceneForgeCreateBusy, setSceneForgeCreateBusy] = useState(false);
 
   const handleOpenImportProject = useCallback(() => {
     setImportProjectDialogOpen(true);
   }, []);
 
-  const handleCreateSceneForgeProject = useCallback(async () => {
-    const projectDir = await window.electronAPI.selectProjectDirectory();
-    if (!projectDir) {
-      return;
-    }
+  const handleCreateSceneForgeProject = useCallback(() => {
+    setSceneForgeCreateOpen(true);
+  }, []);
 
-    try {
-      const raw = await window.electronAPI.createSceneForgeProject(projectDir);
-      const projectData = JSON.parse(raw) as ProjectData;
+  const handleConfirmSceneForgeCreate = useCallback(
+    async (entryPath: SceneEntryPath) => {
+      const projectDir = await window.electronAPI.selectProjectDirectory();
+      if (!projectDir) {
+        return;
+      }
 
-      setProjectDir(projectDir);
-      await window.electronAPI.addRecentProject(projectDir);
-      void syncWorkspaceState();
-      setSetupError(null);
-      setPage(resolveProjectLandingPage(projectData));
-    } catch (error) {
-      console.error('创建 SceneForge 项目失败:', error);
-      setSetupError('创建 SceneForge 项目失败，请确认目录可写。');
-    }
-  }, [setPage, syncWorkspaceState]);
+      setSceneForgeCreateBusy(true);
+      try {
+        const raw = await window.electronAPI.createSceneForgeProject(projectDir, entryPath);
+        const projectData = JSON.parse(raw) as ProjectData;
+
+        setProjectDir(projectDir);
+        await window.electronAPI.addRecentProject(projectDir);
+        void syncWorkspaceState();
+        setSetupError(null);
+        setSceneForgeCreateOpen(false);
+        setPage(resolveProjectLandingPage(projectData));
+      } catch (error) {
+        console.error('创建 SceneForge 项目失败:', error);
+        setSetupError('创建 SceneForge 项目失败，请确认目录可写。');
+      } finally {
+        setSceneForgeCreateBusy(false);
+      }
+    },
+    [setPage, syncWorkspaceState],
+  );
 
   const handleImportProjectComplete = useCallback(
     async (result: ImportProjectResult) => {
@@ -1232,6 +1247,12 @@ export default function App() {
         open={importProjectDialogOpen}
         onOpenChange={setImportProjectDialogOpen}
         onImported={handleImportProjectComplete}
+      />
+      <SceneForgeCreateDialog
+        open={sceneForgeCreateOpen}
+        busy={sceneForgeCreateBusy}
+        onOpenChange={setSceneForgeCreateOpen}
+        onConfirm={(path) => void handleConfirmSceneForgeCreate(path)}
       />
     </div>
   );

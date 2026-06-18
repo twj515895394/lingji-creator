@@ -2,7 +2,7 @@ import fs from 'node:fs/promises';
 import path from 'node:path';
 import YAML from 'yaml';
 import type { SceneStageId } from '../types';
-import { isSceneStageId } from './scene-stage-definitions';
+import { getSceneStageDefinition, isSceneStageId } from './scene-stage-definitions';
 
 export interface SceneStagePackAuxiliaryPaths {
   contextPolicyPath: string | null;
@@ -34,7 +34,10 @@ export interface SceneStagePackSummary {
   reviewChecklistCount: number;
 }
 
-export type SceneStagePackErrorCode = 'INVALID_STAGE' | 'INVALID_STAGE_PACK';
+export type SceneStagePackErrorCode =
+  | 'INVALID_STAGE'
+  | 'INVALID_STAGE_PACK'
+  | 'SCENE_STAGE_OUTPUT_CONTRACT_MISMATCH';
 
 export class SceneStagePackError extends Error {
   code: SceneStagePackErrorCode;
@@ -97,6 +100,23 @@ function parseOutputContract(raw: string): { requiredArtifacts: string[] } {
   };
 }
 
+export function assertSceneStagePackOutputContract(input: {
+  stage: SceneStageId;
+  requiredArtifacts: string[];
+}): void {
+  const expected = getSceneStageDefinition(input.stage).requiredArtifacts;
+  const matches =
+    expected.length === input.requiredArtifacts.length &&
+    expected.every((key, index) => key === input.requiredArtifacts[index]);
+
+  if (!matches) {
+    throw new SceneStagePackError(
+      'SCENE_STAGE_OUTPUT_CONTRACT_MISMATCH',
+      `Stage pack output contract mismatch for ${input.stage}: expected [${expected.join(', ')}], received [${input.requiredArtifacts.join(', ')}]`,
+    );
+  }
+}
+
 export async function loadSceneStagePack(stage: SceneStageId): Promise<SceneStagePack> {
   if (!isSceneStageId(stage)) {
     throw new SceneStagePackError('INVALID_STAGE', `Unknown SceneForge stage: ${stage}`);
@@ -118,13 +138,19 @@ export async function loadSceneStagePack(stage: SceneStageId): Promise<SceneStag
       fs.readFile(path.join(sourceDir, 'review-checklist.md'), 'utf-8'),
     ]);
 
+    const outputContract = parseOutputContract(outputContractRaw);
+    assertSceneStagePackOutputContract({
+      stage,
+      requiredArtifacts: outputContract.requiredArtifacts,
+    });
+
     return {
       stage,
       sourceDir,
       systemPrompt,
       userPrompt,
       agentInstructions,
-      outputContract: parseOutputContract(outputContractRaw),
+      outputContract,
       reviewChecklist: parseReviewChecklist(reviewChecklistRaw),
       auxiliaryPaths: await resolveAuxiliaryPaths(sourceDir),
     };

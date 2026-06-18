@@ -23,10 +23,18 @@ export interface SceneDirectLlmRunnerDeps {
 }
 
 export class SceneDirectLlmRunnerError extends Error {
-  code: 'SCENE_DIRECT_LLM_NO_SETTINGS' | 'SCENE_DIRECT_LLM_PARSE_FAILED' | 'SCENE_DIRECT_LLM_UNSUPPORTED_STAGE';
+  code:
+    | 'SCENE_DIRECT_LLM_NO_SETTINGS'
+    | 'SCENE_DIRECT_LLM_PARSE_FAILED'
+    | 'SCENE_DIRECT_LLM_MISSING_ARTIFACTS'
+    | 'SCENE_DIRECT_LLM_UNSUPPORTED_STAGE';
 
   constructor(
-    code: 'SCENE_DIRECT_LLM_NO_SETTINGS' | 'SCENE_DIRECT_LLM_PARSE_FAILED' | 'SCENE_DIRECT_LLM_UNSUPPORTED_STAGE',
+    code:
+      | 'SCENE_DIRECT_LLM_NO_SETTINGS'
+      | 'SCENE_DIRECT_LLM_PARSE_FAILED'
+      | 'SCENE_DIRECT_LLM_MISSING_ARTIFACTS'
+      | 'SCENE_DIRECT_LLM_UNSUPPORTED_STAGE',
     message: string,
   ) {
     super(message);
@@ -50,18 +58,35 @@ function parseArtifactsFromLlm(
   raw: string,
   requiredKeys: string[],
 ): Record<string, string> {
-  const parsed = parseLLMJsonResponse(raw) as Record<string, unknown>;
+  let parsed: Record<string, unknown>;
+  try {
+    const result = parseLLMJsonResponse(raw);
+    if (!result || typeof result !== 'object' || Array.isArray(result)) {
+      throw new Error('LLM response must be a JSON object');
+    }
+    parsed = result as Record<string, unknown>;
+  } catch (error) {
+    throw new SceneDirectLlmRunnerError(
+      'SCENE_DIRECT_LLM_PARSE_FAILED',
+      error instanceof Error ? `LLM JSON parse failed: ${error.message}` : 'LLM JSON parse failed',
+    );
+  }
+
   const artifacts: Record<string, string> = {};
+  const missingKeys: string[] = [];
   for (const key of requiredKeys) {
     const value = parsed[key];
     if (typeof value === 'string' && value.trim()) {
       artifacts[key] = value;
+    } else {
+      missingKeys.push(key);
     }
   }
-  if (Object.keys(artifacts).length === 0) {
+
+  if (missingKeys.length > 0) {
     throw new SceneDirectLlmRunnerError(
-      'SCENE_DIRECT_LLM_PARSE_FAILED',
-      'LLM JSON did not contain any required artifact keys',
+      'SCENE_DIRECT_LLM_MISSING_ARTIFACTS',
+      `LLM JSON is missing required artifacts: ${missingKeys.join(', ')}`,
     );
   }
   return artifacts;
@@ -92,6 +117,7 @@ export function createDirectLlmStageRunner(deps: SceneDirectLlmRunnerDeps): Scen
         runnerType: 'direct_llm',
         stage: input.stage,
         artifacts,
+        requiredArtifacts: [...pack.outputContract.requiredArtifacts],
       };
     },
   };

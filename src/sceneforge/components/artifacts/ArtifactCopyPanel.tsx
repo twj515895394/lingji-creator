@@ -1,4 +1,5 @@
 import type { SceneArtifactCopyBlock, SceneArtifactDisplayModel } from '../../../types/sceneforge';
+import { Button } from '../../../ui/components/button';
 import styles from './ArtifactCopyPanel.module.css';
 
 export type SceneCopyFeedback = { blockId: string; status: 'success' | 'error' } | null;
@@ -27,9 +28,15 @@ export function ArtifactCopyPanel({
       <div className={styles.panel}>
         <p className={styles.hint}>该产物暂无结构化复制块，请使用 Raw 视图复制全文。</p>
         {rawContent.trim() ? (
-          <button type="button" className={styles.copyButton} data-testid="scene-copy-raw-fallback" onClick={() => void onCopyRaw()}>
+          <Button
+            type="button"
+            variant="secondary"
+            size="sm"
+            data-testid="scene-copy-raw-fallback"
+            onClick={() => void onCopyRaw()}
+          >
             复制全文
-          </button>
+          </Button>
         ) : null}
       </div>
     );
@@ -49,15 +56,16 @@ export function ArtifactCopyPanel({
             <li key={block.id} className={styles.blockItem}>
               <div className={styles.blockHeader}>
                 <span className={styles.blockLabel}>{block.label}</span>
-                <button
+                <Button
                   type="button"
-                  className={styles.copyButton}
+                  variant="secondary"
+                  size="sm"
                   data-testid="scene-copy-block"
                   data-copy-block-id={block.id}
                   onClick={() => void onCopyBlock(block)}
                 >
                   复制
-                </button>
+                </Button>
               </div>
               <pre className={styles.blockPreview}>{block.text}</pre>
               {feedback?.blockId === block.id && feedback.status === 'success' ? (
