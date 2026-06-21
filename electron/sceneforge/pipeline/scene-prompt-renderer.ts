@@ -1,5 +1,6 @@
 import type { SceneStageContext } from './scene-context-builder';
 import type { SceneStagePack } from './scene-stage-pack';
+import { STORY_CHINESE_MANDATE_SYSTEM_BLOCK } from '../validators/story-chinese-led';
 
 function serializeStageContextForPrompt(context: SceneStageContext): string {
   return JSON.stringify(
@@ -73,7 +74,10 @@ export function renderSceneStagePrompts(
 ): RenderedSceneStagePrompts {
   const contextBlock = serializeStageContextForPrompt(stageContext);
   const contractList = pack.outputContract.requiredArtifacts.join(', ');
+  const languageMandate =
+    pack.stage === 'story' ? STORY_CHINESE_MANDATE_SYSTEM_BLOCK : '';
   const systemPrompt = [
+    languageMandate,
     pack.systemPrompt.replace(/\{\{outputContract\}\}/g, contractList).trim(),
     pack.agentInstructions.trim()
       ? ['## Stage Operating Rules', pack.agentInstructions.trim()].join('\n\n')

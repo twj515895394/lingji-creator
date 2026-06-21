@@ -75,6 +75,64 @@ function makeVideoPromptsMultiPackContext(): SceneStageContext {
 }
 
 function makeArtifacts(stage: keyof typeof REQUIRED_ARTIFACTS): Record<string, string> {
+  if (stage === 'story') {
+    return {
+      story_direction: `## story_development_summary
+围绕返家受压到反击翻盘建立四拍故事骨架。
+
+## logline
+返家少年在街口受压后，用一次干净反击夺回主动权。
+
+## story_premise
+故事聚焦返家瞬间被压制，再通过升级动作完成情绪翻盘。
+
+## duration_target
+target_total_duration_seconds: 45
+rationale: 四个 beat 足够完成建立、升级、高潮与收束。
+
+## story_beats
+- beat_id: beat_01
+  title: 返家建立
+  function: 中文（Setup）
+  beat_summary: 建立主角返家状态、街口氛围与潜在压迫关系。
+- beat_id: beat_02
+  title: 对手施压
+  function: 中文（Escalation）
+  beat_summary: 对手公开压场，逼迫主角作出反应。
+- beat_id: beat_03
+  title: 正面对撞
+  function: 中文（Climax）
+  beat_summary: 主角抓住机会完成干净反击，把节奏拉回主动。
+- beat_id: beat_04
+  title: 余波收束
+  function: 中文（Payoff）
+  beat_summary: 冲突落地后，主角以更稳姿态结束返家考验。
+
+## character_functions
+主角负责承压并翻盘，对手负责制造公开压迫，围观者负责放大局面重量。
+
+## core_scene_functions
+街口负责建立公共压力，院门口负责承接动作收束。
+
+## key_prop_functions
+球体负责触发动作反击，院门负责形成回家与收束意象。
+
+## emotional_arc
+从克制压抑推进到被迫应战，再走向爆发后的稳态收束。
+
+## hero_moment_candidates
+主角在众人视线下完成一次干净反击的瞬间。
+
+## ending_payoff
+主角靠动作重新拿回体面与空间。
+
+## story_risk_notes
+需要避免 beat 之间只有情绪没有动作因果。
+
+## next_action
+进入 assets 阶段，把人物、场景与关键道具拆成可执行资产需求。`,
+    };
+  }
   return Object.fromEntries(
     REQUIRED_ARTIFACTS[stage].map((key) => [key, `# ${key}`]),
   );
@@ -236,6 +294,218 @@ describe('SceneForge direct_llm runner', () => {
     expect(generateText.mock.calls[0]?.[2]).toContain('标题级摘要');
     expect(generateText.mock.calls[0]?.[2]).toContain('video_prompt_trace');
     expect(generateText.mock.calls[0]?.[2]).toContain('主 pack 中禁止保留旧残留结构');
+  });
+
+  it('retries story generation with a chinese-forcing appendix when the first draft is english-led', async () => {
+    const firstDraft = {
+      story_direction: `## story_development_summary
+English summary only.
+
+## logline
+An underdog returns home and faces a neighborhood challenge.
+
+## story_premise
+An English premise paragraph that stays fully English.
+
+## duration_target
+target_total_duration_seconds: 45
+rationale: English only.
+
+## story_beats
+- beat_id: beat_01
+  title: The Return
+  function: Setup
+  beat_summary: He comes back home.
+- beat_id: beat_02
+  title: The Pressure
+  function: Escalation
+  beat_summary: The rivalry grows.
+- beat_id: beat_03
+  title: The Clash
+  function: Climax
+  beat_summary: He fights back.
+- beat_id: beat_04
+  title: The Release
+  function: Payoff
+  beat_summary: The tension resolves.
+
+## character_functions
+Hero versus rival.
+
+## core_scene_functions
+Street and yard.
+
+## key_prop_functions
+Ball and gate.
+
+## emotional_arc
+Pressure to relief.
+
+## hero_moment_candidates
+One decisive move.
+
+## ending_payoff
+He regains dignity.
+
+## story_risk_notes
+Too generic.
+
+## next_action
+Move to assets.`,
+    };
+    const secondDraft = {
+      story_direction: `## story_development_summary
+围绕返家受压到反击翻盘，建立四拍短片骨架。
+
+## logline
+返家少年在街口受压后，用一次干净反击重新夺回主动权。
+
+## story_premise
+故事聚焦返家瞬间被街坊对手压制，再通过一连串升级动作完成情绪翻盘。
+
+## duration_target
+target_total_duration_seconds: 45
+rationale: 四个 beat 足够完成建立、升级、高潮与收束。
+
+## story_beats
+- beat_id: beat_01
+  title: 返家建立
+  function: 中文（Setup）
+  beat_summary: 建立主角返家状态、街口氛围与潜在压迫关系。
+- beat_id: beat_02
+  title: 对手施压
+  function: 中文（Escalation）
+  beat_summary: 对手公开压场，逼迫主角在众目睽睽下作出反应。
+- beat_id: beat_03
+  title: 正面对撞
+  function: 中文（Climax）
+  beat_summary: 主角抓住一次机会完成干净反击，把节奏从被动拉回主动。
+- beat_id: beat_04
+  title: 余波收束
+  function: 中文（Payoff）
+  beat_summary: 冲突落地后，主角以更稳的姿态结束这次返家考验。
+
+## character_functions
+主角负责承受压力并完成翻盘，对手负责制造公开压迫，围观者负责放大局面重量。
+
+## core_scene_functions
+街口负责建立公共压力，院门口负责承接动作收束。
+
+## key_prop_functions
+球体负责触发动作反击，院门负责形成回家与收束意象。
+
+## emotional_arc
+从克制压抑推进到被迫应战，再走向短促爆发后的稳态收束。
+
+## hero_moment_candidates
+主角在众人视线下完成一次干净反击的瞬间。
+
+## ending_payoff
+主角不是靠嘴赢，而是靠动作重新拿回体面与空间。
+
+## story_risk_notes
+需要避免 beat 之间只有情绪没有动作因果。
+
+## next_action
+进入 assets 阶段，把人物、场景与关键道具拆成可执行资产需求。`,
+    };
+    const generateText = vi
+      .fn()
+      .mockResolvedValueOnce(JSON.stringify(firstDraft))
+      .mockResolvedValueOnce(JSON.stringify(secondDraft));
+    const runner = createDirectLlmStageRunner({
+      loadSettings: async () => MOCK_LLM_SETTINGS_REF,
+      generateText,
+    });
+
+    const result = await runner.run({
+      ...baseInput,
+      stage: 'story',
+      stageContext: makeContext('story'),
+    });
+
+    expect(result.artifacts).toEqual(secondDraft);
+    expect(generateText).toHaveBeenCalledTimes(2);
+    expect(generateText.mock.calls[1]?.[2]).toContain('## 【强制纠正】上次输出语言违规');
+    expect(generateText.mock.calls[1]?.[2]).toContain('请完全用简体中文重写 story_direction');
+  });
+
+  it('fails story generation when the chinese retry still returns an english-led draft', async () => {
+    const englishDraft = {
+      story_direction: `## story_development_summary
+English summary only.
+
+## logline
+An English-only logline.
+
+## story_premise
+An English-only premise paragraph.
+
+## duration_target
+target_total_duration_seconds: 45
+rationale: English only.
+
+## story_beats
+- beat_id: beat_01
+  title: The Return
+  function: Setup
+  beat_summary: English beat.
+- beat_id: beat_02
+  title: The Pressure
+  function: Escalation
+  beat_summary: English beat.
+- beat_id: beat_03
+  title: The Clash
+  function: Climax
+  beat_summary: English beat.
+- beat_id: beat_04
+  title: The Release
+  function: Payoff
+  beat_summary: English beat.
+
+## character_functions
+English only.
+
+## core_scene_functions
+English only.
+
+## key_prop_functions
+English only.
+
+## emotional_arc
+English only.
+
+## hero_moment_candidates
+English only.
+
+## ending_payoff
+English only.
+
+## story_risk_notes
+English only.
+
+## next_action
+English only.`,
+    };
+    const generateText = vi
+      .fn()
+      .mockResolvedValueOnce(JSON.stringify(englishDraft))
+      .mockResolvedValueOnce(JSON.stringify(englishDraft));
+    const runner = createDirectLlmStageRunner({
+      loadSettings: async () => MOCK_LLM_SETTINGS_REF,
+      generateText,
+    });
+
+    await expect(
+      runner.run({
+        ...baseInput,
+        stage: 'story',
+        stageContext: makeContext('story'),
+      }),
+    ).rejects.toMatchObject<Partial<SceneDirectLlmRunnerError>>({
+      code: 'SCENE_DIRECT_LLM_INVOKE_FAILED',
+    });
+    expect(generateText).toHaveBeenCalledTimes(2);
   });
 
   it('injects locked multi-pack structure into video_prompts when storyboard pack contains multiple packs', async () => {

@@ -1,0 +1,57 @@
+version: 1
+stage: performance
+consumerRunners:
+  - manual_submit
+  - direct_llm
+  - acp_agent
+
+inputs:
+  - id: script_draft
+    fromStage: script
+    artifactKey: script_draft
+    delivery: handoff_first
+    fallback: full
+    required: true
+
+  - id: design_character_prompts
+    fromStage: design
+    artifactKey: character_prompts
+    delivery: handoff_first
+    fallback: full
+    required: true
+
+  - id: design_prompts
+    fromStage: design
+    artifactKey: design_prompts
+    delivery: handoff_first
+    fallback: full
+    required: true
+
+  - id: design_master
+    fromStage: design
+    artifactKey: master_reference_prompt
+    delivery: summary
+    maxChars: 12000
+
+optionalInputs:
+  - id: story_direction
+    fromStage: story
+    artifactKey: story_direction
+    delivery: summary
+    maxChars: 8000
+
+  - id: reference_notes
+    fromStage: reference
+    artifactKey: reference_notes
+    delivery: summary
+    maxChars: 6000
+
+assetLibrary:
+  allowStyleProfile: true
+  allowMethodologyAssets: true
+
+forbidden: []
+
+runnerOverrides:
+  direct_llm:
+    maxTotalChars: 100000

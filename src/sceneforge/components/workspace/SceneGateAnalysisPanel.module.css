@@ -1,0 +1,169 @@
+.root {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+
+.lead,
+.header p,
+.summary {
+  margin: 0;
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-md);
+  line-height: var(--line-height-normal);
+}
+
+.header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--space-4);
+}
+
+.header h4,
+.block h5 {
+  margin: 0 0 var(--space-1);
+  color: var(--color-text-primary);
+  font-size: var(--font-size-lg);
+  line-height: var(--line-height-tight);
+}
+
+.actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+}
+
+.inlineBusyCard {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-3);
+  padding: var(--space-3);
+  border: 1px solid color-mix(in srgb, var(--color-selection-blue) 30%, var(--color-separator));
+  border-radius: var(--radius-md);
+  background:
+    radial-gradient(circle at top left, color-mix(in srgb, var(--color-selection-blue) 18%, transparent), transparent 52%),
+    color-mix(in srgb, var(--color-selection-blue) 7%, var(--color-panel-bg));
+}
+
+.inlineBusyCard strong {
+  display: block;
+  margin-bottom: 2px;
+  color: var(--color-text-primary);
+  font-size: var(--font-size-md);
+  line-height: var(--line-height-tight);
+}
+
+.inlineBusyCard p {
+  margin: 0;
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-sm);
+  line-height: var(--line-height-normal);
+}
+
+.inlineBusyDot {
+  position: relative;
+  width: 10px;
+  height: 10px;
+  flex: 0 0 10px;
+  border-radius: 999px;
+  background: var(--color-selection-blue);
+  box-shadow: 0 0 0 6px color-mix(in srgb, var(--color-selection-blue) 16%, transparent);
+  animation: gateBusyPulse 1.25s ease-out infinite;
+}
+
+.primaryButton {
+  width: auto !important;
+  flex: 0 0 auto;
+}
+
+.recommendationGrid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: var(--space-2);
+}
+
+.recommendationCard {
+  min-width: 0;
+  padding: var(--space-3);
+  border: 1px solid var(--color-separator);
+  border-radius: var(--radius-md);
+  background: var(--color-panel-bg);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+
+.recommendationCard span,
+.styleFamily {
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-sm);
+  line-height: var(--line-height-tight);
+}
+
+.recommendationCard strong,
+.styleLabel {
+  color: var(--color-text-primary);
+  font-size: var(--font-size-lg);
+  font-weight: 600;
+  line-height: var(--line-height-tight);
+}
+
+.block {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.styleList {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: var(--space-2);
+}
+
+.styleCard {
+  min-width: 0;
+  padding: var(--space-3);
+  border: 1px solid var(--color-separator);
+  border-radius: var(--radius-md);
+  background: color-mix(in srgb, var(--color-selection-blue) 8%, var(--color-panel-bg));
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+
+.feedback {
+  margin-top: 0;
+}
+
+@keyframes gateBusyPulse {
+  0% {
+    transform: scale(0.9);
+    opacity: 0.9;
+    box-shadow: 0 0 0 0 color-mix(in srgb, var(--color-selection-blue) 28%, transparent);
+  }
+  70% {
+    transform: scale(1.1);
+    opacity: 1;
+    box-shadow: 0 0 0 12px color-mix(in srgb, var(--color-selection-blue) 0%, transparent);
+  }
+  100% {
+    transform: scale(0.95);
+    opacity: 0.92;
+    box-shadow: 0 0 0 0 color-mix(in srgb, var(--color-selection-blue) 0%, transparent);
+  }
+}
+
+@media (max-width: 900px) {
+  .header {
+    flex-direction: column;
+  }
+
+  .recommendationGrid,
+  .styleList {
+    grid-template-columns: 1fr;
+  }
+}

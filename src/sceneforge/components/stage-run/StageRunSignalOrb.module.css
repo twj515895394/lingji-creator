@@ -1,0 +1,197 @@
+.root {
+  position: relative;
+  width: 72px;
+  height: 72px;
+  flex-shrink: 0;
+  isolation: isolate;
+}
+
+/* 炫彩背景脉冲光晕 */
+.root::before {
+  content: '';
+  position: absolute;
+  inset: -12px;
+  border-radius: 50%;
+  background: radial-gradient(
+    circle,
+    color-mix(in srgb, var(--color-accent, #0a84ff) 60%, #ff007f) 0%,
+    color-mix(in srgb, #7f00ff 30%, transparent) 45%,
+    transparent 70%
+  );
+  opacity: 0.85;
+  filter: blur(8px);
+  pointer-events: none;
+  z-index: -1;
+}
+
+/* 外扩炫彩脉冲环 */
+.pulseA,
+.pulseB {
+  position: absolute;
+  inset: 4px;
+  border-radius: 50%;
+  border: 2px solid color-mix(in srgb, var(--color-accent, #0a84ff), #ff007f);
+  opacity: 0;
+  pointer-events: none;
+  box-shadow: 
+    0 0 8px color-mix(in srgb, var(--color-accent, #0a84ff) 40%, transparent),
+    inset 0 0 8px color-mix(in srgb, #ff007f 40%, transparent);
+}
+
+.pulseB {
+  border-color: color-mix(in srgb, #7f00ff, #00f0ff);
+}
+
+/* 炫彩外环 */
+.ringOuter {
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.ringOuterTrack {
+  width: 100%;
+  height: 100%;
+  border-radius: 50%;
+  box-sizing: border-box;
+  background: conic-gradient(
+    from 0deg,
+    #ff007f 0%,
+    #7f00ff 20%,
+    #00f0ff 40%,
+    #00ff7f 60%,
+    #ffeb3b 80%,
+    #ff007f 100%
+  );
+  -webkit-mask: radial-gradient(circle, transparent 66%, black 67%);
+  mask: radial-gradient(circle, transparent 66%, black 67%);
+  filter: drop-shadow(0 0 6px rgba(127, 0, 255, 0.65)) drop-shadow(0 0 2px rgba(0, 240, 255, 0.4));
+  opacity: 0.95;
+}
+
+/* 炫彩中环 */
+.ringMid {
+  position: absolute;
+  inset: 5px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.ringMidTrack {
+  width: 100%;
+  height: 100%;
+  border-radius: 50%;
+  box-sizing: border-box;
+  background: conic-gradient(
+    from 180deg,
+    #00f0ff 0%,
+    #7f00ff 25%,
+    #ff007f 50%,
+    #ffeb3b 75%,
+    #00f0ff 100%
+  );
+  -webkit-mask: radial-gradient(circle, transparent 68%, black 69%);
+  mask: radial-gradient(circle, transparent 68%, black 69%);
+  filter: drop-shadow(0 0 5px rgba(0, 240, 255, 0.5));
+  opacity: 0.8;
+}
+
+/* 轨道光点 */
+.orbitShell {
+  position: absolute;
+  inset: 2px;
+  border-radius: 50%;
+}
+
+.dot {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 6px;
+  height: 6px;
+  margin: -3px 0 0 -3px;
+  border-radius: 50%;
+}
+
+.dot:nth-child(1) {
+  transform: rotate(0deg) translateX(32px) translateZ(0);
+  background: #00f0ff;
+  box-shadow: 
+    0 0 8px #00f0ff,
+    0 0 16px #00f0ff;
+}
+
+.dot:nth-child(2) {
+  transform: rotate(120deg) translateX(32px) translateZ(0);
+  background: #ff007f;
+  box-shadow: 
+    0 0 8px #ff007f,
+    0 0 16px #ff007f;
+  opacity: 0.9;
+}
+
+.dot:nth-child(3) {
+  transform: rotate(240deg) translateX(32px) translateZ(0);
+  background: #7f00ff;
+  box-shadow: 
+    0 0 8px #7f00ff,
+    0 0 16px #7f00ff;
+  opacity: 0.75;
+}
+
+/* 中心球体 */
+.core {
+  position: absolute;
+  inset: 16px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: radial-gradient(
+    circle at 35% 35%,
+    rgba(255, 255, 255, 0.22) 0%,
+    rgba(13, 26, 46, 0.85) 60%,
+    #050b14 100%
+  );
+  box-shadow:
+    0 0 0 1px rgba(255, 255, 255, 0.12),
+    0 8px 24px rgba(0, 0, 0, 0.65),
+    inset 0 2px 4px rgba(255, 255, 255, 0.25),
+    inset 0 -2px 6px rgba(0, 0, 0, 0.8);
+  overflow: hidden;
+}
+
+/* 内部炫彩融合光 */
+.coreShine {
+  position: absolute;
+  inset: -50%;
+  border-radius: 50%;
+  background: conic-gradient(
+    from 0deg,
+    rgba(255, 0, 127, 0.45),
+    rgba(127, 0, 255, 0.45),
+    rgba(0, 240, 255, 0.45),
+    rgba(255, 0, 127, 0.45)
+  );
+  filter: blur(5px);
+}
+
+/* 中心旋转呼吸星芒 */
+.spark {
+  position: relative;
+  z-index: 1;
+  width: 10px;
+  height: 10px;
+  border-radius: 1.5px;
+  transform: rotate(45deg) translateZ(0);
+  background: #ffffff;
+  box-shadow:
+    0 0 8px #ffffff,
+    0 0 16px rgba(0, 240, 255, 0.85),
+    0 0 24px rgba(255, 0, 127, 0.6);
+}

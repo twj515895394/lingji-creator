@@ -1,0 +1,12 @@
+version: 1
+stage: story
+artifacts:
+  - artifactKey: story_direction
+    maxChars: 18000
+downstreamNotes:
+  assets:
+    storyFunctions: from_story_direction_summary
+  design:
+    storySummary: from_story_direction_summary
+  script:
+    storyBeats: from_story_direction_beats

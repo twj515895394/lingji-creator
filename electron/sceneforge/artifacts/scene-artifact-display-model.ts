@@ -86,7 +86,7 @@ function truncateExcerpt(text: string, maxChars?: number): string {
 function buildFromBlocks(
   artifact: SceneArtifact,
   summary: string,
-  blocks: Array<{ id: string; label: string; target: 'section' | 'prompt'; text: string }>,
+  blocks: Array<{ id: string; label: string; target: SceneArtifactCopyTarget; text: string }>,
   rawContent: string,
   warnings: SceneArtifactDisplayModel['warnings'],
 ): SceneArtifactDisplayModel {
@@ -117,7 +117,7 @@ function buildFromBlocks(
     sections.push({
       id: block.id,
       title: block.label,
-      kind: block.target === 'prompt' ? 'prompt' : 'section',
+      kind: block.target === 'prompt' ? 'prompt' : block.target === 'full' ? 'overview' : 'section',
       copyBlockIds: [block.id],
     });
   }

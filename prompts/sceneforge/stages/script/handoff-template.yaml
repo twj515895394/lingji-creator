@@ -1,0 +1,13 @@
+version: 1
+stage: script
+artifacts:
+  - artifactKey: script_draft
+    maxChars: 48000
+downstreamNotes:
+  performance:
+    inheritBeats: true
+    inheritSegmentStrategy: true
+    inheritPerformanceHandoff: true
+    inheritBlockingFromDesign: true
+  storyboard:
+    dialogueBeats: from_script_draft_segments

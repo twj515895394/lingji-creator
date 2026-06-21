@@ -21,6 +21,10 @@ import {
 } from '../pipeline/scene-prompt-token-gate';
 import type { SceneStageRunner, SceneStageRunnerInput, SceneStageRunnerResult } from '../pipeline/scene-stage-runner';
 import { buildPerformanceLockedBlockFromStageContext } from '../validators/performance-topic-anchor';
+import {
+  hasChineseLedStoryBody,
+  STORY_CHINESE_RETRY_USER_APPENDIX,
+} from '../validators/story-chinese-led';
 
 export type SceneDirectLlmGenerateText = (
   settings: AISettings,
@@ -336,6 +340,23 @@ function ensureStoryboardBoardTitle(
   }
 
   return `## ${marker}\n\n${content}`;
+}
+
+function buildStoryHardRules(): string {
+  return [
+    '## Story Direction Hard Rules（与系统提示「硬性规则：中文为主」一致）',
+    '- `story_direction` 必须是**中文主导** Markdown：logline、story_premise、每个 beat 的 title 与 beat_summary、角色/场景/道具功能说明、emotional_arc、ending_payoff、risk_notes、next_action 均用**简体中文**撰写。',
+    '- 允许保留 snake_case section 键名、`beat_id`（如 beat_01）、以及 function 括号内的短英文标签（如 Setup、Climax），每项不超过 3 个英文词。',
+    '- **禁止**整篇英文故事方向；**禁止**英文 logline；**禁止** `### Beat N: English Title`；**禁止**英文 beat_summary 段落。',
+    '- 违反语言规则时，本次调用结果无效，必须按用户提示中的强制纠正说明重写。',
+  ].join('\n');
+}
+
+function storyDirectionNeedsChineseRetry(
+  stage: SceneStageId,
+  artifacts: Record<string, string>,
+): boolean {
+  return stage === 'story' && !hasChineseLedStoryBody(artifacts.story_direction ?? '');
 }
 
 function buildVideoPromptsHardRules(): string {
@@ -724,6 +745,8 @@ export function createDirectLlmStageRunner(deps: SceneDirectLlmRunnerDeps): Scen
           ? buildPerformanceLockedBlockFromStageContext(stageContext.requiredInputs)
           : '';
 
+      const storyHardRules = input.stage === 'story' ? buildStoryHardRules() : '';
+
       const artifacts = await invokeDirectLlmPhase(deps, {
         input,
         settings,
@@ -731,8 +754,38 @@ export function createDirectLlmStageRunner(deps: SceneDirectLlmRunnerDeps): Scen
         userPrompt,
         requiredArtifacts: pack.outputContract.requiredArtifacts,
         phaseLabel: 'single-phase',
-        additionalUserSections: performanceLocked ? [performanceLocked] : undefined,
+        additionalUserSections: [
+          ...(performanceLocked ? [performanceLocked] : []),
+          ...(storyHardRules ? [storyHardRules] : []),
+        ].filter(Boolean),
       });
+
+      if (storyDirectionNeedsChineseRetry(input.stage, artifacts)) {
+        const retriedArtifacts = await invokeDirectLlmPhase(deps, {
+          input,
+          settings,
+          systemPrompt,
+          userPrompt,
+          requiredArtifacts: pack.outputContract.requiredArtifacts,
+          phaseLabel: 'single-phase-story-chinese-retry',
+          additionalUserSections: [
+            ...(storyHardRules ? [storyHardRules] : []),
+            STORY_CHINESE_RETRY_USER_APPENDIX,
+          ],
+        });
+        if (storyDirectionNeedsChineseRetry(input.stage, retriedArtifacts)) {
+          throw new SceneDirectLlmRunnerError(
+            'SCENE_DIRECT_LLM_INVOKE_FAILED',
+            'Story 阶段连续两次生成仍未满足“中文主导”硬性规则。请更换模型或收紧上游参考后重试。',
+          );
+        }
+        return {
+          runnerType: 'direct_llm',
+          stage: input.stage,
+          artifacts: retriedArtifacts,
+          requiredArtifacts: [...pack.outputContract.requiredArtifacts],
+        };
+      }
 
       return {
         runnerType: 'direct_llm',

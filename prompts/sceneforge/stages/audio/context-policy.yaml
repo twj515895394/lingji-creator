@@ -1,0 +1,47 @@
+version: 1
+stage: audio
+consumerRunners:
+  - manual_submit
+  - direct_llm
+  - acp_agent
+
+inputs:
+  - id: storyboard_pack
+    fromStage: storyboard
+    artifactKey: storyboard_prompt_pack
+    delivery: handoff_first
+    fallback: full
+    required: true
+
+  - id: performance_sheet
+    fromStage: performance
+    artifactKey: performance_direction
+    delivery: full
+    required: true
+
+  - id: script_draft
+    fromStage: script
+    artifactKey: script_draft
+    delivery: handoff_first
+    fallback: summary
+    required: true
+
+  - id: design_prompts
+    fromStage: design
+    artifactKey: design_prompts
+    delivery: handoff_first
+    fallback: summary
+    required: true
+
+optionalInputs:
+  - id: design_master
+    fromStage: design
+    artifactKey: master_reference_prompt
+    delivery: summary
+    maxChars: 6000
+
+forbidden: []
+
+runnerOverrides:
+  direct_llm:
+    maxTotalChars: 120000

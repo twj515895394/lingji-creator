@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { LoaderCircle, Play } from 'lucide-react';
+import { Play } from 'lucide-react';
 import type { SceneStageId, SceneStageStatus } from '../../../types/sceneforge';
 import type {
   SceneRunStageInput,
@@ -16,6 +16,7 @@ import {
 } from '../../store/scene-stage-run-session';
 import { Alert, Button } from '../../../ui';
 import { SceneRunDraftReview } from './SceneRunDraftReview';
+import { StageRunSignalOrb } from './StageRunSignalOrb';
 import { getSceneStageRunCapability, stageSupportsRunner } from '../../lib/scene-stage-run-capabilities';
 import {
   formatMissingRequiredInputsMessage,
@@ -730,12 +731,8 @@ export function StageRunPanel({
         <p className={styles.hint}>{selectedHint}</p>
         {runSignalCopy ? (
           <div className={styles.runSignalCard} data-testid="scene-run-signal-card" aria-live="polite">
-            <div className={styles.runSignalVisual} aria-hidden="true">
-              <span className={styles.runSignalRing} />
-              <span className={styles.runSignalRingDelayed} />
-              <span className={styles.runSignalCore}>
-                <LoaderCircle size={16} className={styles.runSignalIcon} />
-              </span>
+            <div className={styles.runSignalVisual}>
+              <StageRunSignalOrb determinate={runSignalCopy.progressPercent !== null} />
             </div>
             <div className={styles.runSignalMeta}>
               <div className={styles.runSignalHeader}>

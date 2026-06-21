@@ -73,7 +73,8 @@ const binding: ResolvedBinding = { provider, model: 'm' };
 
 describe('generate with optional binding', () => {
   it('不传 binding：走 createChatModel(settings)（兼容老调用）', async () => {
-    const r = await generateStructuredData(settings, 'sys', 'usr');
+    const legacySettings = { ...settings, llmProviders: [], defaultProviderId: null, defaultModel: '' };
+    const r = await generateStructuredData(legacySettings, 'sys', 'usr');
     expect(r).toEqual({ k: 1 });
     expect(createChatModel).toHaveBeenCalled();
   });

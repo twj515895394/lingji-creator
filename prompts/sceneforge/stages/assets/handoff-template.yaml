@@ -1,0 +1,11 @@
+version: 1
+stage: assets
+artifacts:
+  - artifactKey: asset_plan
+    maxChars: 20000
+downstreamNotes:
+  design:
+    characterNeeds: from_asset_plan_characters
+    sceneNeeds: from_asset_plan_scenes
+    propNeeds: from_asset_plan_props
+    priority: from_asset_plan_priority

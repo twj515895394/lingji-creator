@@ -1,0 +1,32 @@
+version: 1
+stage: reference
+consumerRunners:
+  - manual_submit
+  - direct_llm
+  - acp_agent
+
+inputs:
+  - id: topic_brief
+    fromStage: topic_gate
+    artifactKey: topic_brief
+    delivery: full
+    required: true
+
+optionalInputs:
+  - id: gate_confirmations
+    fromStage: topic_gate
+    artifactKey: gate_confirmations
+    delivery: full
+    maxChars: 12000
+
+  - id: source_material
+    fromStage: source_intake
+    artifactKey: source_material
+    delivery: summary
+    maxChars: 16000
+
+forbidden: []
+
+runnerOverrides:
+  direct_llm:
+    maxTotalChars: 60000

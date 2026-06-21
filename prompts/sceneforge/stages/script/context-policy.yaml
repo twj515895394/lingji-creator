@@ -1,0 +1,41 @@
+version: 1
+stage: script
+consumerRunners:
+  - manual_submit
+  - direct_llm
+  - acp_agent
+
+inputs:
+  - id: story_direction
+    fromStage: story
+    artifactKey: story_direction
+    delivery: handoff_first
+    fallback: full
+    required: true
+
+  - id: design_prompts
+    fromStage: design
+    artifactKey: design_prompts
+    delivery: handoff_first
+    fallback: summary
+    required: true
+
+  - id: design_master
+    fromStage: design
+    artifactKey: master_reference_prompt
+    delivery: handoff_first
+    fallback: summary
+    required: true
+
+optionalInputs:
+  - id: topic_brief
+    fromStage: topic_gate
+    artifactKey: topic_brief
+    delivery: summary
+    maxChars: 8000
+
+forbidden: []
+
+runnerOverrides:
+  direct_llm:
+    maxTotalChars: 100000

@@ -342,11 +342,12 @@ describe('SceneForgeStudio', () => {
     );
 
     expect(html).toContain('本阶段输入');
+    expect(html).toContain('上游阶段产物，不含项目级参考资产');
     expect(html).toContain('阻塞型上游输入');
-    expect(html).toContain('阻塞 3 项');
+    expect(html).toContain('阻塞 3');
+    expect(html).toContain('补充 0');
+    expect(html).toContain('全部就绪');
     expect(html).toContain('补充型上游输入');
-    expect(html).toContain('会随本阶段上下文一起发送给模型');
-    expect(html).toContain('已折叠');
     expect(html.indexOf('design.design_prompts')).toBeLessThan(html.indexOf('story.story_direction'));
     expect(html).toContain('design.master_reference_prompt');
     expect(html).toContain('跨阶段参考资产');
@@ -389,7 +390,7 @@ describe('SceneForgeStudio', () => {
       />,
     );
 
-    expect(html).toContain('缺失 1 项');
+    expect(html).toContain('缺失 1');
     expect(html).toContain('data-default-open="true"');
   });
 

@@ -1,0 +1,9 @@
+--- a/tests/sceneforge-continue-run.test.ts
++++ b/tests/sceneforge-continue-run.test.ts
+@@ -1,1 +1,1 @@
+-      { stage: 'story', expectedNextStage: 'assets', expectedCanRun: false },
++      { stage: 'story', expectedNextStage: 'assets', expectedCanRun: true },
+
+Apply from repo root:
+  git apply .scratch/fix-continue-run-story.patch
+Or manually change story boundary expectedCanRun from false to true.

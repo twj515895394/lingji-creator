@@ -1,0 +1,14 @@
+version: 1
+stage: reference
+artifacts:
+  - artifactKey: reference_notes
+    maxChars: 16000
+downstreamNotes:
+  story:
+    referenceBoundary: from_reference_notes_summary
+    mustKeep: from_reference_notes_must_keep
+    mustAvoid: from_reference_notes_must_avoid
+  assets:
+    referenceBoundary: from_reference_notes_summary
+  design:
+    referenceBoundary: from_reference_notes_summary

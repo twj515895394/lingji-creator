@@ -1837,6 +1837,7 @@ English compiled prompt with Chinese notes.`,
     const failed = await validateSceneStage(tmpDir, 'story');
     expect(failed.status).toBe('failed');
     expect(failed.errors.map((error) => error.code)).toEqual([
+      'SCENE_STORY_DIRECTION_NOT_CHINESE_LED',
       'SCENE_STORY_DIRECTION_MISSING_MARKERS',
       'SCENE_STORY_DIRECTION_INVALID_BEAT_COUNT',
       'SCENE_STORY_DIRECTION_MISSING_BEAT_DETAILS',
@@ -1994,6 +1995,80 @@ rationale: 5 个短 beat 适合 20 秒内容。
 
 ## next_action
 进入 assets 阶段锁定男孩、石子路、小院和足球。`);
+
+    const result = await validateSceneStage(tmpDir, 'story');
+    expect(result.status).toBe('passed');
+    expect(result.errors).toEqual([]);
+  });
+
+  it('counts story beats from ### Beat N subsection headings', async () => {
+    await writeStoryArtifact(`## story_development_summary
+纪实披萨手作全过程。
+
+## logline
+面团到出炉的 20 秒蜕变。
+
+## story_premise
+手作温度与食物本真。
+
+## duration_target
+target_total_duration_seconds: 20
+
+## story_beats
+
+### Beat 1: 和面建立
+*   **beat_id**: beat_01
+*   **title**: 唤醒面团
+*   **function**: Setup
+*   **beat_summary**: 双手按压拉伸面团。
+
+### Beat 2: 配料展开
+*   **beat_id**: beat_02
+*   **title**: 酱汁与配料
+*   **function**: Setup Completion
+*   **beat_summary**: 番茄酱螺旋抹开并撒芝士。
+
+### Beat 3: 烈火推进
+*   **beat_id**: beat_03
+*   **title**: 烈火蜕变
+*   **function**: Climax
+*   **beat_summary**: 送入窑炉芝士融化冒泡。
+
+### Beat 4: 出炉释放
+*   **beat_id**: beat_04
+*   **title**: 出炉瞬间
+*   **function**: Falling Action
+*   **beat_summary**: 托铲取出带蒸汽的成品。
+
+### Beat 5: 分享收束
+*   **beat_id**: beat_05
+*   **title**: 酥脆终章
+*   **function**: Resolution
+*   **beat_summary**: 摇刀切块展示拉丝。
+
+## character_functions
+*   **匠人之手**: 引导节奏
+
+## core_scene_functions
+*   **准备工作台**: 故事起点
+
+## key_prop_functions
+*   **发酵面团**: 展现形变
+
+## emotional_arc
+平静到满足。
+
+## hero_moment_candidates
+*   窑炉芝士融化特写
+
+## ending_payoff
+切块拉丝收尾。
+
+## story_risk_notes
+节奏要紧凑。
+
+## next_action
+进入 design。`);
 
     const result = await validateSceneStage(tmpDir, 'story');
     expect(result.status).toBe('passed');

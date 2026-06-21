@@ -1,5 +1,6 @@
 import { readSceneArtifact } from '../artifacts/scene-artifact-store';
 import type { SceneValidationError } from './scene-validator';
+import { hasChineseLedStoryBody } from './story-chinese-led';
 import { validatePrepSupportStage } from './validators.support-prep';
 
 const STORY_REQUIRED_MARKERS = [
@@ -19,12 +20,23 @@ const STORY_REQUIRED_MARKERS = [
 ] as const;
 
 function countStoryBeats(content: string): number {
-  const lines = extractStoryBeatsSection(content).split('\n');
+  const section = extractStoryBeatsSection(content);
+  const beatIds = new Set<string>();
+  for (const match of section.matchAll(
+    /(?:^|\n)\s*[-*]?\s*(?:\*\s*)?(?:\*\*)?beat_id(?:\*\*)?\s*:\s*([A-Za-z0-9_-]+)/gim,
+  )) {
+    beatIds.add(match[1].toLowerCase());
+  }
+  if (beatIds.size > 0) {
+    return beatIds.size;
+  }
+
+  const lines = section.split('\n');
   let beats = 0;
   for (const rawLine of lines) {
     const line = rawLine.trim();
     if (!line) continue;
-    if (/^-\s*(?:\*\*)?beat_id(?:\*\*)?\s*:\s*[A-Za-z0-9_-]+/i.test(line)) {
+    if (/^#{1,3}\s*Beat\s+\d+/i.test(line)) {
       beats += 1;
       continue;
     }
@@ -45,7 +57,10 @@ function extractStoryBeatsSection(content: string): string {
 }
 
 function countStructuredBeatFields(content: string, fieldName: 'function' | 'beat_summary'): number {
-  const regex = new RegExp(`^\\s*-?\\s*(?:\\*\\*)?${fieldName}(?:\\*\\*)?\\s*:\\s*.+$`, 'gim');
+  const regex = new RegExp(
+    `^\\s*[-*]?\\s*(?:\\*\\s*)?(?:\\*\\*)?${fieldName}(?:\\*\\*)?\\s*:\\s*.+$`,
+    'gim',
+  );
   return extractStoryBeatsSection(content).match(regex)?.length ?? 0;
 }
 
@@ -56,6 +71,17 @@ export async function validateStoryStage(projectDir: string) {
   }
 
   const { content } = await readSceneArtifact(projectDir, 'story.story_direction');
+
+  if (!hasChineseLedStoryBody(content)) {
+    errors.push({
+      code: 'SCENE_STORY_DIRECTION_NOT_CHINESE_LED',
+      level: 'error',
+      message: 'Story 阶段故事方向不是中文主导正文，当前英文占比过高或中文叙述过轻。',
+      suggestion:
+        '请用中文撰写 logline、beat 标题与摘要、角色/场景功能与风险说明；英文仅保留 beat_id、section 键名或括号内短标签。点击「运行本阶段」将自动按中文硬性规则重试生成。',
+    });
+  }
+
   const missingMarkers = STORY_REQUIRED_MARKERS.filter((marker) => !content.includes(marker));
   if (missingMarkers.length > 0) {
     errors.push({

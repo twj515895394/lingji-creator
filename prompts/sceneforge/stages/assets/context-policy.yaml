@@ -1,0 +1,27 @@
+version: 1
+stage: assets
+consumerRunners:
+  - manual_submit
+  - direct_llm
+  - acp_agent
+
+inputs:
+  - id: story_direction
+    fromStage: story
+    artifactKey: story_direction
+    delivery: handoff_first
+    fallback: full
+    required: true
+
+optionalInputs:
+  - id: reference_notes
+    fromStage: reference
+    artifactKey: reference_notes
+    delivery: summary
+    maxChars: 8000
+
+forbidden: []
+
+runnerOverrides:
+  direct_llm:
+    maxTotalChars: 80000

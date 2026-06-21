@@ -1,0 +1,38 @@
+version: 1
+stage: story
+consumerRunners:
+  - manual_submit
+  - direct_llm
+  - acp_agent
+
+inputs:
+  - id: reference_notes
+    fromStage: reference
+    artifactKey: reference_notes
+    delivery: handoff_first
+    fallback: full
+    required: true
+
+optionalInputs:
+  - id: topic_brief
+    fromStage: topic_gate
+    artifactKey: topic_brief
+    delivery: summary
+    maxChars: 8000
+
+  - id: adaptation_selection
+    fromStage: source_intake
+    artifactKey: adaptation_selection
+    delivery: full
+    maxChars: 12000
+
+assetLibrary:
+  allowMethodologyAssets: true
+  allowedAssetIds:
+    - adaptation.idea_seed
+
+forbidden: []
+
+runnerOverrides:
+  direct_llm:
+    maxTotalChars: 80000
