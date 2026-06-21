@@ -1,5 +1,5 @@
 import { CircleDashed } from 'lucide-react';
-import logoHorizontal from '../../assets/sceneforge-logo-horizontal.png';
+import logoHorizontal from '../../../assets/sceneforge-logo-horizontal.png';
 import styles from '../../pages/SceneForgeStudio.module.css';
 
 export function SceneForgeStudioHeader() {
