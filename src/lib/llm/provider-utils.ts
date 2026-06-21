@@ -89,3 +89,63 @@ export function resolveProvider(
   if (defaultProviderId) return providers.find((p) => p.id === defaultProviderId) ?? null;
   return providers[0];
 }
+
+/** 默认模型：优先 settings.defaultModel，否则 Provider.models 第一项 */
+export function resolveDefaultModelName(
+  provider: LLMProvider,
+  defaultModel: string | null | undefined,
+): string | null {
+  const trimmed = defaultModel?.trim();
+  if (trimmed) {
+    return trimmed;
+  }
+  const fromList = provider.models?.map((m) => m.trim()).find((m) => m.length > 0);
+  return fromList ?? null;
+}
+
+export interface DefaultLlmBinding {
+  provider: LLMProvider;
+  model: string;
+}
+
+/** 与 binding-resolver 全局回落一致：defaultProviderId + defaultModel */
+export function resolveDefaultLlmBinding(settings: AISettings): DefaultLlmBinding | null {
+  const migrated = migrateToProviders(settings);
+  const provider = resolveProvider(
+    migrated.llmProviders,
+    null,
+    migrated.defaultProviderId,
+  );
+  if (!provider) {
+    return null;
+  }
+  const model = resolveDefaultModelName(provider, migrated.defaultModel);
+  if (!model) {
+    return null;
+  }
+  return { provider, model };
+}
+
+/** 将 LangChain / 网关原始错误转为工坊可操作的说明 */
+export function formatLlmInvokeErrorMessage(error: unknown): string {
+  const raw =
+    error instanceof Error
+      ? error.message
+      : typeof error === 'string'
+        ? error
+        : 'LLM 调用失败';
+  if (/404|MODEL_NOT_FOUND|model.*not found|does not exist/i.test(raw)) {
+    return [
+      'LLM 接口返回 404（模型不存在或名称不匹配）。',
+      '请打开「设置 → AI」：',
+      '1. 确认已选择默认 Provider；',
+      '2. 在默认模型中填写 Provider 文档中的准确模型 ID（或在该 Provider 的模型列表中添加并选中）；',
+      '3. 在设置里用「测试连接」验证同一模型可用后再回到工坊运行。',
+      `技术信息：${raw}`,
+    ].join('\n');
+  }
+  if (/401|403|unauthorized|invalid.*api.*key|authentication/i.test(raw)) {
+    return `LLM 鉴权失败，请检查「设置 → AI」中该 Provider 的 API Key。\n技术信息：${raw}`;
+  }
+  return raw;
+}

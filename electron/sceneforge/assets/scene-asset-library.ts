@@ -17,6 +17,7 @@ export interface SceneAssetRegistryEntry {
 export interface SceneAssetSnippet {
   id: string;
   title: string;
+  type: SceneAssetType;
   text: string;
 }
 
@@ -41,6 +42,14 @@ export interface SceneLoadedAsset {
   type: SceneAssetType;
   title: string;
   content: Record<string, string>;
+}
+
+export interface ResolveSceneAssetsForStageInput {
+  stage: SceneStageId;
+  selectedAssetIds: string[];
+  allowStyleProfile?: boolean;
+  allowMethodologyAssets?: boolean;
+  allowedAssetIds?: string[];
 }
 
 export type SceneAssetLibraryErrorCode =
@@ -148,6 +157,32 @@ export async function listSceneAssets(): Promise<SceneAssetRegistryEntry[]> {
   return loadRegistry();
 }
 
+export async function listSceneAssetsForStage(input: {
+  stage: SceneStageId;
+  allowStyleProfile?: boolean;
+  allowMethodologyAssets?: boolean;
+  allowedAssetIds?: string[];
+}): Promise<SceneAssetRegistryEntry[]> {
+  if (!isSceneStageId(input.stage)) {
+    throw new SceneAssetLibraryError('INVALID_STAGE', `Unknown SceneForge stage: ${input.stage}`);
+  }
+  const registry = await loadRegistry();
+  const explicitAllowedIds = new Set(input.allowedAssetIds ?? []);
+
+  return registry.filter((entry) => {
+    if (!entry.usedBy.includes(input.stage)) {
+      return false;
+    }
+    if (entry.type === 'style_profile') {
+      return input.allowStyleProfile === true;
+    }
+    if (explicitAllowedIds.size > 0) {
+      return explicitAllowedIds.has(entry.id);
+    }
+    return input.allowMethodologyAssets === true;
+  });
+}
+
 export async function loadSceneAsset(assetId: string): Promise<SceneLoadedAsset> {
   const entry = await getRegistryEntry(assetId);
   const content: Record<string, string> = {};
@@ -201,20 +236,21 @@ function buildSnippetText(entry: SceneAssetRegistryEntry, content: Record<string
   return main;
 }
 
-export async function resolveSceneAssetsForStage(input: {
-  stage: SceneStageId;
-  selectedAssetIds: string[];
-}): Promise<SceneAssetSnippet[]> {
-  if (!isSceneStageId(input.stage)) {
-    throw new SceneAssetLibraryError('INVALID_STAGE', `Unknown SceneForge stage: ${input.stage}`);
-  }
-  const registry = await loadRegistry();
+export async function resolveSceneAssetsForStage(
+  input: ResolveSceneAssetsForStageInput,
+): Promise<SceneAssetSnippet[]> {
+  const available = await listSceneAssetsForStage({
+    stage: input.stage,
+    allowedAssetIds: input.allowedAssetIds,
+    allowStyleProfile: input.allowStyleProfile ?? true,
+    allowMethodologyAssets: input.allowMethodologyAssets ?? true,
+  });
   const selected = new Set(input.selectedAssetIds);
   const snippets: SceneAssetSnippet[] = [];
 
   for (const assetId of input.selectedAssetIds) {
-    const entry = registry.find((item) => item.id === assetId);
-    if (!entry || !entry.usedBy.includes(input.stage)) continue;
+    const entry = available.find((item) => item.id === assetId);
+    if (!entry) continue;
     if (!selected.has(assetId)) continue;
 
     let content: Record<string, string>;
@@ -229,6 +265,7 @@ export async function resolveSceneAssetsForStage(input: {
     snippets.push({
       id: entry.id,
       title: entry.title,
+      type: entry.type,
       text: buildSnippetText(entry, content),
     });
   }

@@ -72,6 +72,44 @@ export class SceneArtifactStoreError extends Error {
 }
 
 const MANIFEST_PATH = path.join('sceneforge', 'artifact_manifest.yaml');
+function mapLegacyManifestStageId(stage: string): SceneStageId | null {
+  if (isSceneStageId(stage)) {
+    return stage;
+  }
+  if (stage === 'export') {
+    return 'publish';
+  }
+  return null;
+}
+
+function normalizeArtifactUsedBy(usedBy: unknown): { usedBy: SceneStageId[]; changed: boolean } {
+  if (!Array.isArray(usedBy)) {
+    return { usedBy: [], changed: usedBy !== undefined && usedBy !== null };
+  }
+  const next: SceneStageId[] = [];
+  let changed = false;
+  for (const entry of usedBy) {
+    if (typeof entry !== 'string') {
+      changed = true;
+      continue;
+    }
+    const mapped = mapLegacyManifestStageId(entry);
+    if (!mapped) {
+      changed = true;
+      continue;
+    }
+    if (mapped !== entry) {
+      changed = true;
+    }
+    if (!next.includes(mapped)) {
+      next.push(mapped);
+    } else if (mapped !== entry) {
+      changed = true;
+    }
+  }
+  return { usedBy: next, changed };
+}
+
 const SAFE_ARTIFACT_KEY = /^[a-z0-9][a-z0-9_-]*$/;
 const SCENE_ARTIFACT_KINDS: SceneArtifactKind[] = ['preview', 'draft', 'review', 'final', 'system', 'export'];
 const SCENE_ARTIFACT_ROLES: SceneArtifactRole[] = [
@@ -135,13 +173,13 @@ function resolveProjectPath(projectDir: string, relativePath: string): string {
 }
 
 function resolveUsedBy(stage: SceneStageId): SceneStageId[] {
-  if (stage === 'design') return ['storyboard', 'video_prompts', 'export'];
-  if (stage === 'storyboard') return ['video_prompts', 'export'];
-  if (stage === 'video_prompts') return ['export'];
+  if (stage === 'design') return ['storyboard', 'video_prompts'];
+  if (stage === 'storyboard') return ['video_prompts'];
+  if (stage === 'video_prompts') return ['publish'];
   if (stage === 'assets') return ['design'];
   if (stage === 'script') return ['performance', 'storyboard'];
-  if (stage === 'performance') return ['storyboard', 'video_prompts', 'export'];
-  if (stage === 'audio') return ['video_prompts', 'export'];
+  if (stage === 'performance') return ['storyboard', 'video_prompts'];
+  if (stage === 'audio') return ['video_prompts'];
   return [];
 }
 
@@ -160,23 +198,31 @@ function isSceneArtifactViewMode(value: unknown): value is SceneArtifactViewMode
   );
 }
 
-function normalizeManifest(value: unknown): ManifestFile {
+function normalizeManifest(value: unknown): { manifest: ManifestFile; migrated: boolean } {
   const raw = value as { artifacts?: unknown[] } | null;
   const artifacts: SceneArtifact[] = [];
+  let migrated = false;
 
   for (const item of raw?.artifacts ?? []) {
     const artifact = item as Partial<SceneArtifact>;
+    const mappedStage =
+      typeof artifact.stage === 'string' ? mapLegacyManifestStageId(artifact.stage) : null;
+    if (typeof artifact.stage === 'string' && artifact.stage !== mappedStage) {
+      migrated = true;
+    }
+    const usedByResult = normalizeArtifactUsedBy(artifact.usedBy);
+    if (usedByResult.changed) {
+      migrated = true;
+    }
     if (
       typeof artifact.id !== 'string' ||
-      !isSceneStageId(artifact.stage) ||
+      !mappedStage ||
       !isSceneArtifactKind(artifact.kind) ||
       !isSceneArtifactRole(artifact.role) ||
       typeof artifact.title !== 'string' ||
       typeof artifact.path !== 'string' ||
       typeof artifact.coreAsset !== 'boolean' ||
       typeof artifact.readableByDownstream !== 'boolean' ||
-      !Array.isArray(artifact.usedBy) ||
-      !artifact.usedBy.every(isSceneStageId) ||
       !Array.isArray(artifact.viewModes) ||
       !artifact.viewModes.every(isSceneArtifactViewMode) ||
       typeof artifact.createdAt !== 'string'
@@ -186,10 +232,14 @@ function normalizeManifest(value: unknown): ManifestFile {
         'artifact_manifest.yaml contains an invalid artifact entry',
       );
     }
-    artifacts.push(artifact as SceneArtifact);
+    artifacts.push({
+      ...(artifact as SceneArtifact),
+      stage: mappedStage,
+      usedBy: usedByResult.usedBy,
+    });
   }
 
-  return { version: 1, artifacts };
+  return { manifest: { version: 1, artifacts }, migrated };
 }
 
 async function readManifest(projectDir: string): Promise<ManifestFile> {
@@ -204,9 +254,12 @@ async function readManifest(projectDir: string): Promise<ManifestFile> {
   }
 
   try {
-    const manifest = normalizeManifest(YAML.parse(raw));
+    const { manifest, migrated } = normalizeManifest(YAML.parse(raw));
     for (const artifact of manifest.artifacts) {
       resolveProjectPath(projectDir, artifact.path);
+    }
+    if (migrated) {
+      await writeManifest(projectDir, manifest);
     }
     return manifest;
   } catch (error) {

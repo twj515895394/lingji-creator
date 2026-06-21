@@ -10,7 +10,11 @@ import type { AISettings, TTSProvider, TTSVoicePreset, PromptBindingMap } from '
 /** 读取全局 AISettings（明文，含 keys）；无则返回 null */
 export async function loadHeadlessAISettings(userDataPath: string): Promise<AISettings | null> {
   const file = await loadGlobalSettings(userDataPath);
-  return file?.aiSettings ?? null;
+  if (!file?.aiSettings) {
+    return null;
+  }
+  const merged = { ...defaultAISettings(), ...file.aiSettings } as AISettings;
+  return normalizeTTSSettings(migrateImageProviders(migrateToProviders(merged)));
 }
 
 export interface HeadlessTTSConfig {

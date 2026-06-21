@@ -8,3 +8,5 @@ downstreamNotes:
     segmentSoundMap: []
     packAudioExecutionSummary: from_audio_design_summary
     continuityHooks: []
+    voiceContinuitySummary: from_voice_direction_summary
+    dialogueCarryover: []

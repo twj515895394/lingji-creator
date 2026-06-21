@@ -13,7 +13,6 @@ export const SCENE_STAGE_IDS = [
   'audio',
   'video_prompts',
   'publish',
-  'export',
 ] as const;
 
 export const SCENE_ENTRY_PATHS = ['source_intake', 'topic_gate'] as const;
@@ -53,6 +52,10 @@ export interface SceneProjectMeta {
   pipelineId: 'reference_remake' | 'original_scene' | 'prompt_pack_only';
   /** 创建时选择的项目起点；缺省 topic_gate */
   entryPath?: SceneEntryPath;
+  /** 项目级视觉风格；用于跨阶段稳定复用，不绑定单次运行。 */
+  selectedStyleProfileId?: string | null;
+  /** 项目级参考资产；只保存显式选择的 registry asset ids。 */
+  selectedAssetIds?: string[];
   currentStage: SceneStageId | null;
   status: 'ready' | 'in_progress' | 'completed';
   coreArtifacts: SceneCoreArtifactRefs;
@@ -112,5 +115,5 @@ export const SCENE_CORE_DISPLAY_ARTIFACT_KEYS: Record<
     'style_board_prompts',
     'master_board_prompt',
   ],
-  video_prompts: ['video_prompt_pack', 'video_prompt_pack_cn', 'video_prompt_pack_en'],
+  video_prompts: ['video_prompt_pack', 'video_prompt_pack_cn', 'video_prompt_review', 'video_prompt_trace', 'video_prompt_pack_en'],
 };

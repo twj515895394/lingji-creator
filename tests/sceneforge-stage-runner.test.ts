@@ -3,8 +3,9 @@ import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { createSceneForgeProject } from '../electron/sceneforge/project/scene-project-file';
-import { createAcpStageRunner } from '../electron/sceneforge/runners/scene-acp-stage-runner';
+import { createAcpAgentStageRunner } from '../electron/sceneforge/runners/scene-acp-agent-runner';
 import { createDirectLlmStageRunner } from '../electron/sceneforge/runners/scene-direct-llm-runner';
+import { MOCK_LLM_SETTINGS } from './sceneforge-mock-llm-settings';
 import { SceneForgeService } from '../electron/sceneforge/service';
 
 let tmpDir: string;
@@ -49,7 +50,7 @@ describe('SceneForge stage runner', () => {
     );
 
     const runner = createDirectLlmStageRunner({
-      loadSettings: async () => ({ llmProviders: [], defaultProviderId: null, defaultModel: null } as never),
+      loadSettings: async () => MOCK_LLM_SETTINGS,
       generateText,
     });
 
@@ -66,8 +67,19 @@ describe('SceneForge stage runner', () => {
     expect((await service.getProjectState(tmpDir)).artifacts).toEqual([]);
   });
 
-  it('acp_agent returns briefing when ACP is available', async () => {
-    const runner = createAcpStageRunner({ isAcpAvailable: async () => true });
+  it('acp_agent returns structured draft when ACP is available', async () => {
+    const runner = createAcpAgentStageRunner({
+      isAgentConfigured: async () => true,
+      runAgentTurn: vi.fn().mockResolvedValue(
+        JSON.stringify({
+          design_prompts: '# D',
+          character_prompts: '# C',
+          scene_prompts: '# S',
+          prop_prompts: '# P',
+          master_reference_prompt: '# M',
+        }),
+      ),
+    });
     const result = await runner.run({
       projectDir: tmpDir,
       stage: 'design',
@@ -76,18 +88,21 @@ describe('SceneForge stage runner', () => {
     });
 
     expect(result.runnerType).toBe('acp_agent');
-    expect(result.artifacts.__acp_session_brief).toContain('briefing_only');
+    expect(result.artifacts.design_prompts).toBe('# D');
   });
 
   it('acp_agent throws friendly error when ACP is not configured', async () => {
-    const runner = createAcpStageRunner({ isAcpAvailable: async () => false });
+    const runner = createAcpAgentStageRunner({
+      isAgentConfigured: async () => false,
+      runAgentTurn: vi.fn(),
+    });
     await expect(
       runner.run({
         projectDir: tmpDir,
         stage: 'design',
-        stageContext: { stage: 'design' },
+        stageContext: await service.getStageContext(tmpDir, 'design', { runner: 'acp_agent' }),
         submitStageDraft: vi.fn(),
       }),
-    ).rejects.toMatchObject({ code: 'SCENE_ACP_NOT_CONFIGURED' });
+    ).rejects.toMatchObject({ code: 'SCENE_ACP_NO_AGENT' });
   });
 });

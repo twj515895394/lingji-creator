@@ -11,6 +11,7 @@ import { validateAssetsStage } from './validators.assets';
 import { validateScriptStage } from './validators.script';
 import { validatePerformanceStage } from './validators.performance';
 import { validateAudioStage } from './validators.audio';
+import { validatePublishStage } from './validators.publish';
 
 export interface SceneValidationError {
   code: string;
@@ -69,6 +70,8 @@ export async function validateSceneStage(
     errors = await validatePerformanceStage(projectDir);
   } else if (stage === 'audio') {
     errors = await validateAudioStage(projectDir);
+  } else if (stage === 'publish') {
+    errors = await validatePublishStage(projectDir);
   } else {
     throw new SceneValidatorError(
       'UNSUPPORTED_STAGE_VALIDATOR',

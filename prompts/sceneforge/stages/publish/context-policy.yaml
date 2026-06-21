@@ -1,0 +1,66 @@
+version: 1
+stage: publish
+consumerRunners:
+  - manual_submit
+  - direct_llm
+  - acp_agent
+
+inputs:
+  - id: video_prompt_pack
+    fromStage: video_prompts
+    artifactKey: video_prompt_pack_cn
+    delivery: full
+    required: true
+
+  - id: story_direction
+    fromStage: story
+    artifactKey: story_direction
+    delivery: handoff_first
+    fallback: full
+    required: true
+
+  - id: design_master
+    fromStage: design
+    artifactKey: master_reference_prompt
+    delivery: summary
+    maxChars: 12000
+    required: true
+
+optionalInputs:
+  - id: topic_brief
+    fromStage: topic_gate
+    artifactKey: topic_brief
+    delivery: summary
+    maxChars: 8000
+
+  - id: topic_analysis
+    fromStage: topic_gate
+    artifactKey: topic_analysis
+    delivery: summary
+    maxChars: 10000
+
+  - id: gate_confirmations
+    fromStage: topic_gate
+    artifactKey: gate_confirmations
+    delivery: summary
+    maxChars: 8000
+
+  - id: reference_notes
+    fromStage: reference
+    artifactKey: reference_notes
+    delivery: summary
+    maxChars: 10000
+
+  - id: video_prompt_trace
+    fromStage: video_prompts
+    artifactKey: video_prompt_trace
+    delivery: summary
+    maxChars: 8000
+
+forbidden: []
+
+runnerOverrides:
+  direct_llm:
+    maxTotalChars: 120000
+  acp_agent:
+    maxTotalChars: 80000

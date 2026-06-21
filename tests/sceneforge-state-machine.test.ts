@@ -9,6 +9,7 @@ import {
   markSceneStageDraftSubmitted,
   markSceneStageValidated,
   readSceneState,
+  setSceneCurrentStage,
 } from '../electron/sceneforge/pipeline/scene-state-machine';
 
 let tmpDir: string;
@@ -49,5 +50,67 @@ describe('SceneForge state machine', () => {
     await expect(approveSceneStage(tmpDir, 'design')).rejects.toMatchObject({
       code: 'SCENE_STAGE_NOT_VALIDATED',
     });
+  });
+
+  it('persists currentStage without mutating existing stage runtime status', async () => {
+    await markSceneStageDraftSubmitted(tmpDir, 'design', ['design.design_prompts']);
+
+    const before = await readSceneState(tmpDir);
+    expect(before.currentStage).toBe('design');
+    expect(before.stages.design.status).toBe('draft_submitted');
+
+    await setSceneCurrentStage(tmpDir, 'script');
+
+    const after = await readSceneState(tmpDir);
+    expect(after.currentStage).toBe('script');
+    expect(after.stages.design.status).toBe('draft_submitted');
+    expect(after.stages.script.status).toBe('ready');
+  });
+
+  it('migrates legacy export stage out of state.json', async () => {
+    const statePath = path.join(tmpDir, 'sceneforge', 'state.json');
+    await fs.writeFile(
+      statePath,
+      JSON.stringify(
+        {
+          version: 1,
+          pipelineId: 'reference_remake',
+          currentStage: 'export',
+          status: 'in_progress',
+          stages: {
+            export: {
+              status: 'validated',
+              artifactIds: ['export.final_prompt_pack'],
+              validation: { status: 'passed', errorCodes: [] },
+              validatedAt: '2026-01-01T00:00:00.000Z',
+              approvedAt: null,
+              revisionNote: null,
+            },
+            design: {
+              status: 'approved',
+              artifactIds: [],
+              validation: null,
+              validatedAt: null,
+              approvedAt: null,
+              revisionNote: null,
+            },
+          },
+          coreArtifacts: { design: null, storyboard: null, videoPrompts: null },
+          updatedAt: '2026-01-01T00:00:00.000Z',
+        },
+        null,
+        2,
+      ),
+      'utf-8',
+    );
+
+    const state = await readSceneState(tmpDir);
+    expect(state.currentStage).toBe('publish');
+    expect(state.stages.export).toBeUndefined();
+    expect(state.stages.publish?.status).toBe('validated');
+
+    const persisted = JSON.parse(await fs.readFile(statePath, 'utf-8'));
+    expect(persisted.currentStage).toBe('publish');
+    expect(persisted.stages.export).toBeUndefined();
   });
 });

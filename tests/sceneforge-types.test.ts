@@ -20,6 +20,8 @@ describe('sceneforge domain types', () => {
       version: 1,
       projectRoot: 'sceneforge',
       pipelineId: 'reference_remake',
+      selectedStyleProfileId: 'style.pixar_like',
+      selectedAssetIds: ['cinematic.shot_language'],
       currentStage: 'design',
       status: 'in_progress',
       coreArtifacts: { design: null, storyboard: null, videoPrompts: null },
@@ -42,5 +44,6 @@ describe('sceneforge domain types', () => {
     } satisfies ProjectData;
 
     expect(data.sceneforge?.pipelineId).toBe('reference_remake');
+    expect(data.sceneforge?.selectedStyleProfileId).toBe('style.pixar_like');
   });
 });

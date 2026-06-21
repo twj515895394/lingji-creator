@@ -34,6 +34,8 @@ Phase 3 不再继续扩充“能点通的占位界面”，而是把现有工坊
 | Continue & Run | `.scratch/sceneforge-continue-and-run/PRD.md` | `docs/sceneforge/2026-06-18-sceneforge-continue-and-run-design.md` + ADR-0003 | `.scratch/sceneforge-continue-and-run/IMPLEMENTATION-PLAN.md` | `.scratch/sceneforge-continue-and-run/issues/01–04` |
 | Support Pack Wave | `.scratch/sceneforge-support-pack-wave/PRD.md` | `docs/sceneforge/2026-06-18-sceneforge-support-pack-wave-design.md` | `.scratch/sceneforge-support-pack-wave/IMPLEMENTATION-PLAN.md` | `.scratch/sceneforge-support-pack-wave/issues/01–07` |
 
+后续 backlog 的完整文档包索引见：`docs/sceneforge/2026-06-18-sceneforge-follow-on-packages-index.md`。
+
 ## 3. 依赖关系
 
 ```text

@@ -14,8 +14,12 @@ describe('SceneForge IPC contract', () => {
 
     expect(main).toContain('registerSceneForgeIpc');
     expect(preload).toContain('sceneGetProjectState');
+    expect(preload).toContain('sceneListAvailableAssets');
+    expect(preload).toContain('sceneUpdateStyleSelection');
     expect(preload).toContain('sceneSetApprovalPolicy');
     expect(api).toContain('sceneGetProjectState');
+    expect(api).toContain('sceneListAvailableAssets');
+    expect(api).toContain('sceneUpdateStyleSelection');
     expect(api).toContain('sceneGetStageContext');
     expect(api).toContain('SceneGetStageContextOptions');
     expect(api).toContain('sceneSubmitStageDraft');
@@ -24,9 +28,10 @@ describe('SceneForge IPC contract', () => {
     expect(api).toContain('sceneSetApprovalPolicy');
     expect(api).toContain('sceneListArtifacts');
     expect(api).toContain('sceneReadArtifact');
-    expect(api).toContain('sceneExportPromptPack');
 
     expect(ipc).toContain('sceneforge:get-stage-context');
+    expect(ipc).toContain('sceneforge:list-assets');
+    expect(ipc).toContain('sceneforge:update-style-selection');
     expect(ipc).toContain('SceneGetStageContextOptions');
 
     expect(preload).toContain('sceneforge:get-stage-context');

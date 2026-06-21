@@ -1,10 +1,12 @@
 import { Alert, Button } from '../../../ui';
+import { getSceneArtifactDisplayLabel } from '../../lib/scene-artifact-labels';
 import styles from './SceneRunDraftReview.module.css';
 
 export interface SceneRunDraftReviewProps {
   artifacts: Record<string, string>;
   requiredKeys: string[];
   submitting: boolean;
+  submitLabel?: string;
   onSubmit: () => void;
   onDiscard: () => void;
 }
@@ -13,6 +15,7 @@ export function SceneRunDraftReview({
   artifacts,
   requiredKeys,
   submitting,
+  submitLabel,
   onSubmit,
   onDiscard,
 }: SceneRunDraftReviewProps) {
@@ -33,7 +36,9 @@ export function SceneRunDraftReview({
         <Alert
           variant="error"
           title="草案不完整"
-          description={`缺少或为空：${missingKeys.join('、')}`}
+          description={`缺少或为空：${missingKeys
+            .map((key) => getSceneArtifactDisplayLabel(key))
+            .join('、')}`}
         />
       ) : null}
 
@@ -43,7 +48,7 @@ export function SceneRunDraftReview({
           return (
             <details className={styles.item} key={key}>
               <summary>
-                <code>{key}</code>
+                <span>{getSceneArtifactDisplayLabel(key)}</span>
                 <span>{content.length} 字符</span>
               </summary>
               <pre>{content || '（无内容）'}</pre>
@@ -64,7 +69,7 @@ export function SceneRunDraftReview({
           disabled={!complete || submitting}
           onClick={onSubmit}
         >
-          {submitting ? '提交中…' : `提交 ${requiredKeys.length} 个草案到产物库`}
+          {submitting ? '提交中…' : submitLabel ?? `提交 ${requiredKeys.length} 个草案到产物库`}
         </Button>
       </div>
     </section>

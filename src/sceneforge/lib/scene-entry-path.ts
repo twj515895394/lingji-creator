@@ -1,6 +1,7 @@
-import type { SceneEntryPath, SceneStageId } from '../../types/sceneforge';
+import type { SceneEntryPath, SceneStageId, SceneStageStatus } from '../../types/sceneforge';
+import { SCENE_STAGE_IDS } from '../../types/sceneforge';
 import { getSceneStageDefinitionLite } from './scene-pipeline-ui';
-import { isTopicGateStyleBlockingDownstream } from './scene-hitl-markdown';
+import { getTopicGateDownstreamBlockReason } from './scene-hitl-markdown';
 
 export interface SceneGateNavContext {
   topicBrief: string;
@@ -18,7 +19,6 @@ const STAGES_AFTER_GATE_STYLE = new Set<SceneStageId>([
   'audio',
   'video_prompts',
   'publish',
-  'export',
 ]);
 
 export function normalizeSceneEntryPath(value: unknown): SceneEntryPath {
@@ -30,6 +30,48 @@ export function normalizeSceneEntryPath(value: unknown): SceneEntryPath {
 
 export function getRecommendedStartStage(entryPath: SceneEntryPath): SceneStageId {
   return entryPath === 'source_intake' ? 'source_intake' : 'topic_gate';
+}
+
+const TERMINAL_STAGE_STATUSES = new Set<SceneStageStatus>(['approved', 'completed', 'skipped']);
+const ACTIVE_STAGE_STATUSES = new Set<SceneStageStatus>([
+  'in_progress',
+  'draft_submitted',
+  'validation_failed',
+  'validated',
+  'waiting_approval',
+  'revision_requested',
+]);
+
+function orderedStagesForEntryPath(entryPath: SceneEntryPath): SceneStageId[] {
+  return SCENE_STAGE_IDS.filter((stageId) => !(entryPath === 'topic_gate' && stageId === 'source_intake'));
+}
+
+export function getRecommendedResumeStage(input: {
+  entryPath: SceneEntryPath;
+  currentStage: SceneStageId | null;
+  stageStatuses: Partial<Record<SceneStageId, SceneStageStatus>>;
+}): SceneStageId {
+  const orderedStages = orderedStagesForEntryPath(input.entryPath);
+  if (input.currentStage && orderedStages.includes(input.currentStage)) {
+    const currentStatus = input.stageStatuses[input.currentStage];
+    if (currentStatus && !TERMINAL_STAGE_STATUSES.has(currentStatus)) {
+      return input.currentStage;
+    }
+  }
+
+  for (const stageId of orderedStages) {
+    const status = input.stageStatuses[stageId] ?? 'ready';
+    if (ACTIVE_STAGE_STATUSES.has(status)) {
+      return stageId;
+    }
+    if (!TERMINAL_STAGE_STATUSES.has(status)) {
+      return stageId;
+    }
+  }
+
+  return input.currentStage && orderedStages.includes(input.currentStage)
+    ? input.currentStage
+    : getRecommendedStartStage(input.entryPath);
 }
 
 export function isStageDependencySatisfied(
@@ -73,9 +115,7 @@ export function getStageNavBlockReason(
   const depReason = getStageDependencyBlockReason(stageId, completedStages, entryPath);
   if (depReason) return depReason;
   if (gateCtx && STAGES_AFTER_GATE_STYLE.has(stageId)) {
-    if (isTopicGateStyleBlockingDownstream(gateCtx.gateConfirmations, gateCtx.topicBrief)) {
-      return '请先完成「选题闸门」的风格确认';
-    }
+    return getTopicGateDownstreamBlockReason(gateCtx.gateConfirmations, gateCtx.topicBrief);
   }
   return null;
 }

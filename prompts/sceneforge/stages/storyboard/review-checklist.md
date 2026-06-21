@@ -1,5 +1,28 @@
 # Storyboard Review Checklist
 
-- Storyboard pack covers beats with clear segment or shot headings.
-- Control and style boards stay consistent with design master reference.
-- Master board prompt summarizes continuity for video stage.
+- `storyboard_prompt_pack` 必须明确写出：`beat_skeleton`、`storyboard_content_breakdown`、`cinematic_language_plan`、`video_generation_units`、`shot_continuity_plan`、`continuity_control_system`、`storyboard_prompt_pack_plan`、`storyboard_quality_check`、`design_reconciliation_review`。
+- `storyboard_prompt_pack_plan` 必须明确写出总镜头数、单包/多包决策以及每包覆盖范围；不得省略包数与拆包逻辑。
+- `storyboard_prompt_pack_plan` 必须显式写出 `segment_duration_seconds`，并为每个 Segment 写清 `time_range`、`pacing_profile`、`shot_count`、`boundary_lock`。
+- 每个 Segment 的 `time_range` 必须完整落在单一段界内；例如 10 秒分段下，不得出现 `9s-13s` 这类跨段区间。
+- 每个 Segment 的 `shot_count` 必须同时满足段长硬区间与 pacing profile 期望：`lyrical` 靠低密度、`balanced` 靠中密度、`kinetic` 靠高密度。
+- `control_board_prompts` 必须使用正式整板 prompt 体裁，至少包含：`Control-Oriented Storyboard Board`，并且每个 Pack 都要包在 `copy-block` 里。
+- `style_board_prompts` 必须使用正式整板 prompt 体裁，至少包含：`Style & Rendering Storyboard Board`，并且每个 Pack 都要包在 `copy-block` 里。
+- 若 `total_shots > 12` 或 `storyboard_prompt_pack_plan` 已声明多包，`control_board_prompts` 与 `style_board_prompts` 必须按 Pack 分别生成完整正式 prompt；不得只写一个总 Prompt 再附多包说明。
+- 多包时，每个 Pack 都必须保留完整结构，块内以 `## Pack N:` 起头，且应可单独复制给外部出板模型。
+- `control_board_prompts` 必须明确红色人物运动箭头和蓝色摄影机运动箭头都画在对应画面区内部，而不是只写到底部轨道栏。
+- `control_board_prompts` 中若某格无人物移动或无摄影机运动，必须显式写出“人物静止”或“固定机位”。
+- `control_board_prompts` 的画面区必须保持专业分镜描述密度，至少覆盖景别、机位角度、构图重心、主体姿态/表演、空间关系、层次、光线、关键细节、镜头运动结果、叙事目的中的大多数维度；不能退化成一句画面摘要加箭头说明。
+- `control_board_prompts` 与 `style_board_prompts` 都必须中文主导；不能只有英文总提示词，把真正的 pack 逻辑留在后面的中文说明里。
+- 每个正式 board prompt 都应覆盖 `Panel Layout`、`Beat Line`、`Camera Path`、`Action Path`、`Rhythm Track`、`State Track`、`Continuity Rules`、`Color Legend` 等导演级控制信息，而不是只给镜头摘要。
+- `style_board_prompts` 的画面区也必须保持专业分镜描述密度，不能只剩风格词、材质词和箭头规则。
+- 多包时必须写清 Pack 交界镜头或衔接策略，确保角色朝向、视线、运动方向、场景轴线、速度感与光线条件在上下包之间连续。
+- `design_reconciliation_review` 必须说明最终分镜是否要求回到 design 阶段补角色表情、动作姿态、道具状态或空间站位。
+- `design_reconciliation_review` 必须显式写出 `design_revision_required: true | false`，若为 `true`，不得把 storyboard 视为可直接推进的 completed 版本。
+- 正式产物默认中文主导；英文只作为必要专业术语，除非用户明确要求，否则不得全篇英文。
+- Storyboard 主包必须通过清晰的 segment / shot 标题覆盖主要 beats。
+- Beat skeleton、continuity 逻辑与整包规划必须显式可见，不能只靠暗示。
+- Pack 数、segment 数、beat 数与镜头范围必须前后一致。
+- Control / style boards 必须与 design 主参考保持一致。
+- Control board 要优先保证动作可读性、镜头路径与 blocking 清晰。
+- Style board 可以加质感，但不能与 control board 冲突。
+- Master board prompt 必须足够概括连续性，能够让 video 阶段直接继承。

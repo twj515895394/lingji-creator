@@ -7,7 +7,7 @@ import styles from './SceneStageBriefForms.module.css';
 export interface SceneIntakeBriefFormProps {
   projectDir: string | null;
   initialMarkdown?: string;
-  onSubmitted?: () => void;
+  onSubmitted?: (result: SubmitStageDraftResult) => void;
   onError?: (message: string) => void;
 }
 
@@ -46,7 +46,7 @@ export function SceneIntakeBriefForm({
       if (result.validation.status === 'failed') {
         onError?.(result.validation.errors[0]?.message ?? '校验未通过');
       } else {
-        onSubmitted?.();
+        onSubmitted?.(result);
       }
     } catch (error) {
       onError?.(error instanceof Error ? error.message : '提交失败');
@@ -96,7 +96,7 @@ export function SceneIntakeBriefForm({
         <Alert
           variant="success"
           title="已保存到本项目"
-          description={`产物已写入本地 Artifact Store，阶段状态：${lastResult.status}。可在右侧检查器查看，或点 Validate 做规则校验。`}
+          description={`产物已写入本地 Artifact Store，阶段状态：${lastResult.status}。下一步请确认改编方向，再继续后续阶段。`}
           className={styles.feedback}
         />
       ) : null}

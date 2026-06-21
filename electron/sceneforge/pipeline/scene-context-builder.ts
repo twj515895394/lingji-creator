@@ -5,9 +5,16 @@ import {
   listSceneArtifacts,
   readSceneArtifact,
 } from '../artifacts/scene-artifact-store';
-import { buildSceneArtifactDisplayModel } from '../artifacts/scene-artifact-display-model';
-import { resolveSceneAssetsForStage, type SceneAssetSnippet } from '../assets/scene-asset-library';
-import { getSceneStageDefinition } from './scene-stage-definitions';
+import {
+  buildSceneArtifactDisplayExcerpt,
+  buildSceneArtifactDisplayModel,
+} from '../artifacts/scene-artifact-display-model';
+import {
+  listSceneAssetsForStage,
+  resolveSceneAssetsForStage,
+  type SceneAssetSnippet,
+} from '../assets/scene-asset-library';
+import { getSceneStageDefinition, getSceneStageOrder } from './scene-stage-definitions';
 import {
   extractHandoffSliceContent,
   readSceneStageHandoff,
@@ -41,6 +48,22 @@ export interface SceneStageContextInput {
   delivery?: SceneContextDelivery;
   source?: SceneContextInputSource;
   policyInputId?: string;
+  /** policy 声明的 required 是否已解析到可读内容 */
+  satisfied?: boolean;
+  fromStage?: SceneStageId;
+  artifactKey?: string;
+  priorityOrder?: number;
+  priorityNote?: string;
+}
+
+export interface SceneStageContextReferencePriority {
+  rule: string;
+  currentInputsHighestFirst: Array<{
+    artifactId: string;
+    stage: SceneStageId;
+    order: number;
+    note: string;
+  }>;
 }
 
 export interface SceneStageContextHandoffRef {
@@ -58,6 +81,7 @@ export interface SceneStageContext {
   stage: SceneStageId;
   requiredInputs: SceneStageContextInput[];
   optionalInputs: SceneStageContextInput[];
+  referencePriority: SceneStageContextReferencePriority;
   outputContract: {
     requiredArtifacts: string[];
   };
@@ -78,6 +102,8 @@ export interface BuildSceneStageContextOptions {
 export type SceneStageContextOptions = BuildSceneStageContextOptions;
 
 const CORE_UPSTREAM_STAGES: SceneStageId[] = ['design', 'storyboard', 'video_prompts'];
+const REFERENCE_PRIORITY_RULE =
+  '当多个依赖资料对同一事实存在冲突时，优先采用阶段顺序更靠后的已确认内容；后阶段视为对前阶段的修订，除非当前阶段提示词明确另有说明。';
 
 function isCoreUpstreamStage(stage: SceneStageId): boolean {
   return CORE_UPSTREAM_STAGES.includes(stage);
@@ -123,6 +149,14 @@ function truncateSummary(text: string, maxChars?: number): string {
   return `${trimmed.slice(0, maxChars)}\n…`;
 }
 
+function buildPriorityInfo(fromStage: SceneStageId): { order: number; note: string } {
+  const order = getSceneStageOrder(fromStage);
+  return {
+    order,
+    note: `阶段顺序值 ${order}。若与更早阶段冲突，优先保留该阶段已确认版本。`,
+  };
+}
+
 async function resolveArtifactSummary(
   projectDir: string,
   artifact: SceneArtifact,
@@ -131,11 +165,33 @@ async function resolveArtifactSummary(
   const { content } = await readSceneArtifact(projectDir, artifact.id);
   try {
     const display = buildSceneArtifactDisplayModel(artifact, content);
-    const summary = display?.summary?.trim() || content.trim();
-    return truncateSummary(summary, maxChars);
+    if (display) {
+      const excerpt = buildSceneArtifactDisplayExcerpt(display, maxChars);
+      if (excerpt) {
+        return excerpt;
+      }
+    }
+    return truncateSummary(content.trim(), maxChars);
   } catch {
     return truncateSummary(content, maxChars);
   }
+}
+
+function normalizeLowSignalText(text: string): string {
+  return text
+    .replace(/^#{1,6}\s+/gm, '')
+    .replace(/^[*-]\s+/gm, '')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+function isLowSignalOptionalContent(title: string, content: string): boolean {
+  const normalizedContent = normalizeLowSignalText(content);
+  const normalizedTitle = normalizeLowSignalText(title);
+  if (!normalizedContent) return true;
+  if (normalizedContent === normalizedTitle) return true;
+  if (normalizedContent.length < Math.max(40, normalizedTitle.length * 2)) return true;
+  return false;
 }
 
 async function resolveDeliveryContent(
@@ -175,6 +231,7 @@ async function resolveDeliveryContent(
 
 async function resolvePolicyInput(
   projectDir: string,
+  currentStage: SceneStageId,
   state: SceneState,
   artifacts: SceneArtifact[],
   policyInput: SceneContextPolicyInput,
@@ -182,6 +239,7 @@ async function resolvePolicyInput(
   handoffRefs: SceneStageContextHandoffRef[],
 ): Promise<SceneStageContextInput | null> {
   const { fromStage, artifactKey, id: policyInputId } = policyInput;
+  const priority = buildPriorityInfo(fromStage);
 
   if (!upstreamStageReady(state, fromStage)) {
     if (policyInput.required) {
@@ -245,6 +303,15 @@ async function resolvePolicyInput(
     return null;
   }
 
+  if (
+    currentStage === 'video_prompts' &&
+    !policyInput.required &&
+    isLowSignalOptionalContent(artifact.title, resolved.content)
+  ) {
+    warnings.push(`optional_input_low_signal:${policyInputId}:${artifact.id}`);
+    return null;
+  }
+
   return {
     stage: artifact.stage,
     artifactId: artifact.id,
@@ -254,6 +321,11 @@ async function resolvePolicyInput(
     delivery: effectiveDelivery,
     source: resolved.source,
     policyInputId,
+    satisfied: policyInput.required === true ? true : undefined,
+    fromStage,
+    artifactKey,
+    priorityOrder: priority.order,
+    priorityNote: priority.note,
   };
 }
 
@@ -280,6 +352,7 @@ async function buildFromPolicy(
 
     const resolved = await resolvePolicyInput(
       projectDir,
+      stage,
       state,
       artifacts,
       policyInput,
@@ -306,6 +379,51 @@ async function buildFromPolicy(
     await processInput(policyInput, 'optional');
   }
 
+  for (const policyInput of policy.inputs) {
+    if (policyInput.required !== true) {
+      continue;
+    }
+    const already = requiredInputs.some((input) => input.policyInputId === policyInput.id);
+    if (already) {
+      continue;
+    }
+    if (!upstreamStageReady(state, policyInput.fromStage)) {
+      continue;
+    }
+    requiredInputs.push({
+      stage: policyInput.fromStage,
+      artifactId: `${policyInput.fromStage}.${policyInput.artifactKey}`,
+      path: '',
+      title: policyInput.id,
+      content: '',
+      policyInputId: policyInput.id,
+      satisfied: false,
+      fromStage: policyInput.fromStage,
+      artifactKey: policyInput.artifactKey,
+      priorityOrder: buildPriorityInfo(policyInput.fromStage).order,
+      priorityNote: buildPriorityInfo(policyInput.fromStage).note,
+    });
+  }
+
+  const referencePriority: SceneStageContextReferencePriority = {
+    rule: REFERENCE_PRIORITY_RULE,
+    currentInputsHighestFirst: [...requiredInputs, ...optionalInputs]
+      .filter(
+        (input): input is SceneStageContextInput & {
+          fromStage: SceneStageId;
+          priorityOrder: number;
+          priorityNote: string;
+        } => Boolean(input.fromStage && input.priorityOrder && input.priorityNote),
+      )
+      .sort((a, b) => b.priorityOrder - a.priorityOrder)
+      .map((input) => ({
+        artifactId: input.artifactId,
+        stage: input.fromStage,
+        order: input.priorityOrder,
+        note: input.priorityNote,
+      })),
+  };
+
   let stagePack: SceneStagePackSummary | undefined;
   try {
     stagePack = summarizeSceneStagePack(await loadSceneStagePack(stage));
@@ -315,9 +433,29 @@ async function buildFromPolicy(
 
   let assetLibrary: SceneStageContextAssetLibrary | undefined;
   const selectedAssetIds = options?.selectedAssetIds ?? [];
-  if (policy.assetLibrary?.allowSelectedStyleProfile && selectedAssetIds.length > 0) {
-    const snippets = await resolveSceneAssetsForStage({ stage, selectedAssetIds });
-    assetLibrary = { selectedAssets: selectedAssetIds, snippets };
+  if (policy.assetLibrary) {
+    const allowStyleProfile = policy.assetLibrary.allowStyleProfile === true;
+    const allowMethodologyAssets = policy.assetLibrary.allowMethodologyAssets === true;
+    const allowedAssetIds = policy.assetLibrary.allowedAssetIds;
+    const allowedEntries = await listSceneAssetsForStage({
+      stage,
+      allowStyleProfile,
+      allowMethodologyAssets,
+      allowedAssetIds,
+    });
+    const allowedSelectedAssetIds = selectedAssetIds.filter((assetId) =>
+      allowedEntries.some((entry) => entry.id === assetId),
+    );
+    if (allowedSelectedAssetIds.length > 0) {
+      const snippets = await resolveSceneAssetsForStage({
+        stage,
+        selectedAssetIds: allowedSelectedAssetIds,
+        allowStyleProfile,
+        allowMethodologyAssets,
+        allowedAssetIds,
+      });
+      assetLibrary = { selectedAssets: allowedSelectedAssetIds, snippets };
+    }
   }
 
   let contextCharBudget: number | undefined;
@@ -343,6 +481,7 @@ async function buildFromPolicy(
     stage,
     requiredInputs,
     optionalInputs,
+    referencePriority,
     outputContract: {
       requiredArtifacts:
         stagePack?.outputContract.requiredArtifacts ??
@@ -390,6 +529,10 @@ export async function buildSceneStageContext(
     stage,
     requiredInputs: [],
     optionalInputs: [],
+    referencePriority: {
+      rule: REFERENCE_PRIORITY_RULE,
+      currentInputsHighestFirst: [],
+    },
     outputContract: {
       requiredArtifacts:
         stagePack?.outputContract.requiredArtifacts ??

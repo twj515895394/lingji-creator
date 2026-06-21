@@ -6,6 +6,13 @@ consumerRunners:
   - acp_agent
 
 inputs:
+  - id: design_prompts
+    fromStage: design
+    artifactKey: design_prompts
+    delivery: handoff_first
+    fallback: summary
+    required: true
+
   - id: design_master
     fromStage: design
     artifactKey: master_reference_prompt
@@ -25,7 +32,7 @@ inputs:
     artifactKey: scene_prompts
     delivery: handoff_first
     fallback: summary
-    required: false
+    required: true
 
   - id: script_draft
     fromStage: script
@@ -40,8 +47,18 @@ inputs:
     delivery: full
     required: true
 
+optionalInputs:
+  - id: story_direction
+    fromStage: story
+    artifactKey: story_direction
+    delivery: summary
+    maxChars: 8000
+
 assetLibrary:
-  allowSelectedStyleProfile: true
+  allowStyleProfile: true
+  allowedAssetIds:
+    - cinematic.shot_language
+    - storyboard.methodology_index
 
 forbidden: []
 

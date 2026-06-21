@@ -110,7 +110,7 @@ export const SCENE_STAGE_DEFINITIONS: SceneStageDefinition[] = [
     category: 'core',
     dependencies: ['design', 'storyboard', 'audio'],
     defaultApprovalPolicy: 'required',
-    requiredArtifacts: ['video_prompt_pack', 'video_prompt_pack_cn'],
+    requiredArtifacts: ['video_prompt_pack_cn', 'video_prompt_review', 'video_prompt_trace'],
   },
   {
     id: 'publish',
@@ -120,18 +120,14 @@ export const SCENE_STAGE_DEFINITIONS: SceneStageDefinition[] = [
     defaultApprovalPolicy: 'optional',
     requiredArtifacts: ['publish_notes'],
   },
-  {
-    id: 'export',
-    displayName: 'Export Prompt Pack',
-    category: 'system',
-    dependencies: ['video_prompts'],
-    defaultApprovalPolicy: 'required',
-    requiredArtifacts: ['final_prompt_pack'],
-  },
 ];
 
 const STAGE_DEFINITION_MAP = new Map(
   SCENE_STAGE_DEFINITIONS.map((definition) => [definition.id, definition]),
+);
+
+const STAGE_ORDER_MAP = new Map(
+  SCENE_STAGE_DEFINITIONS.map((definition, index) => [definition.id, index + 1]),
 );
 
 export function isSceneStageId(value: unknown): value is SceneStageId {
@@ -142,6 +138,14 @@ export function getSceneStageDefinition(stage: SceneStageId): SceneStageDefiniti
   const found = STAGE_DEFINITION_MAP.get(stage);
   if (!found) {
     throw new Error(`Unknown SceneForge stage: ${stage}`);
+  }
+  return found;
+}
+
+export function getSceneStageOrder(stage: SceneStageId): number {
+  const found = STAGE_ORDER_MAP.get(stage);
+  if (!found) {
+    throw new Error(`Unknown SceneForge stage order: ${stage}`);
   }
   return found;
 }

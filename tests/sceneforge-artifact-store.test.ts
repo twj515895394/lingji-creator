@@ -44,7 +44,7 @@ describe('SceneForge artifact store', () => {
       path: 'sceneforge/stages/design/outputs/design_prompts.md',
       coreAsset: true,
       readableByDownstream: true,
-      usedBy: ['storyboard', 'video_prompts', 'export'],
+      usedBy: ['storyboard', 'video_prompts'],
       viewModes: ['preview', 'structure', 'trace', 'raw'],
     });
     expect(artifact.createdAt).toMatch(/^\d{4}-\d{2}-\d{2}T/);
@@ -204,5 +204,39 @@ describe('SceneForge artifact store', () => {
     await expect(listSceneArtifacts(tmpDir)).rejects.toMatchObject({
       code: 'ARTIFACT_PATH_OUTSIDE_PROJECT',
     });
+  });
+
+  it('migrates legacy export stage in usedBy to publish when reading manifest', async () => {
+    await fs.writeFile(
+      path.join(tmpDir, 'sceneforge', 'artifact_manifest.yaml'),
+      [
+        'version: 1',
+        'artifacts:',
+        '  - id: design.design_prompts',
+        '    stage: design',
+        '    kind: final',
+        '    role: core_generation_asset',
+        '    title: 设定图提示词',
+        '    path: sceneforge/stages/design/outputs/design_prompts.md',
+        '    coreAsset: true',
+        '    readableByDownstream: true',
+        '    usedBy:',
+        '      - storyboard',
+        '      - video_prompts',
+        '      - export',
+        '    viewModes: [preview, structure, trace, raw]',
+        '    createdAt: 2026-06-16T00:00:00.000Z',
+        '',
+      ].join('\n'),
+      'utf-8',
+    );
+
+    const artifacts = await listSceneArtifacts(tmpDir);
+    expect(artifacts).toHaveLength(1);
+    expect(artifacts[0].usedBy).toEqual(['storyboard', 'video_prompts', 'publish']);
+
+    const raw = await fs.readFile(path.join(tmpDir, 'sceneforge', 'artifact_manifest.yaml'), 'utf-8');
+    expect(raw).not.toContain('\n      - export\n');
+    expect(raw).toContain('publish');
   });
 });

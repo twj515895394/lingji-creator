@@ -4,6 +4,7 @@ import type {
   SceneArtifactDisplaySection,
   SceneArtifactCopyTarget,
 } from '../../../src/types/sceneforge';
+import { parseSceneCopyBlocks } from '../../../src/sceneforge/lib/scene-copy-blocks';
 import type { SceneArtifact } from './scene-artifact-store';
 
 function extractSectionByHeading(content: string, headingPatterns: RegExp[]): string {
@@ -72,6 +73,14 @@ function makeFullBlock(artifactId: string, label: string, text: string): SceneAr
     format: 'plain_text',
     text,
   };
+}
+
+function truncateExcerpt(text: string, maxChars?: number): string {
+  const trimmed = text.trim();
+  if (!maxChars || trimmed.length <= maxChars) {
+    return trimmed;
+  }
+  return `${trimmed.slice(0, maxChars)}\n…`;
 }
 
 function buildFromBlocks(
@@ -214,6 +223,23 @@ function parseStoryboardArtifact(artifact: SceneArtifact, content: string): Scen
   const [, artifactKey] = artifact.id.split('.');
 
   if (artifactKey === 'storyboard_prompt_pack') {
+    const parsedCopyBlocks = parseSceneCopyBlocks(content);
+    warnings.push(...parsedCopyBlocks.warnings);
+    if (parsedCopyBlocks.blocks.length > 0) {
+      return buildFromBlocks(
+        artifact,
+        '故事板提示词包。',
+        parsedCopyBlocks.blocks.map((block) => ({
+          id: `${artifact.id}.${block.id}`,
+          label: `复制${block.label}`,
+          target: 'prompt' as const,
+          text: block.body,
+        })),
+        content,
+        warnings,
+      );
+    }
+
     const segments = extractSegmentPrompts(content);
     const blocks: Array<{ id: string; label: string; target: 'section' | 'prompt'; text: string }> = [
       {
@@ -249,6 +275,24 @@ function parseStoryboardArtifact(artifact: SceneArtifact, content: string): Scen
   };
   const spec = keyToBlock[artifactKey ?? ''];
   if (spec) {
+    if (artifactKey === 'control_board_prompts' || artifactKey === 'style_board_prompts') {
+      const parsedCopyBlocks = parseSceneCopyBlocks(content);
+      warnings.push(...parsedCopyBlocks.warnings);
+      if (parsedCopyBlocks.blocks.length > 0) {
+        return buildFromBlocks(
+          artifact,
+          spec.label,
+          parsedCopyBlocks.blocks.map((block) => ({
+            id: `${artifact.id}.${block.id}`,
+            label: `复制${block.label}`,
+            target: 'prompt' as const,
+            text: block.body,
+          })),
+          content,
+          warnings,
+        );
+      }
+    }
     return buildFromBlocks(
       artifact,
       spec.label,
@@ -297,6 +341,23 @@ function parseVideoPromptsArtifact(artifact: SceneArtifact, content: string): Sc
   }
 
   if (artifactKey === 'video_prompt_pack_cn') {
+    const parsedCopyBlocks = parseSceneCopyBlocks(content);
+    warnings.push(...parsedCopyBlocks.warnings);
+    if (parsedCopyBlocks.blocks.length > 0) {
+      return buildFromBlocks(
+        artifact,
+        '中文视频分段提示词包。',
+        parsedCopyBlocks.blocks.map((block) => ({
+          id: `${artifact.id}.${block.id}`,
+          label: `复制${block.label}`,
+          target: 'prompt' as const,
+          text: block.body,
+        })),
+        content,
+        warnings,
+      );
+    }
+
     const segments = extractSegmentPrompts(content);
     const blocks: Array<{ id: string; label: string; target: 'section' | 'prompt'; text: string }> = [
       {
@@ -341,11 +402,52 @@ function parseVideoPromptsArtifact(artifact: SceneArtifact, content: string): Sc
   return buildFromBlocks(artifact, artifact.title, [], content, warnings);
 }
 
+function parsePublishArtifact(artifact: SceneArtifact, content: string): SceneArtifactDisplayModel {
+  const warnings: SceneArtifactDisplayModel['warnings'] = [];
+  const parsedCopyBlocks = parseSceneCopyBlocks(content);
+  warnings.push(...parsedCopyBlocks.warnings);
+
+  if (parsedCopyBlocks.blocks.length > 0) {
+    return buildFromBlocks(
+      artifact,
+      '发布说明：封面提示词与平台元数据分块复制。',
+      parsedCopyBlocks.blocks.map((block) => ({
+        id: `${artifact.id}.${block.id}`,
+        label: `复制${block.label}`,
+        target: (block.type === 'cover_prompt' ? 'prompt' : 'section') as SceneArtifactCopyTarget,
+        text: block.body,
+      })),
+      content,
+      warnings,
+    );
+  }
+
+  warnings.push({
+    code: 'SCENE_PUBLISH_DISPLAY_NO_COPY_BLOCKS',
+    message: '未解析到 copy-block，已保留全文复制。',
+  });
+  return buildFromBlocks(
+    artifact,
+    '发布说明',
+    [makeFullBlock(artifact.id, '全文', content.trim())],
+    content,
+    warnings,
+  );
+}
+
 export function buildSceneArtifactDisplayModel(
   artifact: SceneArtifact,
   content: string,
 ): SceneArtifactDisplayModel | null {
-  if (artifact.kind !== 'final' || !artifact.coreAsset) {
+  if (artifact.kind !== 'final') {
+    return null;
+  }
+
+  if (artifact.stage === 'publish' && artifact.id === 'publish.publish_notes') {
+    return parsePublishArtifact(artifact, content);
+  }
+
+  if (!artifact.coreAsset) {
     return null;
   }
 
@@ -370,6 +472,26 @@ export function buildSceneArtifactDisplayModel(
       [{ code: 'SCENE_DISPLAY_PARSE_FAILED', message }],
     );
   }
+}
+
+export function buildSceneArtifactDisplayExcerpt(
+  displayModel: SceneArtifactDisplayModel,
+  maxChars?: number,
+): string {
+  const richBlocks = displayModel.copyBlocks.filter(
+    (block) => block.target !== 'full' && block.text.trim(),
+  );
+
+  if (richBlocks.length > 0) {
+    return truncateExcerpt(
+      richBlocks
+        .map((block) => `## ${block.label}\n\n${block.text.trim()}`)
+        .join('\n\n'),
+      maxChars,
+    );
+  }
+
+  return truncateExcerpt(displayModel.summary.trim(), maxChars);
 }
 
 export function defaultCoreArtifactCopyMetadata(): {

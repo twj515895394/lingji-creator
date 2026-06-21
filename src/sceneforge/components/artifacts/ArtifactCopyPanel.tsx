@@ -45,6 +45,11 @@ export function ArtifactCopyPanel({
   const fullBlocks = blocksForTarget(displayModel.copyBlocks, 'full');
   const sectionBlocks = blocksForTarget(displayModel.copyBlocks, 'section');
   const promptBlocks = blocksForTarget(displayModel.copyBlocks, 'prompt');
+  /** 视频包：分段 prompt 与「中文视频提示词包」section 重复，只展示 Copy Prompt。publish 等须保留 section。 */
+  const hideDuplicateVideoPackSections =
+    promptBlocks.length > 0 &&
+    sectionBlocks.some((b) => /video_pack|视频提示词包|提示词包/i.test(b.label));
+  const visibleSectionBlocks = hideDuplicateVideoPackSections ? [] : sectionBlocks;
 
   const renderGroup = (title: string, blocks: SceneArtifactCopyBlock[]) => {
     if (blocks.length === 0) return null;
@@ -95,9 +100,9 @@ export function ArtifactCopyPanel({
           ))}
         </ul>
       ) : null}
-      {renderGroup('Copy Full', fullBlocks)}
-      {renderGroup('Copy Section', sectionBlocks)}
       {renderGroup('Copy Prompt', promptBlocks)}
+      {renderGroup('Copy Full', fullBlocks)}
+      {renderGroup('Copy Section', visibleSectionBlocks)}
     </div>
   );
 }

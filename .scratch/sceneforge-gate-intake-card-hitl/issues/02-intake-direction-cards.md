@@ -1,4 +1,4 @@
-Status: ready-for-agent
+Status: completed
 
 ## 父问题
 
@@ -10,11 +10,17 @@ Status: ready-for-agent
 
 ## 验收标准
 
-- [ ] 每个方向展示标题、摘要和选中态
-- [ ] 键盘可选择并确认方向
-- [ ] 确认后显示只读摘要和重新选择入口
-- [ ] 无候选时显示高级 Markdown 指引
-- [ ] IPC 失败时保留当前选择
+- [x] 每个方向展示标题、摘要和选中态
+- [x] 键盘可选择并确认方向
+- [x] 确认后显示只读摘要和重新选择入口
+- [x] 无候选时显示高级 Markdown 指引
+- [x] IPC 失败时保留当前选择
+
+## 完成证据
+
+- `SceneAdaptationDirectionPanel` 支持 editable/submitting/confirmed/error 状态。
+- 无方向时显示高级 Markdown 降级指引。
+- `tests/sceneforge-card-hitl-ui.test.tsx` 覆盖方向卡、空态和确认摘要。
 
 ## 被阻塞于
 
@@ -23,4 +29,3 @@ Status: ready-for-agent
 ## 类型
 
 AFK
-

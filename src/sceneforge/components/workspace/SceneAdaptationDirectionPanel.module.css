@@ -63,3 +63,32 @@
   color: var(--color-text-secondary);
   line-height: var(--line-height-normal);
 }
+
+.empty,
+.changeHint,
+.summary p {
+  margin: 0;
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-md);
+  line-height: var(--line-height-normal);
+}
+
+.summary {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  margin-bottom: var(--space-3);
+  padding: var(--space-3);
+  border: 1px solid var(--color-separator);
+  border-radius: var(--radius-md);
+  background: var(--color-panel-bg);
+}
+
+.summary strong {
+  font-size: var(--font-size-lg);
+  line-height: var(--line-height-tight);
+}
+
+.changeHint {
+  margin-bottom: var(--space-2);
+}

@@ -25,8 +25,8 @@ describe('scene workspace routing', () => {
     expect(getWorkspaceTemplateForStage('reference')).toBe('support');
   });
 
-  it('maps export to export template', () => {
-    expect(getWorkspaceTemplateForStage('export')).toBe('export');
+  it('maps publish to support template', () => {
+    expect(getWorkspaceTemplateForStage('publish')).toBe('support');
   });
 
   it('maps intake and gate to dedicated templates', () => {
@@ -34,7 +34,7 @@ describe('scene workspace routing', () => {
     expect(getWorkspaceTemplateForStage('topic_gate')).toBe('gate');
   });
 
-  it('only treats the six markdown support stages as submit-capable', () => {
+  it('treats seven markdown support stages as submit-capable', () => {
     const submitStages = [
       'reference',
       'story',
@@ -42,6 +42,7 @@ describe('scene workspace routing', () => {
       'script',
       'performance',
       'audio',
+      'publish',
     ] as const;
     const nonSubmitStages = [
       'source_intake',
@@ -49,8 +50,6 @@ describe('scene workspace routing', () => {
       'design',
       'storyboard',
       'video_prompts',
-      'publish',
-      'export',
     ] as const;
 
     for (const stage of submitStages) {

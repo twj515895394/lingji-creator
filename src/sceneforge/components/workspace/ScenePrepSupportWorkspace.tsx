@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import type { SubmitStageDraftResult } from '../../../lib/electron-api';
-import type { SceneStageId } from '../../../types/sceneforge';
+import type { SceneStageId, SceneStageStatus } from '../../../types/sceneforge';
 import { Button } from '../../../ui/components/button';
 import {
   getPrepSupportConfig,
@@ -9,13 +9,18 @@ import {
   type PrepSupportSubmitStage,
 } from '../../lib/scene-prep-support-stages';
 import styles from './ScenePrepSupportWorkspace.module.css';
+import { StageRunPanel } from '../stage-run/StageRunPanel';
+import { stageSupportsRunner } from '../../lib/scene-stage-run-capabilities';
 
 export interface ScenePrepSupportWorkspaceProps {
   projectDir: string | null;
   stage: PrepSupportSubmitStage;
   stageTitle: string;
+  autoAdvanceAfterSubmit?: boolean;
+  currentStatus?: SceneStageStatus;
+  revisionNote?: string | null;
   initialContent?: string;
-  onSubmitted?: () => void;
+  onSubmitted?: (result: SubmitStageDraftResult) => void;
   onError?: (message: string) => void;
 }
 
@@ -23,6 +28,9 @@ export function ScenePrepSupportWorkspace({
   projectDir,
   stage,
   stageTitle,
+  autoAdvanceAfterSubmit = false,
+  currentStatus,
+  revisionNote = null,
   initialContent = '',
   onSubmitted,
   onError,
@@ -34,6 +42,8 @@ export function ScenePrepSupportWorkspace({
   const [content, setContent] = useState(initialContent);
   const [busy, setBusy] = useState(false);
   const [lastResult, setLastResult] = useState<SubmitStageDraftResult | null>(null);
+  const submitButtonLabel = autoAdvanceAfterSubmit ? '提交并继续' : '提交草案';
+  const draftSubmitLabel = autoAdvanceAfterSubmit ? '提交草案并继续到下一阶段' : undefined;
 
   useEffect(() => {
     setContent(initialContent);
@@ -57,7 +67,7 @@ export function ScenePrepSupportWorkspace({
       if (result.validation.status === 'failed') {
         onError?.(result.validation.errors[0]?.message ?? '校验未通过');
       } else {
-        onSubmitted?.();
+        onSubmitted?.(result);
       }
     } catch (error) {
       onError?.(error instanceof Error ? error.message : '提交失败');
@@ -67,33 +77,49 @@ export function ScenePrepSupportWorkspace({
   }, [config.artifactKey, config.placeholder, content, onError, onSubmitted, projectDir, stage]);
 
   return (
-    <section className={styles.root} data-testid={`scene-prep-support-${stage}`}>
-      <p className={styles.lead}>{config.lead}</p>
-      <label className={styles.label}>
-        {config.artifactLabel}
-        <textarea
-          className={styles.textarea}
-          value={content}
-          placeholder={config.placeholder}
-          rows={14}
-          onChange={(e) => setContent(e.target.value)}
+    <>
+      {stageSupportsRunner(stage, 'direct_llm') ? (
+        <StageRunPanel
+          projectDir={projectDir}
+          stage={stage}
+          stageTitle={stageTitle}
+          currentStatus={currentStatus}
+          revisionNote={revisionNote}
+          draftSubmitLabel={draftSubmitLabel}
+          onSubmitted={onSubmitted}
+          onRunError={onError}
         />
-      </label>
-      <div className={styles.actions}>
-        <Button type="button" disabled={busy || !projectDir} onClick={() => void handleSubmit()}>
-          {busy ? '提交中…' : '提交草案'}
-        </Button>
-        {lastResult ? (
-          <span className={styles.hint} data-testid="scene-prep-submit-status">
-            状态：{lastResult.status}
-            {lastResult.validation.status === 'failed' ? '（校验失败）' : ''}
-          </span>
-        ) : null}
-      </div>
-      <p className={styles.note}>
-        阶段：{stageTitle}（{stage}）· 产物 key：<code>{config.artifactKey}</code>
-      </p>
-    </section>
+      ) : null}
+      <section className={styles.root} data-testid={`scene-prep-support-${stage}`}>
+        <p className={styles.lead}>
+          {autoAdvanceAfterSubmit ? `${config.lead} 校验通过后会直接进入下一阶段。` : config.lead}
+        </p>
+        <label className={styles.label}>
+          {config.artifactLabel}
+          <textarea
+            className={styles.textarea}
+            value={content}
+            placeholder={config.placeholder}
+            rows={14}
+            onChange={(e) => setContent(e.target.value)}
+          />
+        </label>
+        <div className={styles.actions}>
+          <Button type="button" disabled={busy || !projectDir} onClick={() => void handleSubmit()}>
+            {busy ? '提交中…' : submitButtonLabel}
+          </Button>
+          {lastResult ? (
+            <span className={styles.hint} data-testid="scene-prep-submit-status">
+              状态：{lastResult.status}
+              {lastResult.validation.status === 'failed' ? '（校验失败）' : ''}
+            </span>
+          ) : null}
+        </div>
+        <p className={styles.note}>
+          阶段：{stageTitle}（{stage}）· 产物 key：<code>{config.artifactKey}</code>
+        </p>
+      </section>
+    </>
   );
 }
 

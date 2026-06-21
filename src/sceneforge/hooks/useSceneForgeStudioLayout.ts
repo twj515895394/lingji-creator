@@ -4,11 +4,11 @@ const STORAGE_SIDEBAR = 'sceneforge-studio-sidebar-width-v1';
 const STORAGE_INSPECTOR = 'sceneforge-studio-inspector-width-v1';
 const HANDLE = 6;
 const SIDEBAR_DEFAULT = 272;
-const INSPECTOR_DEFAULT = 280;
+const INSPECTOR_DEFAULT = 360;
 const SIDEBAR_MIN = 220;
 const SIDEBAR_MAX = 400;
 const INSPECTOR_MIN = 220;
-const INSPECTOR_MAX = 420;
+const INSPECTOR_MAX = 560;
 const CENTER_MIN = 320;
 
 function readStored(key: string, fallback: number): number {

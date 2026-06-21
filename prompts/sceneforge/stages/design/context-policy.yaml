@@ -28,7 +28,9 @@ inputs:
     required: false
 
 assetLibrary:
-  allowSelectedStyleProfile: true
+  allowStyleProfile: true
+  allowedAssetIds:
+    - adaptation.idea_seed
 
 forbidden: []
 

@@ -135,6 +135,11 @@ contextBridge.exposeInMainWorld('electronAPI', {
     ipcRenderer.invoke('create-scene-forge-project', projectDir, entryPath),
   sceneGetProjectState: (projectDir: string) =>
     ipcRenderer.invoke('sceneforge:get-project-state', projectDir),
+  sceneListAvailableAssets: () =>
+    ipcRenderer.invoke('sceneforge:list-assets'),
+  sceneUpdateStyleSelection: (
+    input: import('../src/lib/electron-api').SceneUpdateStyleSelectionInput,
+  ) => ipcRenderer.invoke('sceneforge:update-style-selection', input),
   sceneGetStageContext: (
     projectDir: string,
     stage: string,
@@ -142,10 +147,17 @@ contextBridge.exposeInMainWorld('electronAPI', {
   ) => ipcRenderer.invoke('sceneforge:get-stage-context', projectDir, stage, options),
   sceneSubmitStageDraft: (input: import('../src/lib/electron-api').SceneSubmitStageDraftInput) =>
     ipcRenderer.invoke('sceneforge:submit-stage-draft', input),
+  sceneAnalyzeTopicGate: (
+    input: import('../src/lib/electron-api').SceneAnalyzeTopicGateInput,
+  ) => ipcRenderer.invoke('sceneforge:analyze-topic-gate', input),
   sceneValidateStage: (projectDir: string, stage: string) =>
     ipcRenderer.invoke('sceneforge:validate-stage', projectDir, stage),
   sceneApproveStage: (projectDir: string, stage: string) =>
     ipcRenderer.invoke('sceneforge:approve-stage', projectDir, stage),
+  sceneSetCurrentStage: (projectDir: string, stage: string) =>
+    ipcRenderer.invoke('sceneforge:set-current-stage', projectDir, stage),
+  sceneCompleteProject: (projectDir: string) =>
+    ipcRenderer.invoke('sceneforge:complete-project', projectDir),
   sceneRequestRevision: (projectDir: string, stage: string, note: string) =>
     ipcRenderer.invoke('sceneforge:request-revision', projectDir, stage, note),
   sceneSetApprovalPolicy: (projectDir: string, stage: string, policy: string) =>
@@ -154,10 +166,18 @@ contextBridge.exposeInMainWorld('electronAPI', {
     ipcRenderer.invoke('sceneforge:list-artifacts', projectDir),
   sceneReadArtifact: (projectDir: string, artifactId: string) =>
     ipcRenderer.invoke('sceneforge:read-artifact', projectDir, artifactId),
-  sceneExportPromptPack: (projectDir: string) =>
-    ipcRenderer.invoke('sceneforge:export-prompt-pack', projectDir),
   sceneRunStage: (input: import('../src/lib/electron-api').SceneRunStageInput) =>
     ipcRenderer.invoke('sceneforge:run-stage', input),
+  onSceneStageRunProgress: (
+    callback: (payload: import('../src/lib/electron-api').SceneStageRunProgressPayload) => void,
+  ) => {
+    const handler = (
+      _event: unknown,
+      payload: import('../src/lib/electron-api').SceneStageRunProgressPayload,
+    ) => callback(payload);
+    ipcRenderer.on('sceneforge:stage-run-progress', handler);
+    return () => ipcRenderer.removeListener('sceneforge:stage-run-progress', handler);
+  },
   saveProjectSection: (projectDir: string, section: string, data: string) =>
     ipcRenderer.invoke('save-project-section', projectDir, section, data),
   scanProjectDirectory: (projectDir: string) =>

@@ -1,10 +1,12 @@
 version: 1
 stage: video_prompts
 artifacts:
-  - artifactKey: video_prompt_pack
-    maxChars: 16000
   - artifactKey: video_prompt_pack_cn
     maxChars: 16000
+  - artifactKey: video_prompt_review
+    maxChars: 6000
+  - artifactKey: video_prompt_trace
+    maxChars: 8000
 downstreamNotes:
   export:
     continuityHint: final_video_packs

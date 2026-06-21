@@ -1,11 +1,23 @@
 import { CheckCircle2, CircleDashed } from 'lucide-react';
-import type { SceneEntryPath, SceneStageId } from '../../../types/sceneforge';
+import type { SceneEntryPath, SceneStageId, SceneStageStatus } from '../../../types/sceneforge';
 import { getEntryPathStageAside } from '../../lib/scene-entry-path-ui';
 import { getStageNavBlockReason, type SceneGateNavContext } from '../../lib/scene-entry-path';
 import { getStageReadiness, readinessLabel } from '../../lib/scene-stage-capabilities';
 import { shortenStageHint } from '../../hooks/useSceneForgeStudioLayout';
 import type { ScenePipelineGroup } from '../../lib/scene-pipeline-ui';
 import styles from '../../pages/SceneForgeStudio.module.css';
+
+const SIDEBAR_DONE_STATUSES = new Set<SceneStageStatus>([
+  'validated',
+  'waiting_approval',
+  'approved',
+  'completed',
+  'skipped',
+] as const);
+
+export function isSidebarStageDoneStatus(status: SceneStageStatus): boolean {
+  return SIDEBAR_DONE_STATUSES.has(status);
+}
 
 export interface SceneForgeStudioPipelineSidebarProps {
   pipelineGroups: ScenePipelineGroup[];
@@ -35,6 +47,7 @@ export function SceneForgeStudioPipelineSidebar({
             <div className={styles.pipelineGroupLabel}>{group.label}</div>
             {group.stages.map(({ definition, status }) => {
               const readiness = getStageReadiness(definition.id);
+              const isDone = isSidebarStageDoneStatus(status);
               const blockReason = getStageNavBlockReason(
                 definition.id,
                 completedStages,
@@ -89,7 +102,7 @@ export function SceneForgeStudioPipelineSidebar({
                     </span>
                     <span className={styles.stageRowMeta}>
                       <span className={styles.stageBadge}>{readinessLabel(readiness)}</span>
-                      {status === 'approved' || status === 'waiting_approval' ? (
+                      {isDone ? (
                         <CheckCircle2 className={styles.stageStatusDone} size={14} aria-hidden />
                       ) : (
                         <CircleDashed className={styles.stageStatusPending} size={14} aria-hidden />

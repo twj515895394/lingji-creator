@@ -10,6 +10,7 @@ const SINGLE_ARTIFACT_REQUIRED: Partial<Record<SceneStageId, readonly string[]>>
   script: ['script_draft'],
   performance: ['performance_direction'],
   audio: ['audio_design'],
+  publish: ['publish_notes'],
 };
 
 function missingError(stage: SceneStageId, artifactKey: string): SceneValidationError {

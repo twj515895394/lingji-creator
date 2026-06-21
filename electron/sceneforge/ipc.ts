@@ -1,7 +1,13 @@
 import { ipcMain } from 'electron';
 import { SceneForgeService, type SceneSubmitStageDraftInput } from './service';
 import type { SceneApprovalPolicy, SceneStageId } from './types';
-import type { SceneGetStageContextOptions, SceneRunStageIpcInput } from './scene-ipc-types';
+import type {
+  SceneAnalyzeTopicGateIpcInput,
+  SceneGetStageContextOptions,
+  SceneRunStageIpcInput,
+  SceneStageRunProgressPayload,
+  SceneUpdateStyleSelectionIpcInput,
+} from './scene-ipc-types';
 
 const service = new SceneForgeService();
 
@@ -13,6 +19,17 @@ export function registerSceneForgeIpc(): void {
   ipcMain.handle('sceneforge:get-project-state', async (_event, projectDir: string) => {
     return service.getProjectState(projectDir);
   });
+
+  ipcMain.handle('sceneforge:list-assets', async () => {
+    return service.listAvailableAssets();
+  });
+
+  ipcMain.handle(
+    'sceneforge:update-style-selection',
+    async (_event, input: SceneUpdateStyleSelectionIpcInput) => {
+      return service.updateStyleSelection(input);
+    },
+  );
 
   ipcMain.handle(
     'sceneforge:get-stage-context',
@@ -34,6 +51,13 @@ export function registerSceneForgeIpc(): void {
   );
 
   ipcMain.handle(
+    'sceneforge:analyze-topic-gate',
+    async (_event, input: SceneAnalyzeTopicGateIpcInput) => {
+      return service.analyzeTopicGate(input);
+    },
+  );
+
+  ipcMain.handle(
     'sceneforge:validate-stage',
     async (_event, projectDir: string, stage: SceneStageId) => {
       return service.validateStage(projectDir, stage);
@@ -46,6 +70,17 @@ export function registerSceneForgeIpc(): void {
       return service.approveStage(projectDir, stage);
     },
   );
+
+  ipcMain.handle(
+    'sceneforge:set-current-stage',
+    async (_event, projectDir: string, stage: SceneStageId) => {
+      return service.setCurrentStage(projectDir, stage);
+    },
+  );
+
+  ipcMain.handle('sceneforge:complete-project', async (_event, projectDir: string) => {
+    return service.completeProject(projectDir);
+  });
 
   ipcMain.handle(
     'sceneforge:request-revision',
@@ -77,11 +112,11 @@ export function registerSceneForgeIpc(): void {
     },
   );
 
-  ipcMain.handle('sceneforge:export-prompt-pack', async (_event, projectDir: string) => {
-    return service.exportPromptPack(projectDir);
-  });
-
-  ipcMain.handle('sceneforge:run-stage', async (_event, input: SceneRunStageIpcInput) => {
-    return service.runStage(input);
+  ipcMain.handle('sceneforge:run-stage', async (event, input: SceneRunStageIpcInput) => {
+    return service.runStage(input, {
+      onProgress: (progress: SceneStageRunProgressPayload) => {
+        event.sender.send('sceneforge:stage-run-progress', progress);
+      },
+    });
   });
 }

@@ -32,15 +32,20 @@ export interface SceneContextPolicyRunnerOverride {
   maxTotalChars?: number;
 }
 
+export interface SceneContextPolicyAssetLibrary {
+  allowSelectedStyleProfile?: boolean;
+  allowStyleProfile?: boolean;
+  allowMethodologyAssets?: boolean;
+  allowedAssetIds?: string[];
+}
+
 export interface SceneContextPolicyDocument {
   version: number;
   stage: SceneStageId;
   consumerRunners?: SceneContextRunnerType[];
   inputs: SceneContextPolicyInput[];
   optionalInputs?: SceneContextPolicyInput[];
-  assetLibrary?: {
-    allowSelectedStyleProfile?: boolean;
-  };
+  assetLibrary?: SceneContextPolicyAssetLibrary;
   forbidden?: SceneContextPolicyForbidden[];
   runnerOverrides?: Partial<Record<SceneContextRunnerType, SceneContextPolicyRunnerOverride>>;
   description?: string;
@@ -67,7 +72,18 @@ export class SceneContextPolicyError extends Error {
   }
 }
 
-const CORE_CONTEXT_POLICY_STAGES: SceneStageId[] = ['design', 'storyboard', 'video_prompts'];
+const CONTEXT_POLICY_STAGES: SceneStageId[] = [
+  'reference',
+  'story',
+  'assets',
+  'design',
+  'script',
+  'performance',
+  'storyboard',
+  'audio',
+  'video_prompts',
+  'publish',
+];
 
 const DELIVERY_VALUES: SceneContextDelivery[] = [
   'handoff',
@@ -197,6 +213,45 @@ function parseRunnerOverrides(
   return Object.keys(result).length > 0 ? result : undefined;
 }
 
+function parseAssetLibrary(raw: unknown): SceneContextPolicyAssetLibrary | undefined {
+  if (raw === undefined || raw === null) {
+    return undefined;
+  }
+  if (typeof raw !== 'object') {
+    throw new SceneContextPolicyError('INVALID_CONTEXT_POLICY', 'assetLibrary must be an object');
+  }
+
+  const doc = raw as Record<string, unknown>;
+  const allowSelectedStyleProfile = doc.allowSelectedStyleProfile === true;
+  const allowStyleProfile = doc.allowStyleProfile === true || allowSelectedStyleProfile;
+  const allowMethodologyAssets = doc.allowMethodologyAssets === true;
+  const allowedAssetIdsRaw = doc.allowedAssetIds;
+
+  let allowedAssetIds: string[] | undefined;
+  if (allowedAssetIdsRaw !== undefined) {
+    if (!Array.isArray(allowedAssetIdsRaw)) {
+      throw new SceneContextPolicyError(
+        'INVALID_CONTEXT_POLICY',
+        'assetLibrary.allowedAssetIds must be an array',
+      );
+    }
+    allowedAssetIds = allowedAssetIdsRaw.filter(
+      (value): value is string => typeof value === 'string' && value.trim().length > 0,
+    );
+  }
+
+  if (!allowStyleProfile && !allowMethodologyAssets && !allowedAssetIds?.length) {
+    return undefined;
+  }
+
+  return {
+    allowSelectedStyleProfile,
+    allowStyleProfile,
+    allowMethodologyAssets,
+    allowedAssetIds,
+  };
+}
+
 function parseStagePolicyDocument(
   parsed: unknown,
   expectedStage: SceneStageId,
@@ -228,14 +283,7 @@ function parseStagePolicyDocument(
     ? doc.optionalInputs.map((item, i) => parseInputEntry(item, `optionalInputs[${i}]`))
     : undefined;
 
-  const assetLibraryRaw = doc.assetLibrary;
-  let assetLibrary: SceneContextPolicyDocument['assetLibrary'];
-  if (assetLibraryRaw && typeof assetLibraryRaw === 'object') {
-    assetLibrary = {
-      allowSelectedStyleProfile:
-        (assetLibraryRaw as Record<string, unknown>).allowSelectedStyleProfile === true,
-    };
-  }
+  const assetLibrary = parseAssetLibrary(doc.assetLibrary);
 
   return {
     version: 1,
@@ -299,7 +347,7 @@ export async function loadSceneContextPolicy(stage: SceneStageId): Promise<Scene
     throw new SceneContextPolicyError('INVALID_STAGE', `Unknown SceneForge stage: ${stage}`);
   }
 
-  if (!CORE_CONTEXT_POLICY_STAGES.includes(stage)) {
+  if (!CONTEXT_POLICY_STAGES.includes(stage)) {
     throw new SceneContextPolicyError(
       'POLICY_NOT_FOUND',
       `No context-policy.yaml registered for stage: ${stage}`,
@@ -333,6 +381,11 @@ export async function loadSceneContextPolicy(stage: SceneStageId): Promise<Scene
   }
 }
 
+export function listSceneContextPolicyStages(): readonly SceneStageId[] {
+  return CONTEXT_POLICY_STAGES;
+}
+
+// 保留旧导出，避免已有集成因支撑阶段加入注册表而被迫同步改名。
 export function listCoreContextPolicyStages(): readonly SceneStageId[] {
-  return CORE_CONTEXT_POLICY_STAGES;
+  return listSceneContextPolicyStages();
 }

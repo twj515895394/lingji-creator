@@ -55,6 +55,9 @@ function normalizePolicyFile(value: unknown): ApprovalPolicyFile {
   const overrides: Partial<Record<SceneStageId, SceneApprovalPolicy>> = {};
 
   for (const [stage, policy] of Object.entries(raw?.overrides ?? {})) {
+    if (stage === 'export') {
+      continue;
+    }
     if (!isSceneStageId(stage)) {
       throw new SceneApprovalPolicyError(
         'INVALID_POLICY_FILE',

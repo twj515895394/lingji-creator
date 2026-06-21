@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { migrateToProviders, resolveProvider } from '../src/lib/llm/provider-utils';
+import { migrateToProviders, resolveProvider, resolveDefaultLlmBinding, formatLlmInvokeErrorMessage } from '../src/lib/llm/provider-utils';
 import type { AISettings, LLMProvider } from '../src/types/ai';
 
 const baseSettings: AISettings = {
@@ -225,5 +225,59 @@ describe('resolveProvider', () => {
   it('providerId 和 defaultProviderId 都为 null 时返回第一个 provider', () => {
     const result = resolveProvider([provider1, provider2], null, null);
     expect(result?.id).toBe('p1');
+  });
+});
+
+describe('resolveDefaultLlmBinding', () => {
+  it('uses defaultModel when set', () => {
+    const settings: AISettings = {
+      ...baseSettings,
+      llmProviders: [
+        {
+          id: 'p1',
+          name: 'P1',
+          type: 'openai_compatible',
+          baseUrl: 'https://api.example.com',
+          apiKey: 'k',
+          models: ['listed-model'],
+        },
+      ],
+      defaultProviderId: 'p1',
+      defaultModel: 'explicit-model',
+    };
+    expect(resolveDefaultLlmBinding(settings)).toMatchObject({
+      model: 'explicit-model',
+      provider: { id: 'p1' },
+    });
+  });
+
+  it('falls back to first entry in provider.models when defaultModel empty', () => {
+    const settings: AISettings = {
+      ...baseSettings,
+      llmProviders: [
+        {
+          id: 'p1',
+          name: 'P1',
+          type: 'openai_compatible',
+          baseUrl: 'https://api.example.com',
+          apiKey: 'k',
+          models: ['from-list'],
+        },
+      ],
+      defaultProviderId: 'p1',
+      defaultModel: null,
+    };
+    expect(resolveDefaultLlmBinding(settings)?.model).toBe('from-list');
+  });
+});
+
+describe('formatLlmInvokeErrorMessage', () => {
+  it('maps 404 MODEL_NOT_FOUND to actionable Chinese text', () => {
+    const msg = formatLlmInvokeErrorMessage(
+      new Error('404 status code (no body) MODEL_NOT_FOUND'),
+    );
+    expect(msg).toContain('404');
+    expect(msg).toContain('设置 → AI');
+    expect(msg).toContain('测试连接');
   });
 });

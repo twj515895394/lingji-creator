@@ -2,7 +2,11 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
-import { createSceneForgeProject } from '../electron/sceneforge/project/scene-project-file';
+import {
+  createSceneForgeProject,
+  readSceneProjectStyleSelection,
+  updateSceneProjectStyleSelection,
+} from '../electron/sceneforge/project/scene-project-file';
 import { loadProjectFile } from '../electron/project-file';
 
 let tmpDir: string;
@@ -26,6 +30,8 @@ describe('createSceneForgeProject', () => {
       pipelineId: 'reference_remake',
       currentStage: 'topic_gate',
       entryPath: 'topic_gate',
+      selectedStyleProfileId: null,
+      selectedAssetIds: [],
       status: 'ready',
       coreArtifacts: { design: null, storyboard: null, videoPrompts: null },
       lastExportPath: null,
@@ -53,5 +59,19 @@ describe('createSceneForgeProject', () => {
     expect(data.sceneforge?.projectRoot).toBe('sceneforge');
     expect(data.timeline).toBeNull();
     expect(data.aiAnalysis).toEqual({ analysisResult: null, coverCandidates: [] });
+  });
+
+  it('persists project-level style selection inside sceneforge metadata', async () => {
+    await createSceneForgeProject(tmpDir);
+
+    await updateSceneProjectStyleSelection(tmpDir, {
+      selectedStyleProfileId: 'style.pixar_like',
+      selectedAssetIds: ['cinematic.shot_language', 'storyboard.methodology_index'],
+    });
+
+    await expect(readSceneProjectStyleSelection(tmpDir)).resolves.toEqual({
+      selectedStyleProfileId: 'style.pixar_like',
+      selectedAssetIds: ['cinematic.shot_language', 'storyboard.methodology_index'],
+    });
   });
 });

@@ -87,6 +87,26 @@ describe('SceneForge artifact display model', () => {
     expect(model?.copyBlocks.some((b) => b.id.endsWith('.control_board'))).toBe(true);
   });
 
+  it('keeps storyboard control board body in section copy blocks', () => {
+    const control = coreArtifact({
+      id: 'storyboard.control_board_prompts',
+      stage: 'storyboard',
+      title: '控制板提示词',
+    });
+    const model = buildSceneArtifactDisplayModel(
+      control,
+      `<copy-block type="storyboard-pack" id="pack-01" label="控制板提示词 第01包">
+## Pack 1: 控制板提示词
+
+## Control-Oriented Storyboard Board
+画面区逐格描述镜头、动作、构图和红蓝箭头标注；控制区明确 Beat Line、Camera Path、Action Path、Continuity Rules。
+</copy-block>`,
+    );
+    const block = model?.copyBlocks.find((b) => b.id.endsWith('.pack-01'));
+    expect(block?.text).toContain('Control-Oriented Storyboard Board');
+    expect(block?.text).toContain('画面区逐格描述镜头');
+  });
+
   it('parses storyboard pack overview and segment prompts', () => {
     const artifact = coreArtifact({
       id: 'storyboard.storyboard_prompt_pack',
@@ -103,6 +123,28 @@ Shot prompt two.`;
     const model = buildSceneArtifactDisplayModel(artifact, content);
     expect(model?.copyBlocks.some((b) => b.id.includes('segment-01'))).toBe(true);
     expect(model?.warnings.some((w) => w.code === 'SCENE_DISPLAY_MISSING_SEGMENTS')).toBe(false);
+  });
+
+  it('prefers explicit storyboard copy-blocks over legacy segment parsing', () => {
+    const artifact = coreArtifact({
+      id: 'storyboard.storyboard_prompt_pack',
+      stage: 'storyboard',
+      title: '故事板包',
+    });
+    const content = `# Pack
+
+<copy-block type="storyboard-pack" id="pack-01" label="故事板提示词 第01包">
+第01包正文
+</copy-block>
+
+## Segment 01
+不应再被识别成默认复制块。`;
+    const model = buildSceneArtifactDisplayModel(artifact, content);
+    expect(model?.copyBlocks.some((b) => b.id === 'storyboard.storyboard_prompt_pack.pack-01')).toBe(true);
+    expect(model?.copyBlocks.some((b) => b.id.includes('segment-01'))).toBe(false);
+    expect(model?.copyBlocks.find((b) => b.id === 'storyboard.storyboard_prompt_pack.pack-01')?.label).toBe(
+      '复制故事板提示词 第01包',
+    );
   });
 
   it('parses video cn pack and optional empty en with warning', () => {
@@ -125,6 +167,40 @@ Shot prompt two.`;
     const enModel = buildSceneArtifactDisplayModel(en, '   ');
     expect(enModel?.warnings.some((w) => w.code === 'SCENE_DISPLAY_OPTIONAL_EN_MISSING')).toBe(true);
     expect(enModel?.copyBlocks.find((b) => b.target === 'full')).toBeTruthy();
+  });
+
+  it('prefers explicit video copy-blocks and falls back safely when markup is broken', () => {
+    const cn = coreArtifact({
+      id: 'video_prompts.video_prompt_pack_cn',
+      stage: 'video_prompts',
+      title: '中文包',
+    });
+    const explicitModel = buildSceneArtifactDisplayModel(
+      cn,
+      `# 中文
+
+<copy-block type="video-pack" id="pack-01" label="视频提示词 第01包">
+视频包正文
+</copy-block>
+
+## Segment 01
+旧结构正文。`,
+    );
+    expect(explicitModel?.copyBlocks.some((b) => b.id === 'video_prompts.video_prompt_pack_cn.pack-01')).toBe(true);
+    expect(explicitModel?.copyBlocks.some((b) => b.id.includes('segment-01'))).toBe(false);
+
+    const fallbackModel = buildSceneArtifactDisplayModel(
+      cn,
+      `# 中文
+
+<copy-block type="video-pack" id="pack-01" label="视频提示词 第01包">
+损坏标签
+
+## Segment 01
+旧结构正文。`,
+    );
+    expect(fallbackModel?.warnings.map((w) => w.code)).toContain('SCENE_COPY_BLOCK_UNBALANCED');
+    expect(fallbackModel?.copyBlocks.some((b) => b.id.includes('segment-01'))).toBe(true);
   });
 
   it('returns null for non-core artifacts', () => {

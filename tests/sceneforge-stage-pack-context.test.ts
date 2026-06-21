@@ -41,7 +41,7 @@ describe('SceneForge Stage Context stage pack integration', () => {
 
   it('injects asset library snippets when selectedAssetIds are provided', async () => {
     const context = await service.getStageContext(tmpDir, 'storyboard', {
-      selectedAssetIds: ['style.pixar_like', 'cinematic.shot_language'],
+      selectedAssetIds: ['style.pixar_like', 'cinematic.shot_language', 'adaptation.idea_seed'],
     });
 
     expect(context.assetLibrary?.selectedAssets).toEqual([
@@ -52,8 +52,38 @@ describe('SceneForge Stage Context stage pack integration', () => {
     expect(context.assetLibrary?.snippets[0]).toMatchObject({
       id: expect.any(String),
       title: expect.any(String),
+      type: expect.any(String),
       text: expect.any(String),
     });
+  });
+
+  it('defaults to project-level style selection when stage context has no override', async () => {
+    await service.updateStyleSelection({
+      projectDir: tmpDir,
+      selectedStyleProfileId: 'style.pixar_like',
+      selectedAssetIds: ['cinematic.shot_language'],
+    });
+
+    const context = await service.getStageContext(tmpDir, 'storyboard');
+
+    expect(context.assetLibrary?.selectedAssets).toEqual([
+      'style.pixar_like',
+      'cinematic.shot_language',
+    ]);
+  });
+
+  it('filters project-level assets by current stage policy instead of reusing all selected assets', async () => {
+    await service.updateStyleSelection({
+      projectDir: tmpDir,
+      selectedStyleProfileId: 'style.pixar_like',
+      selectedAssetIds: ['adaptation.idea_seed', 'cinematic.shot_language'],
+    });
+
+    const storyContext = await service.getStageContext(tmpDir, 'story');
+    const audioContext = await service.getStageContext(tmpDir, 'audio');
+
+    expect(storyContext.assetLibrary?.selectedAssets).toEqual(['adaptation.idea_seed']);
+    expect(audioContext.assetLibrary).toBeUndefined();
   });
 
   it('manual runStage returns draft without bypassing submitStageDraft', async () => {
@@ -68,5 +98,22 @@ describe('SceneForge Stage Context stage pack integration', () => {
     expect(result.artifacts).toEqual({ design_prompts: '# Design' });
     const state = await service.getProjectState(tmpDir);
     expect(state.artifacts).toEqual([]);
+  });
+
+  it('reports missing required upstream for performance direct_llm context', async () => {
+    const context = await service.getStageContext(tmpDir, 'performance', {
+      runner: 'direct_llm',
+    });
+    const scriptRequired = context.requiredInputs.find(
+      (input) => input.policyInputId === 'script_draft',
+    );
+    expect(scriptRequired?.satisfied).toBe(false);
+    await expect(
+      service.runStage({
+        projectDir: tmpDir,
+        stage: 'performance',
+        runnerType: 'direct_llm',
+      }),
+    ).rejects.toThrow(/无法运行|script/);
   });
 });

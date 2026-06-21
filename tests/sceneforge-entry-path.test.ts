@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
+  getRecommendedResumeStage,
   getRecommendedStartStage,
   getStageDependencyBlockReason,
   getStageNavBlockReason,
@@ -16,6 +17,42 @@ describe('scene-entry-path', () => {
   it('recommends start stage from entryPath', () => {
     expect(getRecommendedStartStage('source_intake')).toBe('source_intake');
     expect(getRecommendedStartStage('topic_gate')).toBe('topic_gate');
+  });
+
+  it('recommends the first unfinished downstream stage when progress already exists', () => {
+    expect(
+      getRecommendedResumeStage({
+        entryPath: 'topic_gate',
+        currentStage: 'topic_gate',
+        stageStatuses: {
+          topic_gate: 'approved',
+          reference: 'approved',
+          story: 'approved',
+          assets: 'approved',
+          design: 'approved',
+          script: 'ready',
+        },
+      }),
+    ).toBe('script');
+  });
+
+  it('keeps the active working stage when it is still non-terminal', () => {
+    expect(
+      getRecommendedResumeStage({
+        entryPath: 'topic_gate',
+        currentStage: 'storyboard',
+        stageStatuses: {
+          topic_gate: 'approved',
+          reference: 'approved',
+          story: 'approved',
+          assets: 'approved',
+          design: 'approved',
+          script: 'approved',
+          performance: 'approved',
+          storyboard: 'waiting_approval',
+        },
+      }),
+    ).toBe('storyboard');
   });
 
   it('allows topic_gate entry to skip source_intake dependency', () => {
@@ -38,5 +75,15 @@ describe('scene-entry-path', () => {
       gateConfirmations: null,
     });
     expect(reason).toMatch(/风格确认/);
+  });
+
+  it('keeps reference blocked when the confirmed gate decision is drop', () => {
+    const completed = new Set<import('../src/types/sceneforge').SceneStageId>(['topic_gate']);
+    const reason = getStageNavBlockReason('reference', completed, 'topic_gate', {
+      topicBrief: '# brief',
+      gateConfirmations: 'decision: drop\nstyle_id: cinema\nstyle_confirmed: true\n',
+    });
+
+    expect(reason).toMatch(/已放弃/);
   });
 });

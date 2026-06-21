@@ -1,3 +1,11 @@
 requiredArtifacts:
-  - video_prompt_pack
   - video_prompt_pack_cn
+  - video_prompt_review
+  - video_prompt_trace
+copyBlockProtocol:
+  artifactKey: video_prompt_pack_cn
+  tagName: copy-block
+  defaultUnit: pack
+  type: video-pack
+  idPattern: '^pack-\\d{2}$'
+  labelPattern: '^视频提示词 第\\d{2}包$'

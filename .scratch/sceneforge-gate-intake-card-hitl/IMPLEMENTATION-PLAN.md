@@ -24,13 +24,13 @@
 
 ## Task 1：评分 parser 与 View Model
 
-- [ ] 先写 parser 失败测试，覆盖：
+- [x] 先写 parser 失败测试，覆盖：
   - `- 传播潜力: 8/10`
   - `- 制作可行性：高`
   - 无评分段
   - 空列表项
-- [ ] 实现 `parseGateScoresFromMarkdown`，保留字符串 value。
-- [ ] 运行：
+- [x] 实现 `parseGateScoresFromMarkdown`，保留字符串 value。
+- [x] 运行：
 
 ```bash
 npx vitest run tests/sceneforge-hitl-markdown.test.ts
@@ -38,25 +38,25 @@ npx vitest run tests/sceneforge-hitl-markdown.test.ts
 
 ## Task 2：Intake 方向卡片
 
-- [ ] 写 UI 测试：多个方向、默认选中、确认提交、已确认摘要、重新选择。
-- [ ] 重构现有方向 panel，使卡片可键盘选择并有明确选中态。
-- [ ] 空方向时显示“请在高级 Markdown 中补充改编方向”，不显示不可用确认按钮。
-- [ ] 确认继续提交 `adaptation_selection`。
+- [x] 写 UI 测试：多个方向、默认选中、确认提交、已确认摘要、重新选择。
+- [x] 重构现有方向 panel，使卡片可键盘选择并有明确选中态。
+- [x] 空方向时显示“请在高级 Markdown 中补充改编方向”，不显示不可用确认按钮。
+- [x] 确认继续提交 `adaptation_selection`。
 
 ## Task 3：Gate 评分、决策与风格卡
 
-- [ ] 添加只读评分卡组件。
-- [ ] 将 decision chips 调整为完整决策卡，保留 go/observe/drop 值。
-- [ ] 将风格列表调整为统一卡片，并保持默认候选回退。
-- [ ] 确认时一次写回 `gate_confirmations`。
-- [ ] 已确认状态显示摘要和重新选择。
+- [x] 添加只读评分卡组件。
+- [x] 将 decision chips 调整为完整决策卡，保留 go/observe/drop 值。
+- [x] 将风格列表调整为统一卡片，并保持默认候选回退。
+- [x] 确认时一次写回 `gate_confirmations`。
+- [x] 已确认状态显示摘要和重新选择。
 
 ## Task 4：阻塞规则与兼容回归
 
-- [ ] 测试未确认风格时 reference+ 继续阻塞。
-- [ ] 测试 decision=drop 时不能推进。
-- [ ] 测试缺评分不阻塞 Validate。
-- [ ] 测试旧 Markdown 无 id/family 仍可展示。
+- [x] 测试未确认风格时 reference+ 继续阻塞。
+- [x] 测试 decision=drop 时不能推进。
+- [x] 测试缺评分不阻塞 Validate。
+- [x] 测试旧 Markdown 无 id/family 仍可展示。
 
 ## Task 5：验证
 
@@ -78,4 +78,3 @@ npx vitest run tests/sceneforge-*.test.ts tests/electron-api.test.ts
 2. `feat(sceneforge): upgrade intake direction hitl`
 3. `feat(sceneforge): upgrade topic gate card hitl`
 4. `test(sceneforge): cover card hitl compatibility`
-

@@ -1,4 +1,4 @@
-Status: ready-for-agent
+Status: completed
 
 ## 父问题
 
@@ -10,11 +10,16 @@ Status: ready-for-agent
 
 ## 验收标准
 
-- [ ] 返回明确 nextStage、supportedRunners 和不可用原因
-- [ ] 无下一阶段时不可用
-- [ ] 下一阶段不支持所选 Runner 时不可用
-- [ ] 不调用 IPC，不读取组件状态
-- [ ] 表驱动测试覆盖全部阶段边界
+- [x] 返回明确 nextStage、supportedRunners 和不可用原因
+- [x] 无下一阶段时不可用
+- [x] 下一阶段不支持所选 Runner 时不可用
+- [x] 不调用 IPC，不读取组件状态
+- [x] 表驱动测试覆盖全部阶段边界
+
+## 完成证据
+
+- 新增纯函数 `getContinueRunCapability` 和阶段 Runner 支持判定。
+- `tests/sceneforge-continue-run.test.ts`：18 tests passed，覆盖 13 个阶段边界。
 
 ## 被阻塞于
 
@@ -23,4 +28,3 @@ Status: ready-for-agent
 ## 类型
 
 AFK
-

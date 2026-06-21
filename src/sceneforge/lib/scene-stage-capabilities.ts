@@ -6,8 +6,7 @@ export type SceneWorkspaceTemplateId =
   | 'core'
   | 'intake'
   | 'gate'
-  | 'support'
-  | 'export';
+  | 'support';
 
 const STUDIO_READY_STAGES = new Set<SceneStageId>([
   'design',
@@ -21,6 +20,19 @@ const STUDIO_READY_STAGES = new Set<SceneStageId>([
   'script',
   'performance',
   'audio',
+  'publish',
+]);
+
+const STAGE_FLOW_ACTION_STAGES = new Set<SceneStageId>([
+  'source_intake',
+  'topic_gate',
+  'reference',
+  'story',
+  'assets',
+  'script',
+  'performance',
+  'audio',
+  'publish',
 ]);
 
 export function getStageReadiness(stageId: SceneStageId): SceneStageReadiness {
@@ -29,9 +41,6 @@ export function getStageReadiness(stageId: SceneStageId): SceneStageReadiness {
   }
   if (stageId === 'source_intake' || stageId === 'topic_gate') {
     return 'studio';
-  }
-  if (stageId === 'export') {
-    return 'planned';
   }
   return 'agent';
 }
@@ -46,16 +55,17 @@ export function getWorkspaceTemplateForStage(stageId: SceneStageId): SceneWorksp
   if (stageId === 'reference' || stageId === 'story' || stageId === 'assets') {
     return 'support';
   }
-  if (stageId === 'script' || stageId === 'performance' || stageId === 'audio') {
+  if (stageId === 'script' || stageId === 'performance' || stageId === 'audio' || stageId === 'publish') {
     return 'support';
-  }
-  if (stageId === 'export') {
-    return 'export';
   }
   if (STUDIO_READY_STAGES.has(stageId)) {
     return 'core';
   }
   return 'support';
+}
+
+export function stageUsesFlowActions(stageId: SceneStageId): boolean {
+  return STAGE_FLOW_ACTION_STAGES.has(stageId);
 }
 
 export function readinessLabel(readiness: SceneStageReadiness): string {

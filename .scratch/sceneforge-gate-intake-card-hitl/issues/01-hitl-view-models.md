@@ -1,4 +1,4 @@
-Status: ready-for-agent
+Status: completed
 
 ## 父问题
 
@@ -10,11 +10,16 @@ Status: ready-for-agent
 
 ## 验收标准
 
-- [ ] 评分支持中英文冒号列表项
-- [ ] 评分 value 保留原始字符串
-- [ ] 缺失评分、方向或 family 时返回诚实空值
-- [ ] 既有 builder 输出格式保持兼容
-- [ ] parser 单元测试覆盖正常、边界和旧格式
+- [x] 评分支持中英文冒号列表项
+- [x] 评分 value 保留原始字符串
+- [x] 缺失评分、方向或 family 时返回诚实空值
+- [x] 既有 builder 输出格式保持兼容
+- [x] parser 单元测试覆盖正常、边界和旧格式
+
+## 完成证据
+
+- 新增 `parseGateScoresFromMarkdown` 与评分 View Model。
+- `tests/sceneforge-hitl-markdown.test.ts`：7 tests passed。
 
 ## 被阻塞于
 
@@ -23,4 +28,3 @@ Status: ready-for-agent
 ## 类型
 
 AFK
-

@@ -2,12 +2,25 @@ import type { SceneStageId } from '../types';
 
 export type SceneStageRunnerType = 'manual_submit' | 'direct_llm' | 'acp_agent';
 
+export interface SceneStageRunProgress {
+  projectDir: string;
+  stage: SceneStageId;
+  runnerType: SceneStageRunnerType;
+  phaseKey: string;
+  phaseLabel: string;
+  current: number;
+  total: number;
+}
+
 export interface SceneStageRunnerInput {
   projectDir: string;
   stage: SceneStageId;
   stageContext: unknown;
   manualArtifacts?: Record<string, string>;
+  currentDraftArtifacts?: Record<string, string>;
+  refinementPrompt?: string;
   submitStageDraft: (input: unknown) => Promise<unknown>;
+  onProgress?: (progress: SceneStageRunProgress) => void;
 }
 
 export interface SceneStageRunnerResult {

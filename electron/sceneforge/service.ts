@@ -1,4 +1,9 @@
+import { app } from 'electron';
+import path from 'node:path';
 import type { SceneApprovalPolicy, SceneEntryPath, SceneStageId } from '../../src/types/sceneforge';
+import { generateText } from '../../src/lib/llm';
+import { addAppLog } from '../app-logger';
+import { listSceneAssets, type SceneAssetRegistryEntry } from './assets/scene-asset-library';
 import {
   listSceneArtifacts,
   readSceneArtifact,
@@ -23,26 +28,172 @@ import {
 import { createDefaultSceneStageRunner } from './pipeline/scene-stage-runner-factory';
 import {
   type SceneStageRunnerResult,
+  type SceneStageRunProgress,
   type SceneStageRunnerType,
 } from './pipeline/scene-stage-runner';
 import {
   approveSceneStage,
+  completeSceneForgeProject,
   markSceneStageDraftSubmitted,
+  setSceneCurrentStage,
   markSceneStageValidated,
   markSceneStageValidationFailed,
   readSceneState,
   requestSceneStageRevision,
+  SceneProjectCompletionError,
   type SceneState,
 } from './pipeline/scene-state-machine';
-import { createSceneForgeProject, readSceneProjectEntryPath } from './project/scene-project-file';
-import { exportScenePromptPack } from './export/scene-prompt-pack-exporter';
+import { auditPipelineCompletionForProject } from './pipeline/scene-pipeline-completion';
+import {
+  createSceneForgeProject,
+  getEffectiveSceneSelectedAssetIds,
+  readSceneProjectEntryPath,
+  readSceneProjectStyleSelection,
+  syncSceneProjectMetaFromState,
+  updateSceneProjectStyleSelection,
+  type SceneProjectStyleSelection,
+} from './project/scene-project-file';
+import { normalizeCharacterPromptsMarkdown } from './validators/character-prompt-section-headings';
+import { normalizeDesignPromptsMarkdown } from './validators/design-prompt-section-headings';
+import { normalizeReferenceNotesMarkdown } from './validators/normalize-reference-notes';
+import { normalizePerformanceDirectionMarkdown } from './validators/performance-direction-section-headings';
+import { normalizeScriptDraftMarkdown } from './validators/script-draft-section-headings';
 import { validateSceneStage, type SceneValidationResult } from './validators/scene-validator';
+import { loadFullHeadlessAISettings } from '../pipeline/headless-settings';
+import {
+  createTopicGateDirectLlmAnalyzer,
+  type SceneTopicGateAnalysisResult,
+} from './topic-gate-analysis';
+import {
+  formatMissingRequiredInputsMessage,
+  hasBlockingMissingRequiredInputs,
+  listMissingRequiredStageInputs,
+  normalizeRequiredInputsForBlocking,
+} from '../../src/sceneforge/lib/scene-required-context';
+
+export class SceneRunBlockedError extends Error {
+  code = 'SCENE_RUN_BLOCKED_MISSING_REQUIRED' as const;
+
+  constructor(message: string) {
+    super(message);
+    this.name = 'SceneRunBlockedError';
+  }
+}
+
+function countMatches(text: string, pattern: RegExp): number {
+  return (text.match(pattern) ?? []).length;
+}
+
+function normalizePreview(text: string, maxLength = 180): string {
+  const collapsed = text.replace(/\s+/g, ' ').trim();
+  if (collapsed.length <= maxLength) {
+    return collapsed;
+  }
+  return `${collapsed.slice(0, maxLength)}…`;
+}
+
+function summarizeStageContextInput(input: SceneStageContextInput, warnings: string[]) {
+  const content = input.content ?? '';
+  const chineseChars = countMatches(content, /[\u4e00-\u9fff]/g);
+  const asciiLetters = countMatches(content, /[A-Za-z]/g);
+  const flags: string[] = [];
+
+  if (asciiLetters >= 200 && chineseChars < asciiLetters * 0.15) {
+    flags.push('english_dominant');
+  }
+  if (content.length >= 8000) {
+    flags.push('long_context');
+  }
+  if (input.delivery === 'full' || input.source === 'artifact') {
+    flags.push('full_artifact_context');
+  }
+  if (
+    input.policyInputId &&
+    warnings.some((warning) => warning.startsWith(`handoff_missing_fallback:${input.policyInputId}:`))
+  ) {
+    flags.push('handoff_missing_fallback');
+  }
+  if (
+    input.policyInputId &&
+    warnings.some((warning) => warning.startsWith(`handoff_slice_missing_fallback:${input.policyInputId}:`))
+  ) {
+    flags.push('handoff_slice_missing_fallback');
+  }
+
+  return {
+    artifactId: input.artifactId,
+    title: input.title,
+    fromStage: input.fromStage ?? input.stage,
+    artifactKey: input.artifactKey,
+    delivery: input.delivery,
+    source: input.source,
+    chars: content.length,
+    chineseChars,
+    asciiLetters,
+    flags,
+    preview: normalizePreview(content),
+  };
+}
+
+function logStageContextDebug(
+  projectDir: string,
+  stage: SceneStageId,
+  runnerType: SceneStageRunnerType,
+  stageContext: SceneStageContext,
+): void {
+  const payload = {
+    project: path.basename(projectDir),
+    projectDir,
+    stage,
+    runnerType,
+    warnings: stageContext.warnings,
+    contextCharBudget: stageContext.contextCharBudget,
+    totalRequiredChars: stageContext.requiredInputs.reduce((sum, input) => sum + input.content.length, 0),
+    totalOptionalChars: stageContext.optionalInputs.reduce((sum, input) => sum + input.content.length, 0),
+    requiredInputs: stageContext.requiredInputs.map((input) =>
+      summarizeStageContextInput(input, stageContext.warnings),
+    ),
+    optionalInputs: stageContext.optionalInputs.map((input) =>
+      summarizeStageContextInput(input, stageContext.warnings),
+    ),
+    handoffRefs: stageContext.handoffRefs,
+    referencePriority: stageContext.referencePriority.currentInputsHighestFirst,
+  };
+
+  addAppLog(
+    'info',
+    'sceneforge-stage-context',
+    `stageContext 调试快照：${path.basename(projectDir)} ${stage} (${runnerType})`,
+    JSON.stringify(payload, null, 2),
+  );
+}
+
+function assertRunnableStageContext(
+  stageContext: SceneStageContext,
+  runnerType: SceneStageRunnerType,
+): void {
+  if (runnerType !== 'direct_llm' && runnerType !== 'acp_agent') {
+    return;
+  }
+  const normalized = normalizeRequiredInputsForBlocking(stageContext.requiredInputs);
+  if (!hasBlockingMissingRequiredInputs({ requiredInputs: normalized })) {
+    return;
+  }
+  const message = formatMissingRequiredInputsMessage(
+    listMissingRequiredStageInputs({ requiredInputs: normalized }),
+  );
+  throw new SceneRunBlockedError(message || '无法运行：请先补齐上游阶段产物。');
+}
 
 export type {
   SceneStageContext,
   SceneStageContextInput,
   SceneStageContextOptions,
 } from './pipeline/scene-context-builder';
+
+interface SceneRunStageRuntimeOptions {
+  onProgress?: (progress: SceneStageRunProgress) => void;
+}
 
 const DESIGN_ARTIFACT_KEYS = [
   'design_prompts',
@@ -59,7 +210,13 @@ const STORYBOARD_ARTIFACT_KEYS = [
   'master_board_prompt',
 ] as const;
 
-const VIDEO_PROMPTS_ARTIFACT_KEYS = ['video_prompt_pack', 'video_prompt_pack_cn'] as const;
+const VIDEO_PROMPTS_ARTIFACT_KEYS = [
+  'video_prompt_pack_cn',
+  'video_prompt_review',
+  'video_prompt_trace',
+  'video_prompt_pack_en',
+  'video_prompt_pack',
+] as const;
 
 type DesignArtifactKey = (typeof DESIGN_ARTIFACT_KEYS)[number];
 type StoryboardArtifactKey = (typeof STORYBOARD_ARTIFACT_KEYS)[number];
@@ -81,8 +238,11 @@ const STORYBOARD_ARTIFACT_TITLES: Record<StoryboardArtifactKey, string> = {
 };
 
 const VIDEO_PROMPTS_ARTIFACT_TITLES: Record<VideoPromptsArtifactKey, string> = {
-  video_prompt_pack: '视频提示词包',
-  video_prompt_pack_cn: '中文视频提示词包',
+  video_prompt_pack_cn: '视频提示词包（中文主交付）',
+  video_prompt_review: '视频提示词审查记录',
+  video_prompt_trace: '视频提示词溯源记录',
+  video_prompt_pack_en: '视频提示词包（英文可选）',
+  video_prompt_pack: '视频提示词包（旧格式兼容）',
 };
 
 const SUPPORT_DRAFT_STAGES = [
@@ -94,6 +254,7 @@ const SUPPORT_DRAFT_STAGES = [
   'script',
   'performance',
   'audio',
+  'publish',
 ] as const;
 type SupportDraftStage = (typeof SUPPORT_DRAFT_STAGES)[number];
 
@@ -133,6 +294,10 @@ const SUPPORT_DRAFT_CONFIG: Record<
     artifactKeys: ['audio_design'],
     titles: { audio_design: '声音设计' },
   },
+  publish: {
+    artifactKeys: ['publish_notes'],
+    titles: { publish_notes: '发布说明' },
+  },
 };
 
 const STAGE_DRAFT_CONFIG = {
@@ -157,15 +322,22 @@ export type VideoPromptsDraftInput = Partial<Record<VideoPromptsArtifactKey, str
 export type SceneForgeServiceErrorCode =
   | 'INVALID_DESIGN_DRAFT_ARTIFACT'
   | 'INVALID_STAGE_DRAFT_ARTIFACT'
-  | 'UNSUPPORTED_STAGE_DRAFT';
+  | 'UNSUPPORTED_STAGE_DRAFT'
+  | 'SCENE_PIPELINE_COMPLETION_FAILED';
 
 export class SceneForgeServiceError extends Error {
   code: SceneForgeServiceErrorCode;
+  audit?: import('./pipeline/scene-pipeline-completion').ScenePipelineCompletionAudit;
 
-  constructor(code: SceneForgeServiceErrorCode, message: string) {
+  constructor(
+    code: SceneForgeServiceErrorCode,
+    message: string,
+    audit?: import('./pipeline/scene-pipeline-completion').ScenePipelineCompletionAudit,
+  ) {
     super(message);
     this.name = 'SceneForgeServiceError';
     this.code = code;
+    this.audit = audit;
   }
 }
 
@@ -192,6 +364,8 @@ export interface SceneProjectState {
   artifacts: SceneArtifact[];
   approvalPolicies: Partial<Record<SceneStageId, SceneApprovalPolicy>>;
   entryPath: SceneEntryPath;
+  selectedStyleProfileId: string | null;
+  selectedAssetIds: string[];
 }
 
 export interface SceneRunStageInput {
@@ -200,6 +374,34 @@ export interface SceneRunStageInput {
   runnerType: SceneStageRunnerType;
   manualArtifacts?: Record<string, string>;
   selectedAssetIds?: string[];
+  currentDraftArtifacts?: Record<string, string>;
+  refinementPrompt?: string;
+}
+
+export interface SceneAnalyzeTopicGateInput {
+  projectDir: string;
+}
+
+export interface SceneUpdateStyleSelectionInput extends SceneProjectStyleSelection {
+  projectDir: string;
+}
+
+interface SceneForgeServiceDeps {
+  analyzeTopicGate?: (
+    input: {
+      topicBriefMarkdown: string;
+      sourceMaterialMarkdown?: string | null;
+      adaptationSelectionMarkdown?: string | null;
+    },
+  ) => Promise<SceneTopicGateAnalysisResult>;
+}
+
+function isStyleProfileEntry(asset: SceneAssetRegistryEntry, assetId: string): boolean {
+  return asset.id === assetId && asset.type === 'style_profile';
+}
+
+function isMethodologyEntry(asset: SceneAssetRegistryEntry, assetId: string): boolean {
+  return asset.id === assetId && asset.type === 'methodology';
 }
 
 function isSupportDraftStage(stage: SceneStageId): stage is SupportDraftStage {
@@ -241,6 +443,23 @@ async function writeHandoffIfCapable(projectDir: string, stage: SceneStageId): P
 }
 
 export class SceneForgeService {
+  private readonly analyzeTopicGateWithLlm: NonNullable<SceneForgeServiceDeps['analyzeTopicGate']>;
+
+  constructor(deps: SceneForgeServiceDeps = {}) {
+    this.analyzeTopicGateWithLlm =
+      deps.analyzeTopicGate ??
+      createTopicGateDirectLlmAnalyzer({
+        loadSettings: async () => {
+          try {
+            return await loadFullHeadlessAISettings(app.getPath('userData'));
+          } catch {
+            return null;
+          }
+        },
+        generateText,
+      }).analyze;
+  }
+
   async createProject(projectDir: string, entryPath?: SceneEntryPath) {
     return createSceneForgeProject(projectDir, entryPath ?? 'topic_gate');
   }
@@ -249,6 +468,7 @@ export class SceneForgeService {
     const state = await readSceneState(projectDir);
     const artifacts = await listSceneArtifacts(projectDir);
     const entryPath = await readSceneProjectEntryPath(projectDir);
+    const selection = await readSceneProjectStyleSelection(projectDir);
     const approvalPolicies: Partial<Record<SceneStageId, SceneApprovalPolicy>> = {};
     for (const stage of [
       'design',
@@ -262,11 +482,49 @@ export class SceneForgeService {
       'script',
       'performance',
       'audio',
-      'export',
+      'publish',
     ] as const) {
       approvalPolicies[stage] = await resolveSceneApprovalPolicy(projectDir, stage);
     }
-    return { state, artifacts, approvalPolicies, entryPath };
+    return {
+      state,
+      artifacts,
+      approvalPolicies,
+      entryPath,
+      selectedStyleProfileId: selection.selectedStyleProfileId,
+      selectedAssetIds: selection.selectedAssetIds,
+    };
+  }
+
+  async listAvailableAssets(): Promise<SceneAssetRegistryEntry[]> {
+    return listSceneAssets();
+  }
+
+  async updateStyleSelection(input: SceneUpdateStyleSelectionInput): Promise<SceneProjectState> {
+    const availableAssets = await listSceneAssets();
+    const styleId = input.selectedStyleProfileId;
+    if (styleId && !availableAssets.some((asset) => isStyleProfileEntry(asset, styleId))) {
+      throw new SceneForgeServiceError(
+        'INVALID_STAGE_DRAFT_ARTIFACT',
+        `未知风格配置：${styleId}`,
+      );
+    }
+
+    const selectedAssetIds = Array.from(new Set(input.selectedAssetIds));
+    for (const assetId of selectedAssetIds) {
+      if (!availableAssets.some((asset) => isMethodologyEntry(asset, assetId))) {
+        throw new SceneForgeServiceError(
+          'INVALID_STAGE_DRAFT_ARTIFACT',
+          `未知附加资产：${assetId}`,
+        );
+      }
+    }
+
+    await updateSceneProjectStyleSelection(input.projectDir, {
+      selectedStyleProfileId: styleId,
+      selectedAssetIds,
+    });
+    return this.getProjectState(input.projectDir);
   }
 
   async submitDesignDraft(
@@ -335,13 +593,21 @@ export class SceneForgeService {
     for (const [artifactKey, content] of Object.entries(draft)) {
       assertDraftArtifactKey(stage, artifactKey);
       if (!content) continue;
+      let normalizedContent = content;
+      if (stage === 'design') {
+        if (artifactKey === 'design_prompts') {
+          normalizedContent = normalizeDesignPromptsMarkdown(content);
+        } else if (artifactKey === 'character_prompts') {
+          normalizedContent = normalizeCharacterPromptsMarkdown(content);
+        }
+      }
       const artifact = await writeSceneArtifact({
         projectDir,
         stage,
         artifactKey,
         kind: 'final',
         title: config.titles[artifactKey as keyof typeof config.titles] ?? artifactKey,
-        content,
+        content: normalizedContent,
         role: 'core_generation_asset',
         coreAsset: true,
         readableByDownstream: true,
@@ -387,13 +653,21 @@ export class SceneForgeService {
     for (const [artifactKey, content] of Object.entries(draft)) {
       assertDraftArtifactKey(stage, artifactKey);
       if (!content?.trim()) continue;
+      let normalizedContent = content;
+      if (stage === 'reference' && artifactKey === 'reference_notes') {
+        normalizedContent = normalizeReferenceNotesMarkdown(content);
+      } else if (stage === 'script' && artifactKey === 'script_draft') {
+        normalizedContent = normalizeScriptDraftMarkdown(content);
+      } else if (stage === 'performance' && artifactKey === 'performance_direction') {
+        normalizedContent = normalizePerformanceDirectionMarkdown(content);
+      }
       const artifact = await writeSceneArtifact({
         projectDir,
         stage,
         artifactKey,
         kind: 'final',
         title: config.titles[artifactKey] ?? artifactKey,
-        content,
+        content: normalizedContent,
         role: 'support_direction_asset',
         coreAsset: false,
         readableByDownstream: true,
@@ -434,6 +708,29 @@ export class SceneForgeService {
     return state;
   }
 
+  async setCurrentStage(projectDir: string, stage: SceneStageId): Promise<SceneProjectState> {
+    await setSceneCurrentStage(projectDir, stage);
+    return this.getProjectState(projectDir);
+  }
+
+  async completeProject(projectDir: string): Promise<SceneProjectState> {
+    const state = await readSceneState(projectDir);
+    const entryPath = await readSceneProjectEntryPath(projectDir);
+    const audit = await auditPipelineCompletionForProject(projectDir, state, entryPath, {
+      runValidators: true,
+    });
+    try {
+      const nextState = await completeSceneForgeProject(projectDir, entryPath, audit);
+      await syncSceneProjectMetaFromState(projectDir, nextState);
+    } catch (error) {
+      if (error instanceof SceneProjectCompletionError) {
+        throw new SceneForgeServiceError('SCENE_PIPELINE_COMPLETION_FAILED', error.message, error.audit);
+      }
+      throw error;
+    }
+    return this.getProjectState(projectDir);
+  }
+
   async requestRevision(projectDir: string, stage: SceneStageId, note: string) {
     return requestSceneStageRevision(projectDir, stage, note);
   }
@@ -454,22 +751,73 @@ export class SceneForgeService {
     return readSceneArtifact(projectDir, artifactId);
   }
 
-  async exportPromptPack(projectDir: string) {
-    return exportScenePromptPack(projectDir);
+  async analyzeTopicGate(input: SceneAnalyzeTopicGateInput): Promise<SceneTopicGateAnalysisResult> {
+    const artifacts = await listSceneArtifacts(input.projectDir);
+    const topicBriefArtifact = artifacts.find((artifact) => artifact.id === 'topic_gate.topic_brief');
+    if (!topicBriefArtifact) {
+      throw new SceneForgeServiceError(
+        'UNSUPPORTED_STAGE_DRAFT',
+        '请先保存选题简报，再分析选题。',
+      );
+    }
+
+    const { content: topicBriefMarkdown } = await readSceneArtifact(input.projectDir, topicBriefArtifact.id);
+    const sourceMaterialArtifact = artifacts.find((artifact) => artifact.id === 'source_intake.source_material');
+    const adaptationSelectionArtifact = artifacts.find(
+      (artifact) => artifact.id === 'source_intake.adaptation_selection',
+    );
+    const sourceMaterialMarkdown = sourceMaterialArtifact
+      ? (await readSceneArtifact(input.projectDir, sourceMaterialArtifact.id)).content
+      : null;
+    const adaptationSelectionMarkdown = adaptationSelectionArtifact
+      ? (await readSceneArtifact(input.projectDir, adaptationSelectionArtifact.id)).content
+      : null;
+
+    const result = await this.analyzeTopicGateWithLlm({
+      topicBriefMarkdown,
+      sourceMaterialMarkdown,
+      adaptationSelectionMarkdown,
+    });
+
+    await writeSceneArtifact({
+      projectDir: input.projectDir,
+      stage: 'topic_gate',
+      artifactKey: result.artifactKey,
+      kind: 'final',
+      title: '选题分析',
+      content: result.content,
+      role: 'support_direction_asset',
+      coreAsset: false,
+      readableByDownstream: false,
+    });
+
+    return result;
   }
 
-  async runStage(input: SceneRunStageInput): Promise<SceneStageRunnerResult> {
-    const runner = createDefaultSceneStageRunner(input.runnerType);
+  async runStage(
+    input: SceneRunStageInput,
+    runtimeOptions?: SceneRunStageRuntimeOptions,
+  ): Promise<SceneStageRunnerResult> {
+    const selectedAssetIds = await this.resolveSelectedAssetIds(
+      input.projectDir,
+      input.selectedAssetIds,
+    );
     const stageContext = await this.getStageContext(input.projectDir, input.stage, {
       runner: input.runnerType,
-      selectedAssetIds: input.selectedAssetIds,
+      selectedAssetIds,
     });
+    logStageContextDebug(input.projectDir, input.stage, input.runnerType, stageContext);
+    assertRunnableStageContext(stageContext, input.runnerType);
+    const runner = createDefaultSceneStageRunner(input.runnerType);
     return runner.run({
       projectDir: input.projectDir,
       stage: input.stage,
       stageContext,
       manualArtifacts: input.manualArtifacts,
+      currentDraftArtifacts: input.currentDraftArtifacts,
+      refinementPrompt: input.refinementPrompt,
       submitStageDraft: (submitInput) => this.submitStageDraft(submitInput as SceneSubmitStageDraftInput),
+      onProgress: runtimeOptions?.onProgress,
     });
   }
 
@@ -478,10 +826,22 @@ export class SceneForgeService {
     stage: SceneStageId,
     options?: SceneStageContextOptions,
   ): Promise<SceneStageContext> {
+    const selectedAssetIds = await this.resolveSelectedAssetIds(projectDir, options?.selectedAssetIds);
     const buildOptions: BuildSceneStageContextOptions = {
-      selectedAssetIds: options?.selectedAssetIds,
+      selectedAssetIds,
       runner: options?.runner,
     };
     return buildSceneStageContext(projectDir, stage, buildOptions);
+  }
+
+  private async resolveSelectedAssetIds(
+    projectDir: string,
+    explicitSelectedAssetIds?: string[],
+  ): Promise<string[]> {
+    if (explicitSelectedAssetIds !== undefined) {
+      return Array.from(new Set(explicitSelectedAssetIds));
+    }
+    const selection = await readSceneProjectStyleSelection(projectDir);
+    return getEffectiveSceneSelectedAssetIds(selection);
   }
 }

@@ -108,6 +108,92 @@ describe('loadProjectFile', () => {
     expect(files).not.toContain('timeline.json');
     expect(files).not.toContain('script-state.json');
   });
+
+  it('当 project.json 丢失 SceneForge 标识时，会从 sceneforge/state.json 自动恢复', async () => {
+    const existing = {
+      version: 1,
+      createdAt: '2026-01-01T00:00:00.000Z',
+      updatedAt: '2026-01-01T00:00:00.000Z',
+      timeline: null,
+      aiAnalysis: { analysisResult: null, coverCandidates: [] },
+      script: {
+        templateId: 't',
+        annotations: [],
+        reviewState: 'idle',
+        lastReviewedDocVersion: 0,
+      },
+    };
+    const sceneState = {
+      version: 1,
+      pipelineId: 'reference_remake',
+      currentStage: 'storyboard',
+      status: 'in_progress',
+      stages: {},
+      coreArtifacts: {
+        design: 'design.design_prompts',
+        storyboard: 'storyboard.storyboard_prompt_pack',
+        videoPrompts: null,
+      },
+      updatedAt: '2026-01-01T00:05:00.000Z',
+    };
+
+    await fs.mkdir(path.join(tmpDir, 'sceneforge'), { recursive: true });
+    await fs.writeFile(path.join(tmpDir, 'project.json'), JSON.stringify(existing));
+    await fs.writeFile(
+      path.join(tmpDir, 'sceneforge', 'state.json'),
+      JSON.stringify(sceneState),
+    );
+
+    const data = await loadProjectFile(tmpDir);
+
+    expect(data.type).toBe('sceneforge');
+    expect(data.sceneforge).toMatchObject({
+      projectRoot: 'sceneforge',
+      pipelineId: 'reference_remake',
+      currentStage: 'storyboard',
+      status: 'in_progress',
+      coreArtifacts: {
+        design: 'design.design_prompts',
+        storyboard: 'storyboard.storyboard_prompt_pack',
+        videoPrompts: null,
+      },
+    });
+
+    const persisted = JSON.parse(await fs.readFile(path.join(tmpDir, 'project.json'), 'utf-8'));
+    expect(persisted.type).toBe('sceneforge');
+    expect(persisted.sceneforge.currentStage).toBe('storyboard');
+  });
+
+  it('当只剩 SceneForge state.json 时，会创建带有 SceneForge 标识的 project.json', async () => {
+    const sceneState = {
+      version: 1,
+      pipelineId: 'reference_remake',
+      currentStage: 'performance',
+      status: 'in_progress',
+      stages: {},
+      coreArtifacts: {
+        design: 'design.design_prompts',
+        storyboard: null,
+        videoPrompts: null,
+      },
+      updatedAt: '2026-01-01T00:05:00.000Z',
+    };
+
+    await fs.mkdir(path.join(tmpDir, 'sceneforge'), { recursive: true });
+    await fs.writeFile(
+      path.join(tmpDir, 'sceneforge', 'state.json'),
+      JSON.stringify(sceneState),
+    );
+
+    const data = await loadProjectFile(tmpDir);
+
+    expect(data.type).toBe('sceneforge');
+    expect(data.sceneforge?.currentStage).toBe('performance');
+
+    const persisted = JSON.parse(await fs.readFile(path.join(tmpDir, 'project.json'), 'utf-8'));
+    expect(persisted.type).toBe('sceneforge');
+    expect(persisted.sceneforge.currentStage).toBe('performance');
+  });
 });
 
 describe('saveProjectSection', () => {

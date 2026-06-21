@@ -10,8 +10,10 @@ import {
 } from '../src/lib/project-persistence';
 import { parsePersistedScriptState } from '../src/lib/script-persistence';
 import type { TimelineData } from '../src/types';
+import type { SceneEntryPath, SceneProjectMeta, SceneStageId } from '../src/types/sceneforge';
 
 const PROJECT_FILE = 'project.json';
+const SCENE_STATE_FILE = path.join('sceneforge', 'state.json');
 
 // per-projectDir 写锁：Promise 链序列化
 const writeLocks = new Map<string, Promise<void>>();
@@ -41,6 +43,81 @@ async function readProjectJson(projectDir: string): Promise<ProjectData | null> 
 async function writeProjectJson(projectDir: string, data: ProjectData): Promise<void> {
   await fs.mkdir(projectDir, { recursive: true });
   await fs.writeFile(path.join(projectDir, PROJECT_FILE), JSON.stringify(data, null, 2), 'utf-8');
+}
+
+interface SceneStateSnapshot {
+  pipelineId?: string;
+  currentStage?: SceneStageId | null;
+  status?: 'ready' | 'in_progress' | 'completed';
+  coreArtifacts?: SceneProjectMeta['coreArtifacts'];
+}
+
+function normalizeRecoveredSceneProjectMeta(
+  meta: Partial<SceneProjectMeta> | undefined,
+  state: SceneStateSnapshot,
+): SceneProjectMeta {
+  const entryPath: SceneEntryPath =
+    meta?.entryPath === 'source_intake'
+      ? 'source_intake'
+      : state.currentStage === 'source_intake'
+        ? 'source_intake'
+        : 'topic_gate';
+  const startStage: SceneStageId =
+    entryPath === 'source_intake' ? 'source_intake' : 'topic_gate';
+  return {
+    version: 1,
+    projectRoot: 'sceneforge',
+    pipelineId:
+      meta?.pipelineId ??
+      (state.pipelineId === 'original_scene' || state.pipelineId === 'prompt_pack_only'
+        ? state.pipelineId
+        : 'reference_remake'),
+    entryPath,
+    selectedStyleProfileId: meta?.selectedStyleProfileId ?? null,
+    selectedAssetIds: Array.isArray(meta?.selectedAssetIds)
+      ? Array.from(new Set(meta.selectedAssetIds.filter((value): value is string => typeof value === 'string')))
+      : [],
+    currentStage: meta?.currentStage ?? state.currentStage ?? startStage,
+    status: meta?.status ?? state.status ?? 'ready',
+    coreArtifacts: {
+      design: meta?.coreArtifacts?.design ?? state.coreArtifacts?.design ?? null,
+      storyboard: meta?.coreArtifacts?.storyboard ?? state.coreArtifacts?.storyboard ?? null,
+      videoPrompts: meta?.coreArtifacts?.videoPrompts ?? state.coreArtifacts?.videoPrompts ?? null,
+    },
+    lastExportPath: meta?.lastExportPath ?? null,
+  };
+}
+
+async function readSceneStateSnapshot(projectDir: string): Promise<SceneStateSnapshot | null> {
+  try {
+    const raw = await fs.readFile(path.join(projectDir, SCENE_STATE_FILE), 'utf-8');
+    const parsed = JSON.parse(raw) as SceneStateSnapshot;
+    return parsed ?? null;
+  } catch {
+    return null;
+  }
+}
+
+async function recoverSceneForgeProjectData(
+  projectDir: string,
+  data: ProjectData,
+): Promise<{ data: ProjectData; recovered: boolean }> {
+  const sceneState = await readSceneStateSnapshot(projectDir);
+  if (!sceneState) {
+    return { data, recovered: false };
+  }
+
+  const nextData: ProjectData = {
+    ...data,
+    type: 'sceneforge',
+    sceneforge: normalizeRecoveredSceneProjectMeta(data.sceneforge, sceneState),
+  };
+  const changed =
+    data.type !== 'sceneforge' || JSON.stringify(data.sceneforge ?? null) !== JSON.stringify(nextData.sceneforge);
+  return {
+    data: changed ? { ...nextData, updatedAt: new Date().toISOString() } : nextData,
+    recovered: changed,
+  };
 }
 
 async function tryReadLegacyFile<T>(filePath: string): Promise<T | null> {
@@ -106,11 +183,13 @@ async function migrateFromLegacyFiles(projectDir: string): Promise<ProjectData> 
 }
 
 async function hydrateExistingProjectData(projectDir: string, data: ProjectData): Promise<ProjectData> {
-  const currentAI = data.aiAnalysis ?? {
+  const recovery = await recoverSceneForgeProjectData(projectDir, data);
+  const recoveredData = recovery.data;
+  const currentAI = recoveredData.aiAnalysis ?? {
     analysisResult: null,
     coverCandidates: [],
   };
-  const hasWorkflowMeta = data.workflowMeta !== undefined;
+  const hasWorkflowMeta = recoveredData.workflowMeta !== undefined;
   // 视觉编排下线后 aiAnalysis 只保留 analysisResult + coverCandidates。
   // 若旧工程含 motionCards / storyboardPlan，这里一次性剥离并回写。
   const legacyExtras =
@@ -118,16 +197,16 @@ async function hydrateExistingProjectData(projectDir: string, data: ProjectData)
     'storyboardPlan' in currentAI ||
     currentAI.analysisResult === undefined ||
     currentAI.coverCandidates === undefined;
-  if (!legacyExtras && hasWorkflowMeta) {
-    return data;
+  if (!legacyExtras && hasWorkflowMeta && !recovery.recovered) {
+    return recoveredData;
   }
   const nextData: ProjectData = {
-    ...data,
+    ...recoveredData,
     aiAnalysis: {
       analysisResult: currentAI.analysisResult ?? null,
       coverCandidates: currentAI.coverCandidates ?? [],
     },
-    workflowMeta: hasWorkflowMeta ? data.workflowMeta : { ...DEFAULT_WORKFLOW_META },
+    workflowMeta: hasWorkflowMeta ? recoveredData.workflowMeta : { ...DEFAULT_WORKFLOW_META },
   };
 
   await writeProjectJson(projectDir, nextData);
@@ -151,7 +230,8 @@ export async function loadProjectFile(projectDir: string): Promise<ProjectData> 
 
   if (hasLegacy) return migrateFromLegacyFiles(projectDir);
 
-  const data = createDefaultProjectData();
+  const recovery = await recoverSceneForgeProjectData(projectDir, createDefaultProjectData());
+  const data = recovery.data;
   await writeProjectJson(projectDir, data);
   return data;
 }

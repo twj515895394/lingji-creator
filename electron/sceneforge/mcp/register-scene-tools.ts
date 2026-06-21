@@ -14,6 +14,7 @@ const SUBMIT_VALIDATE_APPROVE_STAGES = [
   'script',
   'performance',
   'audio',
+  'publish',
 ] as const;
 
 const service = new SceneForgeService();
@@ -66,7 +67,7 @@ export function registerSceneForgeMcpTools(server: McpServer): void {
       description: '只返回程序允许下游读取的 approved/final 产物和授权支撑产物。',
       inputSchema: {
         projectDir: z.string().describe('SceneForge 项目目录'),
-        stage: z.enum(['design', 'storyboard', 'video_prompts', 'export']),
+        stage: z.enum(['design', 'storyboard', 'video_prompts', 'publish']),
         runner: z
           .enum(['manual_submit', 'direct_llm', 'acp_agent'])
           .optional()
@@ -161,7 +162,7 @@ export function registerSceneForgeMcpTools(server: McpServer): void {
       description: '更新项目级审批策略 overrides。',
       inputSchema: {
         projectDir: z.string(),
-        stage: z.enum(['design', 'storyboard', 'video_prompts', 'export']),
+        stage: z.enum(['design', 'storyboard', 'video_prompts', 'publish']),
         policy: z.enum(['required', 'optional', 'auto_if_valid', 'skip']),
       },
     },
@@ -240,19 +241,4 @@ export function registerSceneForgeMcpTools(server: McpServer): void {
     },
   );
 
-  server.registerTool(
-    'scene_export_prompt_pack',
-    {
-      title: '导出 SceneForge Prompt Pack',
-      description: '导出当前 manifest 中的核心 final 产物清单。',
-      inputSchema: { projectDir: z.string() },
-    },
-    async ({ projectDir }) => {
-      try {
-        return jsonResult(await service.exportPromptPack(projectDir));
-      } catch (error) {
-        return errorResult(error);
-      }
-    },
-  );
 }

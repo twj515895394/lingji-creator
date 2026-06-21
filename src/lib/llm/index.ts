@@ -9,6 +9,7 @@ import {
   parseStructuredOutput,
 } from './content';
 import { createChatModel, createChatModelFromProvider } from './model';
+import { migrateToProviders, resolveDefaultLlmBinding } from './provider-utils';
 
 export interface StreamCallbacks {
   onReasoningChunk?: (chunk: string) => void;
@@ -33,7 +34,11 @@ function pickModel(settings: AISettings, binding?: ResolvedBinding) {
     // provider.enableThinking 缺省时由 createChatModelFromProvider 内部默认 true
     return createChatModelFromProvider(binding.provider, binding.model);
   }
-  return createChatModel(settings);
+  const defaultBinding = resolveDefaultLlmBinding(settings);
+  if (defaultBinding) {
+    return createChatModelFromProvider(defaultBinding.provider, defaultBinding.model);
+  }
+  return createChatModel(migrateToProviders(settings));
 }
 
 // 流式调用下不再用"总时长"做超时——只要 chunk（含 thinking 的 reasoning）

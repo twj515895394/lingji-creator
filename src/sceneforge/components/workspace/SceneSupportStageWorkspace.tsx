@@ -32,14 +32,24 @@ const GATE_PLACEHOLDER = `# 选题简报
 ## 创作意图
 （桥段、热点、原著母题或改编想法）
 
+## 成片规格
+total_duration_sec: 60
+segment_duration_sec: 8
+
 ## 决策
-go | observe | drop
+go
 
 ## 风格（待确认）
 - style_family:
 - director_style_id:
 
+## 风格候选
+- id: pixar_like | label: 动画·皮克斯感 | family: animation
+- id: live_action_cinematic | label: 实拍·电影感 | family: live_action
+- id: documentary | label: 纪实·解说 | family: documentary
+
 ## 备注
+（先保存，再分析，再在确认区正式确认风格与继续策略）
 `;
 
 export function SceneSupportStageWorkspace({

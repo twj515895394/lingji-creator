@@ -31,7 +31,13 @@ import type {
   UserPromptSeed,
 } from './prompts';
 import type { SceneApprovalPolicy, SceneArtifactDisplayModel, SceneEntryPath, SceneStageId } from '../types/sceneforge';
-import type { SceneGetStageContextOptions, SceneRunStageIpcInput } from '../../electron/sceneforge/scene-ipc-types';
+import type {
+  SceneAnalyzeTopicGateIpcInput,
+  SceneGetStageContextOptions,
+  SceneRunStageIpcInput,
+  SceneStageRunProgressPayload as SceneStageRunProgressPayloadType,
+  SceneUpdateStyleSelectionIpcInput,
+} from '../../electron/sceneforge/scene-ipc-types';
 import type { SceneStageRunnerResult } from '../../electron/sceneforge/pipeline/scene-stage-runner';
 import type {
   SceneProjectState,
@@ -39,15 +45,20 @@ import type {
   SceneSubmitStageDraftInput,
   SubmitStageDraftResult,
 } from '../../electron/sceneforge/service';
+import type { SceneAssetRegistryEntry } from '../../electron/sceneforge/assets/scene-asset-library';
 import type { SceneArtifact } from '../../electron/sceneforge/artifacts/scene-artifact-store';
 import type { SceneValidationResult } from '../../electron/sceneforge/validators/scene-validator';
 import type { SceneState } from '../../electron/sceneforge/pipeline/scene-state-machine';
 
 export type SceneRunStageInput = SceneRunStageIpcInput;
+export type SceneAnalyzeTopicGateInput = SceneAnalyzeTopicGateIpcInput;
+export type SceneUpdateStyleSelectionInput = SceneUpdateStyleSelectionIpcInput;
+export type SceneStageRunProgressPayload = SceneStageRunProgressPayloadType;
 
 export type { SceneGetStageContextOptions, SceneStageRunnerResult };
 
 export type {
+  SceneAssetRegistryEntry,
   SceneProjectState,
   SceneStageContext,
   SceneSubmitStageDraftInput,
@@ -334,6 +345,10 @@ export interface ElectronAPI {
   loadProject: (projectDir: string) => Promise<string>;
   createSceneForgeProject: (projectDir: string, entryPath?: SceneEntryPath) => Promise<string>;
   sceneGetProjectState: (projectDir: string) => Promise<SceneProjectState>;
+  sceneListAvailableAssets: () => Promise<SceneAssetRegistryEntry[]>;
+  sceneUpdateStyleSelection: (
+    input: SceneUpdateStyleSelectionInput,
+  ) => Promise<SceneProjectState>;
   sceneGetStageContext: (
     projectDir: string,
     stage: SceneStageId,
@@ -342,11 +357,16 @@ export interface ElectronAPI {
   sceneSubmitStageDraft: (
     input: SceneSubmitStageDraftInput,
   ) => Promise<SubmitStageDraftResult>;
+  sceneAnalyzeTopicGate: (
+    input: SceneAnalyzeTopicGateInput,
+  ) => Promise<import('../../electron/sceneforge/topic-gate-analysis').SceneTopicGateAnalysisResult>;
   sceneValidateStage: (
     projectDir: string,
     stage: SceneStageId,
   ) => Promise<SceneValidationResult>;
   sceneApproveStage: (projectDir: string, stage: SceneStageId) => Promise<SceneState>;
+  sceneSetCurrentStage: (projectDir: string, stage: SceneStageId) => Promise<SceneProjectState>;
+  sceneCompleteProject: (projectDir: string) => Promise<SceneProjectState>;
   sceneRequestRevision: (
     projectDir: string,
     stage: SceneStageId,
@@ -362,12 +382,10 @@ export interface ElectronAPI {
     projectDir: string,
     artifactId: string,
   ) => Promise<{ artifact: SceneArtifact; content: string; displayModel: SceneArtifactDisplayModel | null }>;
-  sceneExportPromptPack: (projectDir: string) => Promise<{
-    exportDir: string;
-    manifestPath: string;
-    artifactIds: string[];
-  }>;
   sceneRunStage: (input: SceneRunStageInput) => Promise<SceneStageRunnerResult>;
+  onSceneStageRunProgress: (
+    callback: (payload: SceneStageRunProgressPayload) => void,
+  ) => () => void;
   saveProjectSection: (projectDir: string, section: string, data: string) => Promise<void>;
   scanProjectDirectory: (
     projectDir: string,

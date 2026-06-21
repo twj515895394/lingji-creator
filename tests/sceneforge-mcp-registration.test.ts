@@ -29,7 +29,6 @@ describe('SceneForge MCP tools', () => {
       'scene_set_approval_policy',
       'scene_list_artifacts',
       'scene_read_artifact',
-      'scene_export_prompt_pack',
     ]));
 
     expect(JSON.stringify(server.tools.get('scene_submit_stage_draft')?.def)).toContain('artifactKey');

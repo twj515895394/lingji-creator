@@ -17,7 +17,6 @@ const STAGE_HINTS: Partial<Record<SceneStageId, string>> = {
   script: '剧本阶段产物为支撑向内容，请使用 Agent 提交后在此刷新产物列表。',
   performance: '表演/口播节奏阶段当前无 Studio 表单，请用 Agent 推进。',
   audio: '音频规划阶段请通过 Agent 与外部工具链完成。',
-  publish: '发布元数据与平台适配尚未提供 Studio 表单。',
 };
 
 export interface SceneSupportPlaceholderWorkspaceProps {

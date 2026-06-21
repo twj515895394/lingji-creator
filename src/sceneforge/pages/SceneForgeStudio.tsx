@@ -1,55 +1,84 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { SceneApprovalPolicy, SceneArtifactCopyBlock, SceneArtifactDisplayModel, SceneStageId } from '../../types/sceneforge';
-import type { SceneArtifact, SceneProjectState, SceneValidationResult } from '../../lib/electron-api';
+import type {
+  SceneArtifact,
+  SceneProjectState,
+  SceneStageContext,
+  SceneStageRunnerResult,
+  SceneValidationResult,
+  SubmitStageDraftResult,
+} from '../../lib/electron-api';
 import { Alert } from '../../ui';
 import { StageRunPanel } from '../components/stage-run/StageRunPanel';
-import { SceneExportWorkspace } from '../components/workspace/SceneExportWorkspace';
 import { SceneAdaptationDirectionPanel } from '../components/workspace/SceneAdaptationDirectionPanel';
 import { SceneGateConfirmPanel } from '../components/workspace/SceneGateConfirmPanel';
+import { SceneGateAnalysisPanel } from '../components/workspace/SceneGateAnalysisPanel';
 import { SceneSupportPlaceholderWorkspace } from '../components/workspace/SceneSupportPlaceholderWorkspace';
 import {
   ScenePrepSupportWorkspace,
   isPrepSupportSubmitStage,
 } from '../components/workspace/ScenePrepSupportWorkspace';
-import { SceneCoreMvpPlaceholder } from '../components/workspace/SceneCoreMvpPlaceholder';
 import { getPrepSupportConfig } from '../lib/scene-prep-support-stages';
 import { SceneIntakeBriefForm } from '../components/workspace/SceneIntakeBriefForm';
 import { SceneGateBriefForm } from '../components/workspace/SceneGateBriefForm';
 import { buildScenePipelineGroups, getSceneStageDefinitionLite } from '../lib/scene-pipeline-ui';
-import { getRecommendedStartStage, stagesCompletedForNav } from '../lib/scene-entry-path';
+import { getRecommendedResumeStage, stagesCompletedForNav } from '../lib/scene-entry-path';
 import {
   parseAdaptationDirectionsFromMarkdown,
   parseAdaptationSelectionFromArtifact,
   parseGateHITLFromArtifacts,
+  parseTopicAnalysisFromMarkdown,
 } from '../lib/scene-hitl-markdown';
-import { getStageReadiness, getWorkspaceTemplateForStage, readinessLabel } from '../lib/scene-stage-capabilities';
+import {
+  getStageReadiness,
+  getWorkspaceTemplateForStage,
+  readinessLabel,
+  stageUsesFlowActions,
+} from '../lib/scene-stage-capabilities';
 import { copyPlainTextToClipboard } from '../lib/scene-copy';
 import { ResizeHandle } from '../../components/ResizeHandle';
 import { InspectorSection } from '../../ui/patterns/InspectorSection';
-import { getNextPipelineStage } from '../lib/scene-stage-nav';
+import { getNextPipelineStage, isPipelineTerminalStage } from '../lib/scene-stage-nav';
+import {
+  getContinueRunCapability,
+  getStageSupportedRunners,
+} from '../lib/scene-continue-run';
+import { shouldAutoAdvanceAfterSupportSubmit } from '../lib/scene-light-confirmation';
 import { SceneStageFlowActions } from '../components/workspace/SceneStageFlowActions';
 import { useSceneForgeStudioLayout } from '../hooks/useSceneForgeStudioLayout';
+import { useSceneStageContinuation } from '../hooks/useSceneStageContinuation';
 import { SceneForgeStudioHeader } from '../components/studio/SceneForgeStudioHeader';
 import { SceneForgeStudioPipelineSidebar } from '../components/studio/SceneForgeStudioPipelineSidebar';
 import { SceneForgeStudioInspector, type SceneInspectorTab } from '../components/studio/SceneForgeStudioInspector';
+import { SceneStageInputsPanel } from '../components/studio/SceneStageInputsPanel';
+import { SceneStyleSelectorPanel } from '../components/studio/SceneStyleSelectorPanel';
 import type { SceneCopyFeedback } from '../components/artifacts/ArtifactCopyPanel';
+import {
+  getPreferredStageArtifactId,
+  resolveStageArtifactSelection,
+  shouldClearAutoSelectedStageArtifact,
+} from '../lib/scene-artifact-selection';
+import {
+  getSceneStageRunSessionKey,
+  useSceneStageRunSessionStore,
+} from '../store/scene-stage-run-session';
 import styles from './SceneForgeStudio.module.css';
 
 const CORE_STUDIO_STAGES = new Set<SceneStageId>(['design', 'storyboard', 'video_prompts']);
 const SUPPORT_SUBMIT_STAGES = new Set<SceneStageId>([
   'source_intake',
-  'topic_gate',
   'reference',
   'story',
   'assets',
   'script',
   'performance',
   'audio',
+  'publish',
 ]);
 const CORE_EXPECTED_COUNTS: Partial<Record<SceneStageId, number>> = {
   design: 5,
   storyboard: 4,
-  video_prompts: 2,
+  video_prompts: 3,
 };
 
 const policyOptions: Array<{ value: SceneApprovalPolicy; label: string; description: string }> = [
@@ -61,6 +90,16 @@ const policyOptions: Array<{ value: SceneApprovalPolicy; label: string; descript
 
 const riskyPolicies: SceneApprovalPolicy[] = ['auto_if_valid', 'skip'];
 
+function getPrimaryValidationMessage(validation: SceneValidationResult | null | undefined): string {
+  if (!validation) {
+    return '阶段校验未通过。';
+  }
+  const primaryError =
+    validation.errors.find((item) => item.level === 'error') ??
+    validation.errors[0] ??
+    null;
+  return primaryError?.message ?? '阶段校验未通过。';
+}
 
 function isCoreFinalArtifact(artifact: SceneArtifact): boolean {
   return (
@@ -72,17 +111,6 @@ function isCoreFinalArtifact(artifact: SceneArtifact): boolean {
 
 function coreFinalArtifactsForStage(artifacts: SceneArtifact[], stage: SceneStageId): SceneArtifact[] {
   return artifacts.filter((a) => a.stage === stage && isCoreFinalArtifact(a));
-}
-
-function preferredCoreArtifactId(artifacts: SceneArtifact[], stage: SceneStageId): string | null {
-  const cores = coreFinalArtifactsForStage(artifacts, stage);
-  if (cores.length === 0) return null;
-  const pack =
-    cores.find((a) => a.id.endsWith('.design_prompts')) ??
-    cores.find((a) => a.id.endsWith('.storyboard_prompt_pack')) ??
-    cores.find((a) => a.id.endsWith('.video_prompt_pack_cn')) ??
-    cores[0];
-  return pack.id;
 }
 
 interface SceneForgeStudioProps {
@@ -102,9 +130,16 @@ export function SceneForgeStudio({ projectDir = null }: SceneForgeStudioProps) {
   const [flowBusy, setFlowBusy] = useState<'validate' | 'continue' | null>(null);
   const [sourceMaterialMarkdown, setSourceMaterialMarkdown] = useState('');
   const [topicBriefMarkdown, setTopicBriefMarkdown] = useState('');
+  const [topicAnalysisMarkdown, setTopicAnalysisMarkdown] = useState('');
   const [gateConfirmationsMarkdown, setGateConfirmationsMarkdown] = useState('');
   const [adaptationSelectionMarkdown, setAdaptationSelectionMarkdown] = useState('');
   const [prepSupportMarkdown, setPrepSupportMarkdown] = useState('');
+  const [pendingStageRunResult, setPendingStageRunResult] = useState<SceneStageRunnerResult | null>(
+    null,
+  );
+  const [stageContext, setStageContext] = useState<SceneStageContext | null>(null);
+  const [autoAdvanceMessage, setAutoAdvanceMessage] = useState<string | null>(null);
+  const autoAdvanceTimerRef = useRef<number | null>(null);
 
   const selectedStageMeta = useMemo(() => {
     const lite = getSceneStageDefinitionLite(selectedStage);
@@ -131,12 +166,30 @@ export function SceneForgeStudio({ projectDir = null }: SceneForgeStudioProps) {
   const entryStageSynced = useRef(false);
 
   useEffect(() => {
+    entryStageSynced.current = false;
+  }, [projectDir]);
+
+  useEffect(() => {
     if (!projectState?.entryPath || entryStageSynced.current) {
       return;
     }
     entryStageSynced.current = true;
-    setSelectedStage(getRecommendedStartStage(projectState.entryPath));
-  }, [projectState?.entryPath]);
+    const stageStatuses: Partial<Record<SceneStageId, import('../../types/sceneforge').SceneStageStatus>> = {};
+    if (projectState.state.stages) {
+      for (const [id, runtime] of Object.entries(projectState.state.stages)) {
+        if (runtime?.status) {
+          stageStatuses[id as SceneStageId] = runtime.status;
+        }
+      }
+    }
+    setSelectedStage(
+      getRecommendedResumeStage({
+        entryPath: projectState.entryPath,
+        currentStage: projectState.state.currentStage,
+        stageStatuses,
+      }),
+    );
+  }, [projectState?.entryPath, projectState?.state.currentStage, projectState?.state.stages]);
   const selectedArtifact = useMemo<SceneArtifact | null>(() => {
     return projectState?.artifacts.find((artifact) => artifact.id === selectedArtifactId) ?? null;
   }, [projectState?.artifacts, selectedArtifactId]);
@@ -145,6 +198,12 @@ export function SceneForgeStudio({ projectDir = null }: SceneForgeStudioProps) {
     getSceneStageDefinitionLite(selectedStage).defaultApprovalPolicy;
   const stageState = projectState?.state.stages[selectedStage];
   const stageStatus = stageState?.status;
+  const selectedStageSession = useSceneStageRunSessionStore((state) => {
+    if (!projectDir) return null;
+    return state.sessions.get(getSceneStageRunSessionKey(projectDir, selectedStage)) ?? null;
+  });
+  const topicGateAnalyzing =
+    selectedStage === 'topic_gate' && selectedStageSession?.status === 'running';
 
   const canContinueStage = useMemo(() => {
     if (!stageStatus || validation?.status === 'failed') return false;
@@ -157,15 +216,18 @@ export function SceneForgeStudio({ projectDir = null }: SceneForgeStudioProps) {
     );
   }, [stageStatus, validation?.status]);
 
-  const refreshProjectState = useCallback(async () => {
+  const refreshProjectState = useCallback(async (): Promise<SceneProjectState | null> => {
     if (!projectDir || typeof window === 'undefined' || !window.electronAPI?.sceneGetProjectState) {
-      return;
+      return null;
     }
     try {
       setErrorMessage(null);
-      setProjectState(await window.electronAPI.sceneGetProjectState(projectDir));
+      const nextState = await window.electronAPI.sceneGetProjectState(projectDir);
+      setProjectState(nextState);
+      return nextState;
     } catch (error) {
       setErrorMessage(error instanceof Error ? error.message : '读取 SceneForge 项目状态失败。');
+      return null;
     }
   }, [projectDir]);
 
@@ -174,9 +236,18 @@ export function SceneForgeStudio({ projectDir = null }: SceneForgeStudioProps) {
   }, [refreshProjectState]);
 
   useEffect(() => {
+    return () => {
+      if (autoAdvanceTimerRef.current != null) {
+        window.clearTimeout(autoAdvanceTimerRef.current);
+      }
+    };
+  }, []);
+
+  useEffect(() => {
     if (!projectDir || !projectState?.artifacts.length) {
       setSourceMaterialMarkdown('');
       setTopicBriefMarkdown('');
+      setTopicAnalysisMarkdown('');
       setGateConfirmationsMarkdown('');
       setAdaptationSelectionMarkdown('');
       setPrepSupportMarkdown('');
@@ -196,6 +267,7 @@ export function SceneForgeStudio({ projectDir = null }: SceneForgeStudioProps) {
     };
     void load('source_intake.source_material', setSourceMaterialMarkdown);
     void load('topic_gate.topic_brief', setTopicBriefMarkdown);
+    void load('topic_gate.topic_analysis', setTopicAnalysisMarkdown);
     void load('topic_gate.gate_confirmations', setGateConfirmationsMarkdown);
     void load('source_intake.adaptation_selection', setAdaptationSelectionMarkdown);
   }, [projectDir, projectState?.artifacts]);
@@ -220,6 +292,30 @@ export function SceneForgeStudio({ projectDir = null }: SceneForgeStudioProps) {
       .then((result) => setPrepSupportMarkdown(result.content))
       .catch(() => setPrepSupportMarkdown(''));
   }, [projectDir, projectState?.artifacts, selectedStage]);
+
+  useEffect(() => {
+    if (!projectDir || typeof window === 'undefined' || !window.electronAPI?.sceneGetStageContext) {
+      setStageContext(null);
+      return;
+    }
+    let cancelled = false;
+    window.electronAPI
+      .sceneGetStageContext(projectDir, selectedStage)
+      .then((nextContext) => {
+        if (!cancelled) {
+          setStageContext(nextContext);
+        }
+      })
+      .catch((error) => {
+        if (!cancelled) {
+          setStageContext(null);
+          setErrorMessage(error instanceof Error ? error.message : '读取阶段输入上下文失败。');
+        }
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [projectDir, projectState, selectedStage]);
 
   const completedStages = useMemo(() => {
     const statuses: Partial<Record<SceneStageId, import('../../types/sceneforge').SceneStageStatus>> = {};
@@ -248,6 +344,28 @@ export function SceneForgeStudio({ projectDir = null }: SceneForgeStudioProps) {
     () => parseGateHITLFromArtifacts(topicBriefMarkdown, gateConfirmationsMarkdown || null),
     [gateConfirmationsMarkdown, topicBriefMarkdown],
   );
+  const topicAnalysis = useMemo(
+    () => parseTopicAnalysisFromMarkdown(topicAnalysisMarkdown),
+    [topicAnalysisMarkdown],
+  );
+  const gateState = useMemo(() => {
+    if (gateHitl.styleConfirmed) {
+      return gateHitl;
+    }
+    if (topicAnalysis.styleCandidates.length === 0 && topicAnalysis.decisionSuggestion === null) {
+      return gateHitl;
+    }
+    return {
+      ...gateHitl,
+      decision: gateHitl.decision ?? topicAnalysis.decisionSuggestion,
+      styleOptions:
+        topicAnalysis.styleCandidates.length > 0 ? topicAnalysis.styleCandidates : gateHitl.styleOptions,
+    };
+  }, [gateHitl, topicAnalysis.decisionSuggestion, topicAnalysis.styleCandidates]);
+  const topicAnalysisReady =
+    Boolean(topicAnalysis.summary) ||
+    topicAnalysis.scoreState.items.length > 0 ||
+    topicAnalysis.styleCandidates.length > 0;
 
   const entryPath = projectState?.entryPath ?? 'topic_gate';
 
@@ -281,12 +399,100 @@ export function SceneForgeStudio({ projectDir = null }: SceneForgeStudioProps) {
       ? '请先确认改编方向。'
       : undefined;
 
-  const flowCanValidate = gateReadyToValidate && intakeReadyToValidate;
+  const flowCanValidate = gateReadyToValidate && intakeReadyToValidate && !topicGateAnalyzing;
   const flowValidateHint = gateValidateHint ?? intakeValidateHint;
+  const isTerminalPipelineStage = isPipelineTerminalStage(selectedStage);
   const flowCanContinue =
-    selectedStage === 'topic_gate' && gateHitl.decision === 'drop'
+    topicGateAnalyzing
       ? false
-      : canContinueStage;
+      : selectedStage === 'topic_gate' && gateHitl.decision === 'drop'
+        ? false
+        : canContinueStage;
+  const flowContinueHint =
+    topicGateAnalyzing
+      ? '正在分析选题，请等待当前执行完成。'
+      : !validatePassedForStage
+      ? '请先通过 Validate。'
+      : selectedStage === 'topic_gate' && gateHitl.decision === 'drop'
+        ? '已放弃选题，当前阶段不会继续推进。'
+        : !flowCanContinue
+          ? '校验通过后方可 Continue。'
+          : isTerminalPipelineStage
+            ? '将校验全部阶段并标记项目创作完成。'
+            : undefined;
+  const flowStageMode =
+    CORE_STUDIO_STAGES.has(selectedStage) ? 'core_confirm' : 'support_light';
+  const prepSupportAutoAdvance =
+    isPrepSupportSubmitStage(selectedStage) &&
+    shouldAutoAdvanceAfterSupportSubmit(selectedStage, currentPolicy);
+  const hasDedicatedStagePrimaryAction =
+    selectedStage === 'source_intake' || selectedStage === 'topic_gate';
+  const showBottomFlowActions =
+    stageUsesFlowActions(selectedStage) &&
+    !hasDedicatedStagePrimaryAction &&
+    !(isPrepSupportSubmitStage(selectedStage) && prepSupportAutoAdvance);
+  const nextStage = getNextPipelineStage(selectedStage);
+  const continueRunCapability = getContinueRunCapability({
+    currentStage: selectedStage,
+    canContinue: flowCanContinue,
+    nextStage,
+    supportedRunners: getStageSupportedRunners(nextStage),
+    runnerType: 'direct_llm',
+  });
+  const nextStageTitle = nextStage ? getSceneStageDefinitionLite(nextStage).titleZh : undefined;
+
+  const persistCurrentStage = useCallback(
+    async (stage: SceneStageId): Promise<SceneProjectState | null> => {
+      if (!projectDir || typeof window === 'undefined' || !window.electronAPI?.sceneSetCurrentStage) {
+        return null;
+      }
+      try {
+        const nextState = await window.electronAPI.sceneSetCurrentStage(projectDir, stage);
+        setProjectState(nextState);
+        return nextState;
+      } catch (error) {
+        setErrorMessage(error instanceof Error ? error.message : '持久化当前阶段失败。');
+        return null;
+      }
+    },
+    [projectDir],
+  );
+
+  const navigateToStage = useCallback(
+    async (stage: SceneStageId) => {
+      const nextState = (await persistCurrentStage(stage)) ?? (await refreshProjectState());
+      setSelectedStage(stage);
+      setValidation(null);
+      setCopyFeedback(null);
+      const nextId = getPreferredStageArtifactId(nextState?.artifacts ?? projectState?.artifacts ?? [], stage);
+      if (nextId) {
+        setSelectedArtifactId(nextId);
+        setSelectedTab('Preview');
+      } else {
+        setSelectedArtifactId(null);
+      }
+    },
+    [persistCurrentStage, projectState?.artifacts, refreshProjectState],
+  );
+
+  const stageContinuation = useSceneStageContinuation({
+    approve: async (stage) => {
+      if (!projectDir) throw new Error('请先打开 SceneForge 项目目录。');
+      await window.electronAPI.sceneApproveStage(projectDir, stage);
+    },
+    navigate: navigateToStage,
+    run: async (stage, runnerType) => {
+      if (!projectDir) throw new Error('请先打开 SceneForge 项目目录。');
+      return window.electronAPI.sceneRunStage({ projectDir, stage, runnerType });
+    },
+    finalizeProject: async () => {
+      if (!projectDir || !window.electronAPI.sceneCompleteProject) {
+        throw new Error('无法完成项目：缺少 SceneForge 接口。');
+      }
+      await window.electronAPI.sceneCompleteProject(projectDir);
+      await refreshProjectState();
+    },
+  });
 
   const handleValidate = async () => {
     if (!projectDir || !flowCanValidate || validatePassedForStage) return;
@@ -300,50 +506,107 @@ export function SceneForgeStudio({ projectDir = null }: SceneForgeStudioProps) {
     }
   };
 
-  const handleContinueStage = async () => {
+  const handleContinueStage = async (mode: 'navigate' | 'navigate_and_run' = 'navigate') => {
     if (!projectDir || !flowCanContinue) return;
     const stageAtApprove = selectedStage;
     const statusNow = projectState?.state.stages[stageAtApprove]?.status;
-
-    if (statusNow === 'approved' || statusNow === 'completed' || statusNow === 'skipped') {
-      const next = getNextPipelineStage(stageAtApprove);
-      if (next) {
-        setSelectedStage(next);
-        setValidation(null);
-        setCopyFeedback(null);
-        const nextId = preferredCoreArtifactId(projectState?.artifacts ?? [], next);
-        if (nextId) {
-          setSelectedArtifactId(nextId);
-          setSelectedTab('Preview');
-        } else {
-          setSelectedArtifactId(null);
-        }
-      }
-      return;
-    }
-
-    setFlowBusy('continue');
+    if (!statusNow) return;
+    setErrorMessage(null);
     try {
-      await window.electronAPI.sceneApproveStage(projectDir, stageAtApprove);
-      await refreshProjectState();
-      const next = getNextPipelineStage(stageAtApprove);
-      if (next) {
-        setSelectedStage(next);
-        setValidation(null);
-        setCopyFeedback(null);
-        const artifacts = projectState?.artifacts ?? [];
-        const nextId = preferredCoreArtifactId(artifacts, next);
-        if (nextId) {
-          setSelectedArtifactId(nextId);
-          setSelectedTab('Preview');
-        } else {
-          setSelectedArtifactId(null);
+      const result = await stageContinuation.continueStage({
+        currentStage: stageAtApprove,
+        currentStatus: statusNow,
+        mode,
+        runnerType: 'direct_llm',
+      });
+      if (result.runResult) {
+        setPendingStageRunResult(result.runResult);
+      }
+      if (result.runError) {
+        setErrorMessage(result.runError);
+      }
+      if (isPipelineTerminalStage(stageAtApprove) && !result.nextStage) {
+        const refreshed = await refreshProjectState();
+        if (refreshed?.state.status === 'completed') {
+          setAutoAdvanceMessage('全项目校验已通过，创作工坊项目已标记为完成。');
+          if (autoAdvanceTimerRef.current != null) {
+            window.clearTimeout(autoAdvanceTimerRef.current);
+          }
+          autoAdvanceTimerRef.current = window.setTimeout(() => {
+            setAutoAdvanceMessage(null);
+            autoAdvanceTimerRef.current = null;
+          }, 6000);
         }
       }
-    } finally {
-      setFlowBusy(null);
+    } catch (error) {
+      setErrorMessage(error instanceof Error ? error.message : '阶段推进失败。');
     }
   };
+
+  const handleDedicatedStageContinue = useCallback(
+    async (stage: SceneStageId, result: SubmitStageDraftResult) => {
+      const nextState = await refreshProjectState();
+      const statusNow = nextState?.state.stages[stage]?.status;
+      if (!statusNow) {
+        return;
+      }
+      const nextStage = getNextPipelineStage(stage);
+      if (!nextStage) {
+        return;
+      }
+      const continuation = await stageContinuation.continueStage({
+        currentStage: stage,
+        currentStatus: statusNow,
+        mode: 'navigate',
+        runnerType: 'direct_llm',
+      });
+      if (continuation.nextStage && result.validation.status === 'passed') {
+        const fromTitle = getSceneStageDefinitionLite(stage).titleZh;
+        const nextTitle = getSceneStageDefinitionLite(continuation.nextStage).titleZh;
+        setAutoAdvanceMessage(`「${fromTitle}」已确认，已进入「${nextTitle}」。`);
+        if (autoAdvanceTimerRef.current != null) {
+          window.clearTimeout(autoAdvanceTimerRef.current);
+        }
+        autoAdvanceTimerRef.current = window.setTimeout(() => {
+          setAutoAdvanceMessage(null);
+          autoAdvanceTimerRef.current = null;
+        }, 4000);
+      }
+    },
+    [refreshProjectState, stageContinuation],
+  );
+
+  const handleSupportStageSubmitted = useCallback(
+    async (stage: SceneStageId, result: SubmitStageDraftResult) => {
+      const nextState = await refreshProjectState();
+      const policy =
+        nextState?.approvalPolicies[stage] ??
+        projectState?.approvalPolicies[stage] ??
+        getSceneStageDefinitionLite(stage).defaultApprovalPolicy;
+      if (
+        result.validation.status !== 'passed' ||
+        !shouldAutoAdvanceAfterSupportSubmit(stage, policy)
+      ) {
+        return;
+      }
+      const nextStage = getNextPipelineStage(stage);
+      if (!nextStage) {
+        return;
+      }
+      const fromTitle = getSceneStageDefinitionLite(stage).titleZh;
+      const nextTitle = getSceneStageDefinitionLite(nextStage).titleZh;
+      setAutoAdvanceMessage(`「${fromTitle}」已提交并通过校验，已自动进入「${nextTitle}」。`);
+      if (autoAdvanceTimerRef.current != null) {
+        window.clearTimeout(autoAdvanceTimerRef.current);
+      }
+      autoAdvanceTimerRef.current = window.setTimeout(() => {
+        setAutoAdvanceMessage(null);
+        autoAdvanceTimerRef.current = null;
+      }, 4000);
+      await navigateToStage(nextStage);
+    },
+    [navigateToStage, projectState?.approvalPolicies, refreshProjectState],
+  );
 
   useEffect(() => {
     if (!projectDir || !selectedArtifactId || typeof window === 'undefined') {
@@ -363,17 +626,49 @@ export function SceneForgeStudio({ projectDir = null }: SceneForgeStudioProps) {
       });
   }, [projectDir, selectedArtifactId]);
 
+  useEffect(() => {
+    const artifacts = projectState?.artifacts ?? [];
+    setSelectedArtifactId((current) => {
+      const next = resolveStageArtifactSelection({
+        artifacts,
+        stage: selectedStage,
+        selectedArtifactId: current,
+      });
+      return next === current ? current : next;
+    });
+  }, [projectState?.artifacts, selectedStage]);
+
+  useEffect(() => {
+    const artifacts = projectState?.artifacts ?? [];
+    const hasPendingDraft = Boolean(selectedStageSession?.pendingArtifacts);
+    setSelectedArtifactId((current) => {
+      if (
+        !shouldClearAutoSelectedStageArtifact({
+          artifacts,
+          stage: selectedStage,
+          selectedArtifactId: current,
+          hasPendingDraft,
+          stageStatus,
+        })
+      ) {
+        return current;
+      }
+      return null;
+    });
+  }, [projectState?.artifacts, selectedStage, selectedStageSession?.pendingArtifacts, stageStatus]);
+
   const selectStage = (stageId: SceneStageId) => {
     setSelectedStage(stageId);
     setCopyFeedback(null);
     const artifacts = projectState?.artifacts ?? [];
-    const nextId = preferredCoreArtifactId(artifacts, stageId);
+    const nextId = getPreferredStageArtifactId(artifacts, stageId);
     if (nextId) {
       setSelectedArtifactId(nextId);
       setSelectedTab('Preview');
     } else {
       setSelectedArtifactId(null);
     }
+    void persistCurrentStage(stageId);
   };
 
   const selectArtifact = (artifactId: string) => {
@@ -402,6 +697,21 @@ export function SceneForgeStudio({ projectDir = null }: SceneForgeStudioProps) {
     }
   };
 
+  const refreshStageArtifacts = useCallback(
+    async (stage: SceneStageId) => {
+      const nextState = await refreshProjectState();
+      const nextId = getPreferredStageArtifactId(
+        nextState?.artifacts ?? projectState?.artifacts ?? [],
+        stage,
+      );
+      if (nextId) {
+        setSelectedArtifactId(nextId);
+        setSelectedTab('Preview');
+      }
+    },
+    [projectState?.artifacts, refreshProjectState],
+  );
+
   const handlePolicyChange = async (nextPolicy: SceneApprovalPolicy) => {
     if (!projectDir || !window.electronAPI?.sceneSetApprovalPolicy) {
       return;
@@ -420,6 +730,9 @@ export function SceneForgeStudio({ projectDir = null }: SceneForgeStudioProps) {
   const stageCoreFinals = coreFinalArtifactsForStage(projectState?.artifacts ?? [], selectedStage);
 
   const workspaceTemplate = getWorkspaceTemplateForStage(selectedStage);
+  // gate 确认后，下游阶段只展示当前阶段真正会注入的项目级参考资产，避免与上游依赖混淆。
+  const showStageInputsPanel = selectedStage !== 'source_intake' && selectedStage !== 'topic_gate' && stageContext !== null;
+  const showProjectAssetPanel = Boolean(stageContext?.assetLibrary?.snippets.length);
 
   const layout = useSceneForgeStudioLayout();
 
@@ -428,6 +741,20 @@ export function SceneForgeStudio({ projectDir = null }: SceneForgeStudioProps) {
     (displayModel?.copyBlocks.find((b) => b.target === 'full')?.text.slice(0, 400) ?? '') ||
     artifactContent ||
     '暂无预览内容';
+  const coreStageCanValidate =
+    !CORE_STUDIO_STAGES.has(selectedStage) ||
+    stageStatus === 'draft_submitted' ||
+    stageStatus === 'validation_failed' ||
+    stageStatus === 'revision_requested' ||
+    stageStatus === 'validated' ||
+    stageStatus === 'waiting_approval' ||
+    stageStatus === 'approved' ||
+    stageStatus === 'completed' ||
+    stageStatus === 'skipped';
+  const coreStageValidateHint =
+    CORE_STUDIO_STAGES.has(selectedStage) && !coreStageCanValidate
+      ? '请先运行本阶段并提交草案到产物库。'
+      : undefined;
 
   return (
     <main className={styles.page}>
@@ -470,13 +797,21 @@ export function SceneForgeStudio({ projectDir = null }: SceneForgeStudioProps) {
                   ? '受控提交、校验与审批；下游仅读取已审批产物。'
                   : SUPPORT_SUBMIT_STAGES.has(selectedStage)
                     ? '填写并保存后写入本地产物库，再校验与审批。'
-                    : workspaceTemplate === 'export'
-                      ? '导出已通过校验的核心产物清单。'
+                    : selectedStage === 'topic_gate'
+                      ? '先保存选题简报，再生成分析建议，最后由你确认是否继续推进。'
                       : workspaceTemplate === 'support'
-                        ? '由 Agent / MCP 推进本阶段。'
-                        : '等待专用工作区或 Agent 推进。'}
+                        ? '使用当前工作区完成该阶段内容。'
+                        : '等待该阶段专用工作区完成配置。'}
               </p>
             </header>
+
+            {showStageInputsPanel ? <SceneStageInputsPanel stageContext={stageContext} /> : null}
+
+            {showProjectAssetPanel && stageContext?.assetLibrary ? (
+              <SceneStyleSelectorPanel
+                assetLibrary={stageContext.assetLibrary}
+              />
+            ) : null}
 
             {CORE_STUDIO_STAGES.has(selectedStage) ? (
               <InspectorSection title="阶段概览" className={styles.workspaceSection}>
@@ -516,34 +851,12 @@ export function SceneForgeStudio({ projectDir = null }: SceneForgeStudioProps) {
                     </button>
                   ))}
                 </div>
-                {displayModel && selectedArtifact && selectedArtifact.stage === selectedStage ? (
-                  <ul className={styles.copyBlockSummary}>
-                    {displayModel.copyBlocks
-                      .filter((b) => b.target !== 'full' && b.text.trim())
-                      .slice(0, 6)
-                      .map((block) => (
-                        <li key={block.id}>
-                          <span>{block.label}</span>
-                          <button
-                            type="button"
-                            className={styles.miniCopy}
-                            data-testid="scene-workspace-copy"
-                            onClick={() => void handleCopyBlock(block)}
-                          >
-                            复制
-                          </button>
-                        </li>
-                      ))}
-                  </ul>
-                ) : null}
               </InspectorSection>
             ) : CORE_STUDIO_STAGES.has(selectedStage) ? (
               <p className={styles.emptyCopy}>提交并校验通过后，核心 final 产物会出现在这里。</p>
-            ) : SUPPORT_SUBMIT_STAGES.has(selectedStage) ? null : workspaceTemplate === 'support' ? null : workspaceTemplate === 'export' ? (
-              <p className={styles.emptyCopy}>导出阶段见下方「导出核心产物包」。</p>
-            ) : (
+            ) : SUPPORT_SUBMIT_STAGES.has(selectedStage) ? null : workspaceTemplate === 'support' ? null : (
               <p className={styles.emptyCopy}>
-                「{selectedStageMeta.title}」请使用 Agent 工具推进，或等待专用工作区。
+                「{selectedStageMeta.title}」的专用工作区正在补齐中。
               </p>
             )}
 
@@ -552,41 +865,75 @@ export function SceneForgeStudio({ projectDir = null }: SceneForgeStudioProps) {
                 <SceneIntakeBriefForm
                   projectDir={projectDir}
                   initialMarkdown={sourceMaterialMarkdown}
-                  onSubmitted={() => void refreshProjectState()}
+                  onSubmitted={(result) => void handleSupportStageSubmitted('source_intake', result)}
                   onError={(message) => setErrorMessage(message)}
                 />
-                {intakeAdaptation.directions.length > 0 && intakeAdaptation.status !== 'selected' ? (
-                  <SceneAdaptationDirectionPanel
-                    projectDir={projectDir}
-                    directions={intakeAdaptation.directions}
-                    selectedId={intakeAdaptation.selectedId}
-                    onConfirmed={() => void refreshProjectState()}
-                    onError={(message) => setErrorMessage(message)}
-                  />
-                ) : null}
+                <SceneAdaptationDirectionPanel
+                  projectDir={projectDir}
+                  status={intakeAdaptation.status}
+                  directions={intakeAdaptation.directions}
+                  selectedId={intakeAdaptation.selectedId}
+                  onConfirmed={(result) => void handleDedicatedStageContinue('source_intake', result)}
+                  onError={(message) => setErrorMessage(message)}
+                />
               </>
             ) : null}
 
             {selectedStage === 'topic_gate' ? (
-              <>
+              <div className={styles.stageBusyShell}>
+                {topicGateAnalyzing ? (
+                  <div className={styles.stageBusyOverlay} role="status" aria-live="polite" aria-busy="true">
+                    <div className={styles.stageBusyCard}>
+                      <div className={styles.stageBusyBeacon} aria-hidden="true">
+                        <span />
+                        <span />
+                        <span />
+                      </div>
+                      <div className={styles.stageBusyText}>
+                        <strong>正在分析选题</strong>
+                        <p>当前阶段已加锁，等待模型返回评分、决策建议与风格候选。</p>
+                      </div>
+                    </div>
+                  </div>
+                ) : null}
+                <div className={topicGateAnalyzing ? styles.stageBusyContent : undefined} aria-hidden={topicGateAnalyzing}>
                 <InspectorSection title="选题简报" className={styles.workspaceSection}>
                   <SceneGateBriefForm
                     projectDir={projectDir}
                     initialMarkdown={topicBriefMarkdown}
-                    onSubmitted={() => void refreshProjectState()}
+                    onSubmitted={(result) => void handleSupportStageSubmitted('topic_gate', result)}
+                    onError={(message) => setErrorMessage(message)}
+                  />
+                </InspectorSection>
+                <InspectorSection title="分析选题" className={styles.workspaceSection}>
+                  <SceneGateAnalysisPanel
+                    projectDir={projectDir}
+                    topicBriefMarkdown={topicBriefMarkdown}
+                    initialAnalysisMarkdown={topicAnalysisMarkdown}
+                    busy={topicGateAnalyzing}
+                    onAnalyzed={() => void refreshProjectState()}
                     onError={(message) => setErrorMessage(message)}
                   />
                 </InspectorSection>
                 <InspectorSection title="风格与决策" className={styles.workspaceSection}>
                   <SceneGateConfirmPanel
                     projectDir={projectDir}
-                    gateState={gateHitl}
+                    gateState={gateState}
                     topicBriefMarkdown={topicBriefMarkdown}
-                    onSubmitted={() => void refreshProjectState()}
+                    analysisReady={topicAnalysisReady}
+                    suggestedDecision={topicAnalysis.decisionSuggestion}
+                    onSubmitted={(result, decision) => {
+                      if (decision === 'go') {
+                        void handleDedicatedStageContinue('topic_gate', result);
+                        return;
+                      }
+                      void refreshProjectState();
+                    }}
                     onError={(message) => setErrorMessage(message)}
                   />
                 </InspectorSection>
-              </>
+                </div>
+              </div>
             ) : null}
 
             {isPrepSupportSubmitStage(selectedStage) ? (
@@ -594,8 +941,11 @@ export function SceneForgeStudio({ projectDir = null }: SceneForgeStudioProps) {
                 projectDir={projectDir}
                 stage={selectedStage}
                 stageTitle={selectedStageMeta.title}
+                autoAdvanceAfterSubmit={prepSupportAutoAdvance}
+                currentStatus={stageState?.status}
+                revisionNote={stageState?.revisionNote ?? null}
                 initialContent={prepSupportMarkdown}
-                onSubmitted={() => void refreshProjectState()}
+                onSubmitted={(result) => void handleSupportStageSubmitted(selectedStage, result)}
                 onError={(message) => setErrorMessage(message)}
               />
             ) : null}
@@ -604,31 +954,25 @@ export function SceneForgeStudio({ projectDir = null }: SceneForgeStudioProps) {
               <SceneSupportPlaceholderWorkspace stage={selectedStage} stageTitle={selectedStageMeta.title} />
             ) : null}
 
-            {workspaceTemplate === 'export' ? (
-              <SceneExportWorkspace
-                projectDir={projectDir}
-                onError={(message) => setErrorMessage(message)}
-              />
-            ) : null}
-
-            {SUPPORT_SUBMIT_STAGES.has(selectedStage) ? (
+            {showBottomFlowActions ? (
               <SceneStageFlowActions
+                stageMode={flowStageMode}
                 canValidate={flowCanValidate}
                 validateDisabledReason={flowValidateHint}
                 validatePassed={validatePassedForStage}
                 validateFailed={validation?.status === 'failed'}
                 canContinue={flowCanContinue}
-                continueDisabledReason={
-                  !validatePassedForStage
-                    ? '请先通过 Validate。'
-                    : !flowCanContinue
-                      ? '校验通过后方可 Continue。'
-                      : undefined
-                }
+                continueDisabledReason={flowContinueHint}
                 onValidate={() => void handleValidate()}
-                onContinue={() => void handleContinueStage()}
+                onContinue={() => void handleContinueStage('navigate')}
+                onContinueAndRun={() => void handleContinueStage('navigate_and_run')}
+                canContinueAndRun={continueRunCapability.canRun}
+                nextStageTitle={nextStageTitle}
                 validateBusy={flowBusy === 'validate'}
-                continueBusy={flowBusy === 'continue'}
+                continueBusy={stageContinuation.busy === 'approving' || stageContinuation.busy === 'navigating'}
+                runningNext={stageContinuation.busy === 'running_next'}
+                isTerminalStage={isTerminalPipelineStage}
+                projectCompleted={projectState?.state.status === 'completed'}
               />
             ) : null}
 
@@ -663,7 +1007,7 @@ export function SceneForgeStudio({ projectDir = null }: SceneForgeStudioProps) {
               <Alert
                 variant="error"
                 title="校验未通过"
-                description={validation.errors[0]?.message ?? '阶段校验未通过。'}
+                description={getPrimaryValidationMessage(validation)}
               />
             )}
 
@@ -671,29 +1015,33 @@ export function SceneForgeStudio({ projectDir = null }: SceneForgeStudioProps) {
               projectDir={projectDir}
               stage={selectedStage}
               stageTitle={selectedStageMeta.title}
+              currentStatus={stageState?.status}
+              revisionNote={stageState?.revisionNote ?? null}
               onRunError={(message) => setErrorMessage(message)}
-              onSubmitted={() => void refreshProjectState()}
+              onSubmitted={() => void refreshStageArtifacts(selectedStage)}
+              onRevisionRequested={() => void refreshProjectState()}
+              initialRunResult={
+                pendingStageRunResult?.stage === selectedStage ? pendingStageRunResult : null
+              }
+              onInitialRunResultConsumed={() => setPendingStageRunResult(null)}
             />
 
-            {CORE_STUDIO_STAGES.has(selectedStage) ? (
-              <SceneCoreMvpPlaceholder
-                projectDir={projectDir}
-                stage={selectedStage}
-                onSubmitted={() => void refreshProjectState()}
-                onError={(message) => setErrorMessage(message)}
-              />
-            ) : null}
-
-            <SceneStageFlowActions
-              canValidate={Boolean(projectDir)}
+              <SceneStageFlowActions
+              stageMode={flowStageMode}
+              canValidate={Boolean(projectDir) && coreStageCanValidate}
               validatePassed={validatePassedForStage}
               validateFailed={validation?.status === 'failed'}
               canContinue={canContinueStage}
+              validateDisabledReason={coreStageValidateHint}
               continueDisabledReason={!validatePassedForStage ? '请先通过 Validate。' : undefined}
               onValidate={() => void handleValidate()}
-              onContinue={() => void handleContinueStage()}
+              onContinue={() => void handleContinueStage('navigate')}
+              onContinueAndRun={() => void handleContinueStage('navigate_and_run')}
+              canContinueAndRun={continueRunCapability.canRun}
+              nextStageTitle={nextStageTitle}
               validateBusy={flowBusy === 'validate'}
-              continueBusy={flowBusy === 'continue'}
+              continueBusy={stageContinuation.busy === 'approving' || stageContinuation.busy === 'navigating'}
+              runningNext={stageContinuation.busy === 'running_next'}
             />
               </>
             ) : null}
@@ -701,6 +1049,17 @@ export function SceneForgeStudio({ projectDir = null }: SceneForgeStudioProps) {
             {errorMessage ? (
               <div className={styles.alertStack}>
                 <Alert variant="error" title="操作失败" description={errorMessage} dismissible onDismiss={() => setErrorMessage(null)} />
+              </div>
+            ) : null}
+            {autoAdvanceMessage ? (
+              <div className={styles.alertStack} aria-live="polite">
+                <Alert
+                  variant="success"
+                  title="已自动进入下一阶段"
+                  description={autoAdvanceMessage}
+                  dismissible
+                  onDismiss={() => setAutoAdvanceMessage(null)}
+                />
               </div>
             ) : null}
           </div>

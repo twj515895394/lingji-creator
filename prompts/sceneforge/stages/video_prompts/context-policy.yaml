@@ -9,8 +9,7 @@ inputs:
   - id: storyboard_pack
     fromStage: storyboard
     artifactKey: storyboard_prompt_pack
-    delivery: handoff_first
-    fallback: full
+    delivery: full
     required: true
 
   - id: audio_plan
@@ -44,14 +43,14 @@ inputs:
     artifactKey: control_board_prompts
     delivery: handoff_first
     fallback: summary
-    required: false
+    required: true
 
   - id: storyboard_style_board
     fromStage: storyboard
     artifactKey: style_board_prompts
     delivery: handoff_first
     fallback: summary
-    required: false
+    required: true
 
   - id: storyboard_master_board
     fromStage: storyboard
@@ -68,7 +67,10 @@ optionalInputs:
     maxChars: 6000
 
 assetLibrary:
-  allowSelectedStyleProfile: true
+  allowStyleProfile: true
+  allowedAssetIds:
+    - cinematic.shot_language
+    - animation.contrast_comedy
 
 forbidden:
   - fromStage: design

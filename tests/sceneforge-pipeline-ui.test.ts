@@ -6,8 +6,8 @@ import {
 } from '../src/sceneforge/lib/scene-pipeline-ui';
 
 describe('scene-pipeline-ui', () => {
-  it('lists 13 engine stages', () => {
-    expect(listAllPipelineStageIds()).toHaveLength(13);
+  it('lists 12 engine stages', () => {
+    expect(listAllPipelineStageIds()).toHaveLength(12);
   });
 
   it('groups stages into prep, production, delivery', () => {
@@ -16,7 +16,7 @@ describe('scene-pipeline-ui', () => {
     expect(groups[0].label).toBe(SCENE_PIPELINE_GROUP_LABELS.prep);
     expect(groups[0].stages).toHaveLength(5);
     expect(groups[1].stages).toHaveLength(5);
-    expect(groups[2].stages).toHaveLength(3);
+    expect(groups[2].stages).toHaveLength(2);
   });
 
   it('merges runtime status from project state', () => {

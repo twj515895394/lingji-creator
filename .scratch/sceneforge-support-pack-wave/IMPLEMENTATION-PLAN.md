@@ -29,48 +29,48 @@
 
 ## Task 1：Performance 追踪子弹
 
-- [ ] 写失败测试：performance 支持 Direct LLM，返回 `performance_direction`，run 不写盘。
-- [ ] 建立显式 stage run capability 表。
-- [ ] 让 Direct LLM 根据能力表接受 performance。
-- [ ] 让 StageRunPanel 对 support submit mode 提交生成草案。
-- [ ] 在 performance Workspace 同时显示 Runner 和手工编辑。
-- [ ] mock run → submit → validate passed。
+- [x] 写失败测试：performance 支持 Direct LLM，返回 `performance_direction`，run 不写盘。
+- [x] 建立显式 stage run capability 表。
+- [x] 让 Direct LLM 根据能力表接受 performance。
+- [x] 让 StageRunPanel 对 support submit mode 提交生成草案。
+- [x] 在 performance Workspace 同时显示 Runner 和手工编辑。
+- [x] mock run → submit → validate passed。
 
 ## Task 2：Audio 追踪子弹
 
-- [ ] 验证 audio Pack 与 `audio_design` 契约。
-- [ ] 补齐 audio context policy。
-- [ ] 开放 Direct LLM 并完成 mock happy path。
-- [ ] 确认手工 audio 提交无回归。
+- [x] 验证 audio Pack 与 `audio_design` 契约。
+- [x] 补齐 audio context policy。
+- [x] 开放 Direct LLM 并完成 mock happy path。
+- [x] 确认手工 audio 提交无回归。
 
 ## Task 3：Reference Pack
 
-- [ ] 从旧 reference skill 提取执行目标和 review checklist。
-- [ ] 创建标准 Pack 八件套。
-- [ ] policy 只读取 topic_gate、gate confirmations 和可选 source material。
-- [ ] 开放 reference Direct LLM。
-- [ ] 完成 run → review → submit → validate 测试。
+- [x] 从旧 reference skill 提取执行目标和 review checklist。
+- [x] 创建标准 Pack 八件套。
+- [x] policy 只读取 topic_gate、gate confirmations 和可选 source material。
+- [x] 开放 reference Direct LLM。
+- [x] 完成 run → review → submit → validate 测试。
 
 ## Task 4：Story Pack
 
-- [ ] 创建标准 Pack 八件套。
-- [ ] 接入 reference handoff、topic brief、adaptation selection 和 adaptation assets。
-- [ ] 开放 story Direct LLM。
-- [ ] 完成独立 happy path。
+- [x] 创建标准 Pack 八件套。
+- [x] 接入 reference handoff、topic brief、adaptation selection 和 adaptation assets。
+- [x] 开放 story Direct LLM。
+- [x] 完成独立 happy path。
 
 ## Task 5：Assets Pack
 
-- [ ] 创建标准 Pack 八件套。
-- [ ] 接入 story、reference 摘要和 selected style。
-- [ ] 开放 assets Direct LLM。
-- [ ] 完成独立 happy path。
+- [x] 创建标准 Pack 八件套。
+- [x] 接入 story、reference 摘要和 selected style。
+- [x] 开放 assets Direct LLM。
+- [x] 完成独立 happy path。
 
 ## Task 6：Script Pack
 
-- [ ] 创建标准 Pack 八件套。
-- [ ] 接入 story、design handoff、总时长和每段时长。
-- [ ] 开放 script Direct LLM。
-- [ ] 完成独立 happy path。
+- [x] 创建标准 Pack 八件套。
+- [x] 接入 story、design handoff、总时长和每段时长。
+- [x] 开放 script Direct LLM。
+- [x] 完成独立 happy path。
 
 ## Task 7：全链回归
 
@@ -100,4 +100,3 @@ npx vitest run tests/sceneforge-*.test.ts tests/electron-api.test.ts
 5. `feat(sceneforge): add assets stage pack`
 6. `feat(sceneforge): add script stage pack`
 7. `test(sceneforge): verify support llm chain`
-

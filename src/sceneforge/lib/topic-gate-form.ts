@@ -41,6 +41,9 @@ go
 - id: pixar_like | label: 动画·皮克斯感 | family: animation
 - id: live_action_cinematic | label: 实拍·电影感 | family: live_action
 - id: documentary | label: 纪实·解说 | family: documentary
+
+## 备注
+- 可先保存简报，再做分析与人工确认。
 `;
 }
 

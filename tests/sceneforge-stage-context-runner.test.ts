@@ -31,11 +31,14 @@ describe('SceneForge stage context runner options', () => {
 
   it('accepts selectedAssetIds without adding undeclared policy artifacts', async () => {
     const context = await service.getStageContext(tmpDir, 'storyboard', {
-      selectedAssetIds: ['style.pixar_like'],
+      selectedAssetIds: ['style.pixar_like', 'adaptation.idea_seed'],
     });
 
     expect(context.assetLibrary?.selectedAssets).toEqual(['style.pixar_like']);
-    expect(context.requiredInputs).toEqual([]);
+    expect(context.requiredInputs.map((input) => input.policyInputId)).toEqual([
+      'performance_sheet',
+    ]);
+    expect(context.requiredInputs[0]?.satisfied).toBe(false);
     expect(context.optionalInputs).toEqual([]);
   });
 });

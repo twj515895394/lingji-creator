@@ -8,7 +8,14 @@ import {
   readSceneArtifact,
   type SceneArtifact,
 } from '../artifacts/scene-artifact-store';
-import { buildSceneArtifactDisplayModel } from '../artifacts/scene-artifact-display-model';
+import {
+  buildSceneArtifactDisplayExcerpt,
+  buildSceneArtifactDisplayModel,
+} from '../artifacts/scene-artifact-display-model';
+import {
+  extractScriptDraftMarkdownSection,
+  normalizeScriptDraftMarkdown,
+} from '../validators/script-draft-section-headings';
 
 export interface SceneHandoffPointer {
   artifactId: string;
@@ -47,7 +54,7 @@ export class SceneHandoffWriterError extends Error {
   }
 }
 
-const HANDOFF_STAGES: SceneStageId[] = ['design', 'storyboard', 'audio', 'performance'];
+const HANDOFF_STAGES: SceneStageId[] = ['design', 'script', 'storyboard', 'audio', 'performance'];
 
 interface HandoffTemplateArtifact {
   artifactKey: string;
@@ -75,6 +82,48 @@ function truncateText(text: string, maxChars?: number): { text: string; truncate
     return { text: trimmed, truncated: false };
   }
   return { text: `${trimmed.slice(0, maxChars)}\n…`, truncated: true };
+}
+
+/** 下游 performance 优先消费的剧本切片（节拍、段界、表演交接、可拍正文）。 */
+export function buildScriptDraftPerformanceHandoffExcerpt(
+  rawContent: string,
+  maxChars?: number,
+): string {
+  const normalized = normalizeScriptDraftMarkdown(rawContent);
+  const sections: Array<{ heading: string; body: string }> = [
+    { heading: 'script_summary', body: extractScriptDraftMarkdownSection(normalized, 'script_summary') },
+    { heading: 'segment_strategy', body: extractScriptDraftMarkdownSection(normalized, 'segment_strategy') },
+    { heading: 'story_beats', body: extractScriptDraftMarkdownSection(normalized, 'story_beats') },
+    { heading: 'beat_table', body: extractScriptDraftMarkdownSection(normalized, 'beat_table') },
+    {
+      heading: 'video_generation_unit_plan',
+      body: extractScriptDraftMarkdownSection(normalized, 'video_generation_unit_plan'),
+    },
+    { heading: 'script_body', body: extractScriptDraftMarkdownSection(normalized, 'script_body') },
+    {
+      heading: 'performance_handoff',
+      body: extractScriptDraftMarkdownSection(normalized, 'performance_handoff'),
+    },
+  ];
+
+  const parts: string[] = [
+    '# script_draft（performance 上游切片）',
+    '',
+    '以下内容为已确认剧本的结构化摘录；表演指导必须逐 beat 继承，不得改写题材或另起故事。',
+    '',
+  ];
+
+  for (const { heading, body } of sections) {
+    const trimmed = body.trim();
+    if (!trimmed) continue;
+    parts.push(`## ${heading}`, '', trimmed, '');
+  }
+
+  const joined = parts.join('\n').trim();
+  if (!joined || parts.length <= 4) {
+    return truncateText(normalized, maxChars).text;
+  }
+  return truncateText(joined, maxChars).text;
 }
 
 async function loadHandoffTemplate(stage: SceneStageId): Promise<HandoffTemplateDocument> {
@@ -180,11 +229,19 @@ async function buildSliceText(
   maxChars?: number,
 ): Promise<{ text: string; truncated: boolean }> {
   const { content } = await readSceneArtifact(projectDir, artifact.id);
+  const artifactKeyFromId = artifact.id.includes('.') ? artifact.id.split('.').slice(1).join('.') : '';
+  if (artifact.stage === 'script' && artifactKeyFromId === 'script_draft') {
+    const excerpt = buildScriptDraftPerformanceHandoffExcerpt(content, maxChars);
+    const truncated = Boolean(maxChars && excerpt.endsWith('\n…'));
+    return { text: excerpt, truncated };
+  }
   try {
     const display = buildSceneArtifactDisplayModel(artifact, content);
-    const summary = display?.summary?.trim();
-    if (summary) {
-      return truncateText(summary, maxChars);
+    if (display) {
+      const excerpt = buildSceneArtifactDisplayExcerpt(display, maxChars);
+      if (excerpt) {
+        return { text: excerpt, truncated: excerpt.endsWith('\n…') };
+      }
     }
   } catch {
     // fall through to full content truncation

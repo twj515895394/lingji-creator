@@ -12,7 +12,7 @@ import styles from './SceneStageBriefForms.module.css';
 export interface SceneGateBriefFormProps {
   projectDir: string | null;
   initialMarkdown?: string;
-  onSubmitted?: () => void;
+  onSubmitted?: (result: SubmitStageDraftResult) => void;
   onError?: (message: string) => void;
 }
 
@@ -55,7 +55,7 @@ export function SceneGateBriefForm({
       if (result.validation.status === 'failed') {
         onError?.(result.validation.errors[0]?.message ?? '校验未通过');
       } else {
-        onSubmitted?.();
+        onSubmitted?.(result);
       }
     } catch (error) {
       onError?.(error instanceof Error ? error.message : '提交失败');
@@ -133,7 +133,7 @@ export function SceneGateBriefForm({
         <Alert
           variant="success"
           title="选题简报已保存"
-          description={`已写入本地产物并更新阶段状态（${lastResult.status}）。请在下方确认风格与决策，再对 topic_gate 做 Validate / Approve。`}
+          description={`已写入本地产物并更新阶段状态（${lastResult.status}）。请在下方确认风格与决策，再决定是否继续推进。`}
           className={styles.feedback}
         />
       ) : null}

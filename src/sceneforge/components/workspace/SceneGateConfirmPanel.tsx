@@ -1,4 +1,6 @@
-import { useCallback, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
+import type { SubmitStageDraftResult } from '../../../lib/electron-api';
+import { Alert } from '../../../ui';
 import { Button } from '../../../ui/components/button';
 import {
   buildGateConfirmationsMarkdown,
@@ -13,7 +15,12 @@ export interface SceneGateConfirmPanelProps {
   projectDir: string | null;
   gateState: SceneGateHITLState;
   topicBriefMarkdown?: string;
-  onSubmitted?: () => void;
+  analysisReady?: boolean;
+  suggestedDecision?: 'go' | 'observe' | 'drop' | null;
+  onSubmitted?: (
+    result: SubmitStageDraftResult,
+    decision: 'go' | 'observe' | 'drop',
+  ) => void;
   onError?: (message: string) => void;
 }
 
@@ -27,10 +34,14 @@ export function SceneGateConfirmPanel({
   projectDir,
   gateState,
   topicBriefMarkdown = '',
+  analysisReady = false,
+  suggestedDecision = null,
   onSubmitted,
   onError,
 }: SceneGateConfirmPanelProps) {
-  const [decision, setDecision] = useState<'go' | 'observe' | 'drop'>(gateState.decision ?? 'go');
+  const [decision, setDecision] = useState<'go' | 'observe' | 'drop'>(
+    gateState.decision ?? suggestedDecision ?? 'go',
+  );
   const [styleId, setStyleId] = useState(
     gateState.selectedStyleId ?? gateState.styleOptions[0]?.id ?? '',
   );
@@ -39,7 +50,19 @@ export function SceneGateConfirmPanel({
 
   const showSummary = gateState.styleConfirmed && !editing;
 
+  useEffect(() => {
+    setDecision(gateState.decision ?? suggestedDecision ?? 'go');
+  }, [gateState.decision, suggestedDecision]);
+
+  useEffect(() => {
+    setStyleId(gateState.selectedStyleId ?? gateState.styleOptions[0]?.id ?? '');
+  }, [gateState.selectedStyleId, gateState.styleOptions]);
+
   const handleConfirm = useCallback(async () => {
+    if (!analysisReady) {
+      onError?.('请先完成上方「分析选题」，再确认风格与决策。');
+      return;
+    }
     const style = gateState.styleOptions.find((o) => o.id === styleId);
     if (!style) {
       onError?.('请选择导演/风格包。');
@@ -73,34 +96,46 @@ export function SceneGateConfirmPanel({
         onError?.(result.validation.errors[0]?.message ?? '确认提交校验失败');
       } else {
         setEditing(false);
-        onSubmitted?.();
+        onSubmitted?.(result, decision);
       }
     } catch (error) {
       onError?.(error instanceof Error ? error.message : '提交失败');
     } finally {
       setBusy(false);
     }
-  }, [decision, gateState.styleOptions, onSubmitted, onError, projectDir, styleId, topicBriefMarkdown]);
+  }, [analysisReady, decision, gateState.styleOptions, onSubmitted, onError, projectDir, styleId, topicBriefMarkdown]);
 
   if (showSummary) {
     return (
-      <SceneGatePostConfirm gateState={gateState} onEditAgain={() => setEditing(true)} />
+      <SceneGatePostConfirm
+        gateState={gateState}
+        topicBriefMarkdown={topicBriefMarkdown}
+        onEditAgain={() => setEditing(true)}
+      />
     );
   }
 
   return (
     <div className={styles.root} data-testid="scene-gate-confirm-panel">
       <p className={styles.lead}>
-        确认你对选题的态度与画面风格。完成后侧栏后续阶段不再显示阻塞提示。
+        结合上方分析结果，确认是否继续推进，以及采用哪种画面风格。
       </p>
+
+      {!analysisReady ? (
+        <Alert
+          variant="info"
+          title="等待分析结果"
+          description="请先完成上方「分析选题」，再确认决策与风格。"
+        />
+      ) : null}
 
       <fieldset className={styles.fieldset}>
         <legend className={styles.legend}>你对这个选题的态度</legend>
-        <div className={styles.decisionRow}>
+        <div className={styles.decisionGrid}>
           {DECISIONS.map((d) => (
             <label
               key={d.value}
-              className={`${styles.decisionChip} ${decision === d.value ? styles.decisionChipActive : ''}`}
+              className={`${styles.decisionCard} ${decision === d.value ? styles.decisionCardActive : ''}`}
             >
               <input
                 type="radio"
@@ -108,13 +143,14 @@ export function SceneGateConfirmPanel({
                 name="gate-decision"
                 value={d.value}
                 checked={decision === d.value}
+                disabled={busy}
                 onChange={() => setDecision(d.value)}
               />
               <span className={styles.decisionLabel}>{d.label}</span>
+              <span className={styles.decisionDescription}>{d.hint}</span>
             </label>
           ))}
         </div>
-        <p className={styles.decisionHint}>{DECISIONS.find((d) => d.value === decision)?.hint}</p>
       </fieldset>
 
       <fieldset className={styles.fieldset}>
@@ -131,6 +167,7 @@ export function SceneGateConfirmPanel({
                   name="gate-style"
                   value={opt.id}
                   checked={styleId === opt.id}
+                  disabled={busy}
                   onChange={() => setStyleId(opt.id)}
                 />
                 <span className={styles.styleLabel}>{opt.label}</span>
@@ -147,7 +184,7 @@ export function SceneGateConfirmPanel({
           variant="primary"
           size="sm"
           className={styles.confirmButton}
-          disabled={busy || !projectDir}
+          disabled={busy || !projectDir || !analysisReady}
           onClick={() => void handleConfirm()}
         >
           {busy ? '提交中…' : '确认风格并继续'}

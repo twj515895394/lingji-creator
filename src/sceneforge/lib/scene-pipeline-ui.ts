@@ -126,21 +126,12 @@ const STAGE_ROWS: SceneStageDefinitionLite[] = [
   },
   {
     id: 'publish',
-    displayName: 'Publish Notes',
+    displayName: 'Publish deliverables',
     titleZh: '发布说明',
     category: 'support',
     groupId: 'delivery',
     dependencies: ['video_prompts'],
     defaultApprovalPolicy: 'optional',
-  },
-  {
-    id: 'export',
-    displayName: 'Export deliverables',
-    titleZh: '导出提示词包',
-    category: 'system',
-    groupId: 'delivery',
-    dependencies: ['video_prompts'],
-    defaultApprovalPolicy: 'required',
   },
 ];
 

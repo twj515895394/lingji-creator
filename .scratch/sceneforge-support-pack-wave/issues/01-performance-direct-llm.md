@@ -1,4 +1,4 @@
-Status: ready-for-agent
+Status: completed
 
 ## 父问题
 
@@ -10,12 +10,20 @@ Status: ready-for-agent
 
 ## 验收标准
 
-- [ ] performance 在能力表中支持 direct_llm
-- [ ] mock Provider 返回 `performance_direction`
-- [ ] run 不写盘，用户提交后才写入产物库
-- [ ] 提交后 performance validator passed
-- [ ] Studio 同时保留 Direct LLM 和手工 Markdown
-- [ ] 其他未开放支撑阶段仍被拒绝
+- [x] performance 在能力表中支持 direct_llm
+- [x] mock Provider 返回 `performance_direction`
+- [x] run 不写盘，用户提交后才写入产物库
+- [x] 提交后 performance validator passed
+- [x] Studio 同时保留 Direct LLM 和手工 Markdown
+- [x] 其他未开放支撑阶段仍被拒绝
+
+## 完成证据
+
+- 共享能力表显式开放 performance，未开放的 reference 仍返回 unsupported。
+- mock performance run 不写盘，显式 submit 后 validator passed。
+- performance Workspace 同时保留 Direct LLM 与手工 Markdown。
+- 目标回归：6 files / 50 tests passed；`npx tsc --noEmit` passed。
+- 严格 Review 修复了 renderer 对 `electron/**` 的运行时跨层引用，最终无 blocking issue。
 
 ## 被阻塞于
 
@@ -24,4 +32,3 @@ Status: ready-for-agent
 ## 类型
 
 AFK
-

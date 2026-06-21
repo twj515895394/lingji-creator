@@ -4,6 +4,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { createSceneForgeProject } from '../electron/sceneforge/project/scene-project-file';
 import { SceneForgeService } from '../electron/sceneforge/service';
+import { buildTopicBriefMarkdown } from '../src/sceneforge/lib/topic-gate-form';
 
 let tmpDir: string;
 let service: SceneForgeService;
@@ -57,6 +58,28 @@ describe('intake adaptation gate', () => {
       ],
     });
     const validation = await service.validateStage(tmpDir, 'source_intake');
+    expect(validation.status).toBe('passed');
+  });
+});
+
+describe('topic gate compatibility', () => {
+  it('does not require a score section to validate the topic brief', async () => {
+    await service.submitStageDraft({
+      projectDir: tmpDir,
+      stage: 'topic_gate',
+      artifacts: [
+        {
+          artifactKey: 'topic_brief',
+          content: buildTopicBriefMarkdown({
+            intent: '桥段重构',
+            totalDurationSec: 30,
+            segmentDurationSec: 10,
+          }),
+        },
+      ],
+    });
+
+    const validation = await service.validateStage(tmpDir, 'topic_gate');
     expect(validation.status).toBe('passed');
   });
 });

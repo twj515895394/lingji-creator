@@ -1,7 +1,18 @@
-# Design Review Checklist
+# 设计阶段 · 审核清单
 
+- `character_prompts` 必须是中文主导的角色说明书板，而不是单张海报式角色图。
+- `character_prompts` 必须覆盖：多视角、轮廓剪影、表情系统、微表情、动作姿态、关键道具交互、细节区、比例对照、边界约束。
+- `character_prompts` 中英文关系必须是“中文主导 + 少量英文锚词”，不能整段再写一份完整英文版。
+- `character_prompts` 不得把 `single portrait`、`cinematic portrait`、`hero poster`、`character poster` 作为主要目标。
+- `character_prompts` 必须交代正确角色数量；多角色项目不得擅自删角、并角或只保留主角一人。
+- `scene_prompts` 必须按“全场景资产总参考图”来写，至少覆盖：主场景空间布局、角色默认站位、核心道具位置、道具状态矩阵、出入口与运动轴线。
+- `design_prompts` 须含中文小节：空间连续性、道具状态机、场面调度。
+- `design_prompts` 须含项目级节奏契约：节奏契约、分段节奏配置、镜头密度期望、边界规则（`##` 标题用中文）。
+- `design_prompts` 须显式写出段长（`segment_duration_seconds` 或「段长：N秒」），与上游 topic_gate 一致。
+- 「镜头密度期望」须覆盖 5 / 6 / 8 / 10 / 15 秒，不能只写“快一点/慢一点”。
+- 「边界规则」须明确镜头不得跨段（可写 shots_must_not_cross_segment_boundary 或等价中文）。
 - 角色提示词与整体视觉方向一致。
 - 场景提示词能支持后续分镜构图。
 - 道具提示词覆盖关键叙事物件。
-- 总参考图提示词能统一风格、构图和材质。
+- 总参考图提示词能统一风格、构图、材质与节奏边界。
 - 下游 Storyboard 可以直接读取这些核心产物。
