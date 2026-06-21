@@ -69,7 +69,11 @@ export function SceneForgeStudioInspector({
           >
             <TabsList className={styles.inspectorTabsList} aria-label="Artifact Inspector tabs">
               {inspectorTabs.map((tab) => (
-                <TabsTrigger key={tab} value={tab}>
+                <TabsTrigger
+                  key={tab}
+                  value={tab}
+                  className={styles.inspectorTabTrigger}
+                >
                   {tab}
                 </TabsTrigger>
               ))}

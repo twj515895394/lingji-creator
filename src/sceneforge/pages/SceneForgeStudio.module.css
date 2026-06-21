@@ -17,11 +17,52 @@
   justify-content: space-between;
   gap: var(--space-4);
   flex: 0 0 auto;
-  min-height: 48px;
-  padding: var(--space-2) var(--space-4);
+  min-height: 38px;
+  padding: var(--space-3) var(--space-4);
   border: 1px solid var(--color-separator);
   border-radius: var(--radius-md);
   background: var(--color-panel-bg);
+}
+
+.headerMain {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  min-width: 0;
+  flex: 1;
+}
+
+.headerLogo {
+  height: 20px;
+  width: auto;
+  display: block;
+}
+
+.headerDivider {
+  color: var(--color-separator);
+  font-size: var(--font-size-lg);
+  font-weight: 300;
+  user-select: none;
+}
+
+.header h1,
+.headerTitle {
+  margin: 0;
+  font-size: var(--font-size-lg);
+  line-height: var(--line-height-tight);
+  font-weight: 600;
+  color: var(--color-text-primary);
+  white-space: nowrap;
+}
+
+.headerLead {
+  margin: 0 0 0 var(--space-2);
+  font-size: var(--font-size-sm);
+  line-height: var(--line-height-tight);
+  color: var(--color-text-secondary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .eyebrow {
@@ -29,14 +70,6 @@
   font-size: var(--font-size-md);
   line-height: var(--line-height-tight);
   color: var(--color-text-secondary);
-}
-
-.header h1,
-.headerTitle {
-  margin: 0;
-  font-size: var(--font-size-3xl);
-  line-height: var(--line-height-tight);
-  font-weight: 600;
 }
 
 .statusPill {
@@ -103,8 +136,8 @@
 }
 
 .pipelineGroup + .pipelineGroup {
-  margin-top: 0;
-  padding-top: var(--space-2);
+  margin-top: var(--space-4);
+  padding-top: var(--space-4);
   border-top: 1px solid var(--color-separator);
 }
 
@@ -119,11 +152,12 @@
 
 .pipelineGroupLabel {
   padding: var(--space-1) var(--space-3) var(--space-1) var(--space-6);
-  font-size: var(--font-size-sm);
-  font-weight: 600;
-  letter-spacing: 0.04em;
+  font-size: var(--font-size-xs);
+  font-weight: 700;
+  letter-spacing: 0.08em;
   text-transform: uppercase;
-  color: var(--color-text-disabled);
+  color: var(--color-text-tertiary);
+  margin-bottom: var(--space-1);
 }
 
 .stageList {
@@ -176,8 +210,7 @@
 }
 
 .stageRowTitle {
-  flex-shrink: 0;
-  max-width: 52%;
+  flex-shrink: 1;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -220,11 +253,13 @@
 .stageStatusDone {
   color: var(--color-success, #32d74b);
   flex-shrink: 0;
+  display: block;
 }
 
 .stageStatusPending {
   color: var(--color-text-disabled);
   flex-shrink: 0;
+  display: block;
 }
 
 .stageGroup {
@@ -423,11 +458,11 @@
 }
 
 .styleSelectorPanel {
-  margin: 0 var(--space-6) var(--space-4);
-  border: 1px solid var(--color-separator);
-  border-radius: var(--radius-md);
-  padding: var(--space-4);
-  background: var(--color-window-bg);
+  margin: 0;
+  border-top: 1px solid var(--color-separator);
+  border-radius: 0;
+  padding: var(--space-5) var(--space-6);
+  background: transparent;
   display: flex;
   flex-direction: column;
   gap: var(--space-4);
@@ -820,15 +855,14 @@
 }
 
 .policyPanel {
-  margin: var(--space-4) var(--space-6) 0;
+  margin: 0;
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: var(--space-4);
-  border: 1px solid var(--color-separator);
-  border-radius: var(--radius-md);
-  padding: var(--space-4);
-  background: var(--color-window-bg);
+  border-top: 1px solid var(--color-separator);
+  padding: var(--space-5) var(--space-6);
+  background: transparent;
 }
 
 .policyPanel h3 {
@@ -902,11 +936,41 @@
 }
 
 .inspectorTabsList {
-  width: 100%;
-  display: flex;
-  flex-wrap: wrap;
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  padding: 2px;
+  background: var(--color-window-bg);
+  border: 1px solid var(--color-separator);
+  border-radius: var(--radius-md);
+  width: fit-content;
   height: auto;
-  min-height: 32px;
+  min-height: 28px;
+}
+
+.inspectorTabTrigger {
+  padding: var(--space-1) var(--space-3) !important;
+  font-size: var(--font-size-sm) !important;
+  font-weight: 500 !important;
+  color: var(--color-text-secondary) !important;
+  border-radius: var(--radius-sm) !important;
+  border: none !important;
+  background: transparent !important;
+  cursor: pointer !important;
+  transition: all 120ms ease !important;
+}
+
+.inspectorTabTrigger:hover {
+  color: var(--color-text-primary) !important;
+  background: rgba(255, 255, 255, 0.04) !important;
+}
+
+.inspectorTabTrigger[aria-selected="true"] {
+  color: var(--color-text-primary) !important;
+  background: var(--color-panel-elevated) !important;
+  box-shadow: 
+    0 1px 3px rgba(0, 0, 0, 0.2),
+    inset 0 1px 0 rgba(255, 255, 255, 0.1) !important;
 }
 
 .emptyTitle {
@@ -917,8 +981,7 @@
   color: var(--color-text-secondary);
 }
 
-.artifactButton,
-.artifactButtonActive {
+.artifactButton {
   width: 100%;
   min-height: 32px;
   border: 1px solid var(--color-separator);
@@ -928,19 +991,6 @@
   text-align: left;
   padding: var(--space-2) var(--space-3);
   font-size: var(--font-size-md);
-  line-height: var(--line-height-tight);
-}
-
-.tab,
-.tabActive {
-  min-width: 0;
-  height: 28px;
-  border: 1px solid var(--color-separator);
-  border-radius: var(--radius-md);
-  background: var(--color-window-bg);
-  color: var(--color-text-secondary);
-  font-size: var(--font-size-sm);
-  font-weight: 500;
   line-height: var(--line-height-tight);
 }
 
@@ -992,12 +1042,12 @@
   overflow-wrap: anywhere;
   border: 1px solid var(--color-separator);
   border-radius: var(--radius-md);
-  padding: var(--space-3);
+  padding: var(--space-4) var(--space-5);
   background: var(--color-window-bg);
   color: var(--color-text-primary);
-  font-family: var(--font-mono);
+  font-family: var(--font-sans); /* Comfortable sans-serif for reading specs */
   font-size: var(--font-size-md);
-  line-height: var(--line-height-normal);
+  line-height: var(--line-height-relaxed); /* 1.6 line height */
 }
 
 .copyBlockSummary {

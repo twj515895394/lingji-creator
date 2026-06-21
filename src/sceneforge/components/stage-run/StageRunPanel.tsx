@@ -766,28 +766,42 @@ export function StageRunPanel({
             className={styles.runAlert}
           />
         ) : null}
-        <Button
-          type="button"
-          variant="primary"
-          size="sm"
-          data-testid="scene-run-stage-button"
-          disabled={!canRun}
-          title={
-            !projectDir
-              ? '需要已打开的 SceneForge 项目'
-              : SUBMITTED_LOCKED_STATUSES.includes(currentStatus ?? 'ready')
-                ? '当前阶段草案已提交；如需重做，请先登记修订。'
-              : runBlocked
-                ? blockingContext.message
-                : contextLoading
-                  ? '正在检查上游产物…'
-                  : undefined
-          }
-          onClick={() => void handleRun()}
-        >
-          <Play size={14} aria-hidden />
-          {running ? '运行中…' : primaryRunLabel}
-        </Button>
+        <div className={styles.actionsGroup}>
+          <Button
+            type="button"
+            variant="primary"
+            size="sm"
+            data-testid="scene-run-stage-button"
+            disabled={!canRun}
+            title={
+              !projectDir
+                ? '需要已打开的 SceneForge 项目'
+                : SUBMITTED_LOCKED_STATUSES.includes(currentStatus ?? 'ready')
+                  ? '当前阶段草案已提交；如需重做，请先登记修订。'
+                : runBlocked
+                  ? blockingContext.message
+                  : contextLoading
+                    ? '正在检查上游产物…'
+                    : undefined
+            }
+            onClick={() => void handleRun()}
+          >
+            <Play size={14} aria-hidden />
+            {running ? '运行中…' : primaryRunLabel}
+          </Button>
+          {canReopenSubmittedDraft ? (
+            <Button
+              type="button"
+              variant="secondary"
+              size="sm"
+              data-testid="scene-reopen-regenerate-button"
+              disabled={requestingRevision || running || submitting}
+              onClick={() => setShowReopenConfirm((value) => !value)}
+            >
+              {showReopenConfirm ? '收起撤回确认' : '撤回并重生成'}
+            </Button>
+          ) : null}
+        </div>
         {runLockedAfterSubmit ? (
           <p className={styles.hint}>
             当前草案已提交并视为本轮确认结果。若要推翻这次确认，请先撤回后再重新生成。
@@ -799,21 +813,9 @@ export function StageRunPanel({
           </p>
         ) : null}
         {canReopenSubmittedDraft ? (
-          <>
-            <Button
-              type="button"
-              variant="secondary"
-              size="sm"
-              data-testid="scene-reopen-regenerate-button"
-              disabled={requestingRevision || running || submitting}
-              onClick={() => setShowReopenConfirm((value) => !value)}
-            >
-              {showReopenConfirm ? '收起撤回确认' : '撤回并重生成'}
-            </Button>
-            <p className={styles.hint}>
-              不会直接覆盖已提交产物，而是先撤回本轮确认，再重新开放生成入口。
-            </p>
-          </>
+          <p className={styles.hint}>
+            不会直接覆盖已提交产物，而是先撤回本轮确认，再重新开放生成入口。
+          </p>
         ) : null}
         {showReopenConfirm && canReopenSubmittedDraft ? (
           <div className={styles.reopenConfirm} data-testid="scene-reopen-confirm-panel">
