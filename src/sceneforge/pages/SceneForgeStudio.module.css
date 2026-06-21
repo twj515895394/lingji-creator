@@ -36,19 +36,21 @@
   height: 36px;
   width: auto;
   display: block;
+  margin-left: var(--space-2);
 }
 
 .headerDivider {
   color: var(--color-separator);
-  font-size: var(--font-size-lg);
+  font-size: var(--font-size-md);
   font-weight: 300;
   user-select: none;
+  margin: 0 var(--space-2);
 }
 
 .header h1,
 .headerTitle {
   margin: 0;
-  font-size: var(--font-size-lg);
+  font-size: var(--font-size-md);
   line-height: var(--line-height-tight);
   font-weight: 600;
   color: var(--color-text-primary);
@@ -57,7 +59,7 @@
 
 .headerLead {
   margin: 0 0 0 var(--space-2);
-  font-size: var(--font-size-sm);
+  font-size: var(--font-size-xs);
   line-height: var(--line-height-tight);
   color: var(--color-text-secondary);
   white-space: nowrap;
