@@ -83,6 +83,30 @@
   background: var(--color-panel-bg);
   font-size: var(--font-size-md);
   line-height: var(--line-height-tight);
+  transition: all 0.2s ease;
+}
+
+.statusPill[data-status="running"] {
+  color: var(--color-primary);
+  border-color: var(--color-primary-dim);
+}
+
+.statusPill[data-status="completed"] {
+  color: var(--color-success, #32D74B);
+  border-color: rgba(50, 215, 75, 0.3);
+}
+
+@keyframes spin {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.spin {
+  animation: spin 1s linear infinite;
 }
 
 .shell {

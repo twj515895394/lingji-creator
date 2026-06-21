@@ -756,9 +756,21 @@ export function SceneForgeStudio({ projectDir = null }: SceneForgeStudioProps) {
       ? '请先运行本阶段并提交草案到产物库。'
       : undefined;
 
+  const sessions = useSceneStageRunSessionStore((state) => state.sessions);
+  const isAnyStageRunning = useMemo(() => {
+    if (stageContinuation.busy === 'running_next') return true;
+    if (!projectDir) return false;
+    return Array.from(sessions.values()).some(
+      (s) => s.projectDir === projectDir && (s.status === 'running' || s.status === 'submitting')
+    );
+  }, [sessions, projectDir, stageContinuation.busy]);
+
   return (
     <main className={styles.page}>
-      <SceneForgeStudioHeader />
+      <SceneForgeStudioHeader
+        projectStatus={projectState?.state.status}
+        isAnyStageRunning={isAnyStageRunning}
+      />
 
       <section
         className={styles.shell}
