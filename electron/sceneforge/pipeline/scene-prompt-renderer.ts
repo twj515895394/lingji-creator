@@ -2,7 +2,7 @@ import type { SceneStageContext } from './scene-context-builder';
 import type { SceneStagePack } from './scene-stage-pack';
 import { STORY_CHINESE_MANDATE_SYSTEM_BLOCK } from '../validators/story-chinese-led';
 
-function serializeStageContextForPrompt(context: SceneStageContext): string {
+export function serializeStageContextForPrompt(context: SceneStageContext): string {
   return JSON.stringify(
     {
       stage: context.stage,

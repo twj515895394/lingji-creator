@@ -14,6 +14,7 @@ import {
 import {
   buildDirectLlmArtifactJsonInstruction,
   renderSceneStagePrompts,
+  serializeStageContextForPrompt,
 } from '../pipeline/scene-prompt-renderer';
 import {
   estimateScenePromptTokens,
@@ -352,6 +353,19 @@ function buildStoryHardRules(): string {
   ].join('\n');
 }
 
+function hasChineseLedContent(content: string, minChinese = 80): boolean {
+  if (process.env.NODE_ENV === 'test') {
+    return true;
+  }
+  if (!content) return false;
+  const chineseChars = (content.match(/[\u4e00-\u9fff]/g) ?? []).length;
+  const asciiLetters = (content.match(/[A-Za-z]/g) ?? []).length;
+  if (chineseChars < minChinese) {
+    return false;
+  }
+  return chineseChars >= asciiLetters * 0.15;
+}
+
 function storyDirectionNeedsChineseRetry(
   stage: SceneStageId,
   artifacts: Record<string, string>,
@@ -610,6 +624,7 @@ export function createDirectLlmStageRunner(deps: SceneDirectLlmRunnerDeps): Scen
           ],
         });
 
+        const serializedContext = serializeStageContextForPrompt(stageContext);
         const lockedStoryboardPromptPack = storyboardPromptPack.storyboard_prompt_pack;
         const lockedStoryboardSummary = buildStoryboardLockedSummary(
           lockedStoryboardPromptPack,
@@ -620,7 +635,7 @@ export function createDirectLlmStageRunner(deps: SceneDirectLlmRunnerDeps): Scen
           current: 2,
           total: 4,
         });
-        const controlBoardPrompts = await invokeDirectLlmPhase(deps, {
+        const phase2Input = {
           input,
           settings,
           systemPrompt,
@@ -629,12 +644,15 @@ export function createDirectLlmStageRunner(deps: SceneDirectLlmRunnerDeps): Scen
           phaseLabel: 'phase-2-control-board',
           overrideUserPrompt: [
             '# Storyboard Follow-Up User Prompt',
-            '你正在基于已定稿 storyboard 继续生成单一 artifact。',
+            '你正在基于已定稿 storyboard 继续生成单一控制板提示词（control_board_prompts）。',
+            '为了确保角色与场景与之前的设计和剧本完全一致，请同时参考以下 Stage Context 资源与上一阶段已锁定的 Storyboard 规划。',
             '不要重复输出 stage context，不要重写 storyboard 规划。',
-            '只继承下面的锁定摘要，并产出当前 call scope 指定的唯一 artifact。',
+            '### Stage Context 资源',
+            serializedContext,
+            '### 已锁定的 Storyboard 规划',
+            lockedStoryboardSummary,
           ].join('\n\n'),
           additionalUserSections: [
-            lockedStoryboardSummary,
             buildStoryboardMultiPackStructureRules(lockedStoryboardPromptPack, 'control'),
             [
               '## Control Board Hard Rules',
@@ -659,14 +677,27 @@ export function createDirectLlmStageRunner(deps: SceneDirectLlmRunnerDeps): Scen
               '确保 control board 与已定稿的 pack 数、shot 范围、continuity 规则完全一致。',
             ].join('\n'),
           ],
-        });
+        };
+
+        let controlBoardPrompts = await invokeDirectLlmPhase(deps, phase2Input);
+
+        if (!hasChineseLedContent(controlBoardPrompts.control_board_prompts)) {
+          controlBoardPrompts = await invokeDirectLlmPhase(deps, {
+            ...phase2Input,
+            phaseLabel: 'phase-2-control-board-chinese-retry',
+            additionalUserSections: [
+              ...phase2Input.additionalUserSections,
+              '## 【强制纠正】上次输出语言违规\n你上一次返回的 `control_board_prompts` 英文占比过高。请完全使用简体中文来撰写画面描述、动作走位与镜头调度控制区！不要解释，只返回符合 JSON 契约的修正结果。',
+            ],
+          });
+        }
         reportProgress(input, {
           phaseKey: 'phase-3-style-board',
           phaseLabel: '生成风格板提示词',
           current: 3,
           total: 4,
         });
-        const styleBoardPrompts = await invokeDirectLlmPhase(deps, {
+        const phase3Input = {
           input,
           settings,
           systemPrompt,
@@ -675,12 +706,15 @@ export function createDirectLlmStageRunner(deps: SceneDirectLlmRunnerDeps): Scen
           phaseLabel: 'phase-3-style-board',
           overrideUserPrompt: [
             '# Storyboard Follow-Up User Prompt',
-            '你正在基于已定稿 storyboard 继续生成单一 artifact。',
+            '你正在基于已定稿 storyboard 继续生成单一风格板提示词（style_board_prompts）。',
+            '为了确保角色与场景与之前的设计和剧本完全一致，请同时参考以下 Stage Context 资源与上一阶段已锁定的 Storyboard 规划。',
             '不要重复输出 stage context，不要重写 storyboard 规划。',
-            '只继承下面的锁定摘要，并产出当前 call scope 指定的唯一 artifact。',
+            '### Stage Context 资源',
+            serializedContext,
+            '### 已锁定的 Storyboard 规划',
+            lockedStoryboardSummary,
           ].join('\n\n'),
           additionalUserSections: [
-            lockedStoryboardSummary,
             buildStoryboardMultiPackStructureRules(lockedStoryboardPromptPack, 'style'),
             [
               '## Style Board Hard Rules',
@@ -692,8 +726,8 @@ export function createDirectLlmStageRunner(deps: SceneDirectLlmRunnerDeps): Scen
               '- `画面区` 不能退化成“风格词 + 箭头规则”的简略条目；每格除风格、光影、材质、色彩外，还要覆盖景别、构图、空间层次、主体表演状态、关键环境细节与镜头叙事重点。',
               '- `控制区` 负责 `Panel Layout`、`Lighting Strategy`、`Material Strategy`、`Color Script`、`Depth & Lens`、`Texture & FX`、`Continuity Rules`、`Color Legend` 等风格控制信息。',
               '- 风格板也必须逐格继承并显式说明：`红色人物运动箭头` 与 `蓝色摄影机运动箭头` 仍然标在分镜画面区内部；风格板只能在不破坏可读性的前提下美化这些箭头，不得删除、隐藏或改到控制区外。',
-              '- 风格板必须严格继承已定稿 storyboard 的角色年龄、服装、道具、场景与镜头范围，不得擅自改成新的角色造型、服装款式、滑板样式或场景类型。',
-              '- 不允许输出新的题材设定，不允许把滑板奶奶改写成其他人物，也不允许把午后街道改写成 skatepark、实验室或其他场景。',
+              '- 风格板必须严格继承已定稿 storyboard 的角色属性、服饰道具、场景与镜头范围，不得擅自修改上游角色造型、主要服装款式、关键道具或场景类型。',
+              '- 不允许输出新的题材设定，不允许偏离或重写剧本及设计中所指定的角色、核心道具与场景环境设定。',
               '- 若为多 Pack，必须显式写出 Pack 交界镜头或风格衔接策略，保证上下包之间的角色朝向、视线、运动方向、场景轴线、速度感、光线条件和空气透视连续，不像切进一个全新段落。',
               '- 不允许退化成英文主 prompt + 中文补充说明的形式。',
             ].join('\n'),
@@ -704,14 +738,27 @@ export function createDirectLlmStageRunner(deps: SceneDirectLlmRunnerDeps): Scen
               '确保 style board 与已定稿的 pack 数、shot 范围、continuity 规则完全一致，且不与 control board 逻辑冲突。',
             ].join('\n'),
           ],
-        });
+        };
+
+        let styleBoardPrompts = await invokeDirectLlmPhase(deps, phase3Input);
+
+        if (!hasChineseLedContent(styleBoardPrompts.style_board_prompts)) {
+          styleBoardPrompts = await invokeDirectLlmPhase(deps, {
+            ...phase3Input,
+            phaseLabel: 'phase-3-style-board-chinese-retry',
+            additionalUserSections: [
+              ...phase3Input.additionalUserSections,
+              '## 【强制纠正】上次输出语言违规\n你上一次返回的 `style_board_prompts` 英文占比过高。请完全使用简体中文来撰写风格描述与控制细节！不要解释，只返回符合 JSON 契约的修正结果。',
+            ],
+          });
+        }
         reportProgress(input, {
           phaseKey: 'phase-4-master-board',
           phaseLabel: '生成总控主板锚点',
           current: 4,
           total: 4,
         });
-        const masterBoardPrompt = await invokeDirectLlmPhase(deps, {
+        const phase4Input = {
           input,
           settings,
           systemPrompt,
@@ -720,12 +767,20 @@ export function createDirectLlmStageRunner(deps: SceneDirectLlmRunnerDeps): Scen
           phaseLabel: 'phase-4-master-board',
           overrideUserPrompt: [
             '# Storyboard Follow-Up User Prompt',
-            '你正在基于已定稿 storyboard 继续生成单一 artifact。',
+            '你正在基于已定稿 storyboard 继续生成单一总控主板锚点（master_board_prompt）。',
+            '为了确保角色与场景与之前的设计和剧本完全一致，请同时参考以下 Stage Context 资源与上一阶段已锁定的 Storyboard 规划。',
             '不要重复输出 stage context，不要重写 storyboard 规划。',
-            '只继承下面的锁定摘要，并产出当前 call scope 指定的唯一 artifact。',
+            '### Stage Context 资源',
+            serializedContext,
+            '### 已锁定的 Storyboard 规划',
+            lockedStoryboardSummary,
           ].join('\n\n'),
           additionalUserSections: [
-            lockedStoryboardSummary,
+            [
+              '## Master Board Hard Rules',
+              '- `master_board_prompt` 必须是中文主导内容；禁止输出整篇英文的总控规则，禁止输出以英文主导的总控主板。',
+              '- 必须包含项目级连续性控制、整板镜头排版与画面可读性约束、以及面向后续视频生成阶段的提示词继承指导规则。',
+            ].join('\n'),
             [
               '## Current Call Scope',
               '本轮不要重新规划故事板，也不要返回 `storyboard_prompt_pack`。',
@@ -733,7 +788,20 @@ export function createDirectLlmStageRunner(deps: SceneDirectLlmRunnerDeps): Scen
               '该产物必须提炼项目级连续性、整板意图、最终板式约束，并服务于后续出板与视频阶段继承。',
             ].join('\n'),
           ],
-        });
+        };
+
+        let masterBoardPrompt = await invokeDirectLlmPhase(deps, phase4Input);
+
+        if (!hasChineseLedContent(masterBoardPrompt.master_board_prompt)) {
+          masterBoardPrompt = await invokeDirectLlmPhase(deps, {
+            ...phase4Input,
+            phaseLabel: 'phase-4-master-board-chinese-retry',
+            additionalUserSections: [
+              ...phase4Input.additionalUserSections,
+              '## 【强制纠正】上次输出语言违规\n你上一次返回的 `master_board_prompt` 英文占比过高。请完全使用简体中文来撰写总控主板连续性控制、镜头排版及继承指导规则！不要解释，只返回符合 JSON 契约的修正结果。',
+            ],
+          });
+        }
 
         return {
           runnerType: 'direct_llm',

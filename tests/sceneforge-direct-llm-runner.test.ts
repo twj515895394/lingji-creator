@@ -250,7 +250,7 @@ describe('SceneForge direct_llm runner', () => {
     expect(generateText.mock.calls[2]?.[2]).toContain('本轮只生成 `style_board_prompts`');
     expect(generateText.mock.calls[3]?.[2]).toContain('本轮只生成 `master_board_prompt`');
     expect(generateText.mock.calls[1]?.[2]).toContain('# Locked Storyboard Summary');
-    expect(generateText.mock.calls[1]?.[2]).not.toContain('"requiredInputs"');
+    expect(generateText.mock.calls[1]?.[2]).toContain('"requiredInputs"');
     expect(generateText.mock.calls[1]?.[2]).toContain('## Control Board Hard Rules');
     expect(generateText.mock.calls[1]?.[2]).toContain('画面区');
     expect(generateText.mock.calls[1]?.[2]).toContain('控制区');
@@ -265,7 +265,7 @@ describe('SceneForge direct_llm runner', () => {
     expect(generateText.mock.calls[2]?.[2]).toContain('画面区');
     expect(generateText.mock.calls[2]?.[2]).toContain('控制区');
     expect(generateText.mock.calls[2]?.[2]).toContain('Style & Rendering Storyboard Board');
-    expect(generateText.mock.calls[2]?.[2]).toContain('不得擅自改成新的角色造型');
+    expect(generateText.mock.calls[2]?.[2]).toContain('不得擅自修改上游角色造型');
     expect(generateText.mock.calls[2]?.[2]).toContain('不允许输出新的题材设定');
     expect(generateText.mock.calls[2]?.[2]).toContain('红色人物运动箭头');
     expect(generateText.mock.calls[2]?.[2]).toContain('蓝色摄影机运动箭头');
@@ -583,7 +583,7 @@ English only.`,
     );
     expect(generateText.mock.calls[1]?.[2]).toContain('# Locked Storyboard Summary');
     expect(generateText.mock.calls[1]?.[2]).toContain('## storyboard_prompt_pack_plan');
-    expect(generateText.mock.calls[1]?.[2]).not.toContain('"requiredInputs"');
+    expect(generateText.mock.calls[1]?.[2]).toContain('"requiredInputs"');
     expect(generateText.mock.calls[2]?.[2]).toContain('Required top-level keys: style_board_prompts');
     expect(generateText.mock.calls[2]?.[2]).toContain('# Locked Storyboard Summary');
     expect(generateText.mock.calls[3]?.[2]).toContain('Required top-level keys: master_board_prompt');
