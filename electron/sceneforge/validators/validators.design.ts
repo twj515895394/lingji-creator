@@ -36,6 +36,29 @@ const SCENE_PROMPTS_REQUIRED_MARKERS = [
   '出入口与运动轴线',
 ] as const;
 
+function isFaceMicroExpressionOptional(content: string): boolean {
+  const normalized = content.replace(/\s+/g, '');
+  const noFaceSignals = [
+    '无人脸',
+    '非人脸',
+    '不涉及人脸',
+    '无面部特写',
+    '微表情不适用',
+    '面部表情不适用',
+  ].some((signal) => normalized.includes(signal));
+  const foodOrHandSignals = [
+    '番茄炒蛋',
+    '料理制作',
+    '烹饪',
+    '食材',
+    '锅具',
+    '手部动作',
+    '手部表演',
+    '工序状态',
+  ].some((signal) => normalized.includes(signal));
+  return noFaceSignals && foodOrHandSignals;
+}
+
 function toErrorCode(artifactKey: string): string {
   return `SCENE_DESIGN_MISSING_${artifactKey.toUpperCase()}`;
 }
@@ -79,8 +102,12 @@ export async function validateDesignStage(projectDir: string): Promise<SceneVali
         characterContent,
         CHARACTER_PROMPT_REQUIRED_SECTIONS,
       );
-      if (missingSections.length > 0) {
-        const zhLabels = missingSections.map(
+      const adjustedMissingSections =
+        isFaceMicroExpressionOptional(characterContent)
+          ? missingSections.filter((section) => section !== 'micro_expression')
+          : missingSections;
+      if (adjustedMissingSections.length > 0) {
+        const zhLabels = adjustedMissingSections.map(
           (key) => CHARACTER_PROMPT_SECTION_CANONICAL_ZH[key],
         );
         errors.push({
@@ -88,7 +115,7 @@ export async function validateDesignStage(projectDir: string): Promise<SceneVali
           level: 'error',
           message: `角色提示词缺少角色说明书板必备分区：${zhLabels.join('、')}`,
           suggestion:
-            '请按角色说明书板重写 character_prompts，至少补齐多视角、表情系统、动作姿态、关键道具交互、比例对照和边界约束。',
+            '请按角色说明书板重写 character_prompts，至少补齐多视角、表情系统、动作姿态、关键道具交互、比例对照和边界约束；若项目明确无人脸/非人脸，可保留“微表情”分区并写明“不适用，以手部动作/食材状态表达为主”。',
         });
       }
 

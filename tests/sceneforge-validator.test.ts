@@ -904,6 +904,48 @@ describe('SceneForge validator', () => {
     expect(result.errors).toEqual([]);
   });
 
+  it('accepts non-face cooking character prompts when micro expression is explicitly marked not applicable', async () => {
+    await writeDesignArtifact('design_prompts', validDesignOverviewBody);
+    await writeDesignArtifact(
+      'character_prompts',
+      `# 角色说明书
+
+## 多视角
+俯视锅内、灶台侧视、手部近景、出锅成品斜前视。
+
+## 轮廓剪影
+番茄块、蛋液、锅铲和手部工作姿态轮廓清楚。
+
+## 表情系统
+本项目不靠脸部表情推进，而靠食材状态、锅内节奏和手部动作强弱表达情绪变化。
+
+## 动作姿态
+打蛋、翻炒、颠锅、起锅装盘的手部姿态连续明确。
+
+## 关键道具交互
+鸡蛋、番茄、锅铲、炒锅、盘子之间的交互顺序与接触关系明确。
+
+## 细节区
+蛋液凝固层次、番茄出汁状态、锅边油光与蒸汽变化。
+
+## 比例对照
+鸡蛋、番茄块、锅铲与炒锅口径比例统一。
+
+## 边界约束
+无人脸、非人脸主角、无面部特写；本项目以手部动作、食材状态、火候变化和器具交互为主。
+
+## 微表情
+不适用：本项目为番茄炒蛋料理制作视频，不涉及人脸或面部近景，以手部动作、食材状态、火候变化和器具交互表达情绪与节奏。`,
+    );
+    await writeDesignArtifact('scene_prompts', validSceneReferenceBoardBody);
+    await writeDesignArtifact('prop_prompts');
+    await writeDesignArtifact('master_reference_prompt');
+
+    const result = await validateSceneStage(tmpDir, 'design');
+    expect(result.status).toBe('passed');
+    expect(result.errors).toEqual([]);
+  });
+
   it('fails design when character prompts degrade into a light poster-style summary', async () => {
     await writeDesignArtifact('design_prompts', validDesignOverviewBody);
     await writeDesignArtifact(

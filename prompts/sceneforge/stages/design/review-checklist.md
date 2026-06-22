@@ -2,6 +2,7 @@
 
 - `character_prompts` 必须是中文主导的角色说明书板，而不是单张海报式角色图。
 - `character_prompts` 必须覆盖：多视角、轮廓剪影、表情系统、微表情、动作姿态、关键道具交互、细节区、比例对照、边界约束。
+- 若项目明确无人脸/非人脸主角（如料理制作、手部与食材主导），`微表情` 分区不得直接消失；应显式写“不适用”，并把情绪表达落到手部动作、食材状态、火候变化与器具交互。
 - `character_prompts` 中英文关系必须是“中文主导 + 少量英文锚词”，不能整段再写一份完整英文版。
 - `character_prompts` 不得把 `single portrait`、`cinematic portrait`、`hero poster`、`character poster` 作为主要目标。
 - `character_prompts` 必须交代正确角色数量；多角色项目不得擅自删角、并角或只保留主角一人。
