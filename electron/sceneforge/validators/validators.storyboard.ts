@@ -434,8 +434,23 @@ export async function validateStoryboardStage(projectDir: string): Promise<Scene
             '请补齐 beat_skeleton、video_generation_units、shot_continuity_plan、storyboard_prompt_pack_plan、storyboard_quality_check 和 design_reconciliation_review 等正式 section。',
         });
       }
-      const hasShotCount = content.includes('总镜头数') || /total_shots/i.test(content);
-      const hasPackDecision = content.includes('单包') || content.includes('多包');
+      const hasShotCount =
+        content.includes('总镜头数') ||
+        /total_shots/i.test(content) ||
+        /镜头总数/i.test(content) ||
+        /镜头数/i.test(content) ||
+        /shot_count/i.test(content);
+      const hasPackDecision =
+        content.includes('单包') ||
+        content.includes('多包') ||
+        content.includes('分包') ||
+        content.includes('拆包') ||
+        content.includes('单一包') ||
+        content.includes('单一Prompt') ||
+        /pack_decision/i.test(content) ||
+        /pack_count/i.test(content) ||
+        /single[_-]?pack/i.test(content) ||
+        /multi[_-]?pack/i.test(content);
       const hasChinese = /[\u4e00-\u9fff]/.test(content);
       if (!hasShotCount || !hasPackDecision) {
         errors.push({

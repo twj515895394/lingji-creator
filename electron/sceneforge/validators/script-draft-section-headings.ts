@@ -29,7 +29,7 @@ export const SCRIPT_DRAFT_SECTION_CANONICAL_ZH: Record<ScriptDraftSection, strin
 };
 
 const SCRIPT_DRAFT_SECTION_ALIASES: Record<ScriptDraftSection, RegExp[]> = {
-  script_summary: [/^script_summary$/i, /^剧本摘要/i, /^剧本概要/i, /^summary$/i],
+  script_summary: [/^script_summary$/i, /^剧本摘要/i, /^剧本概要/i, /^summary$/i, /^剧本概述/i, /^项目概述/i, /^剧本大纲/i],
   segment_strategy: [
     /^segment_strategy$/i,
     /^分段策略/i,
@@ -38,7 +38,7 @@ const SCRIPT_DRAFT_SECTION_ALIASES: Record<ScriptDraftSection, RegExp[]> = {
     /^节奏分段/i,
   ],
   story_beats: [/^story_beats$/i, /^故事节拍/i, /^剧情节拍/i, /^节拍列表/i],
-  beat_table: [/^beat_table$/i, /^节拍表/i, /^beat\s*table$/i],
+  beat_table: [/^beat_table$/i, /^节拍表/i, /^beat\s*table$/i, /^节拍关联表/i, /^节拍关系表/i],
   video_generation_unit_plan: [
     /^video_generation_unit_plan$/i,
     /^视频生成单元/i,
@@ -59,6 +59,12 @@ function stripHeadingDecorations(title: string): string {
 }
 
 export function resolveScriptDraftSectionFromHeading(title: string): ScriptDraftSection | null {
+  // 优先提取括号内的英文主键标识，如 "1. 剧本概述 (script_summary)"
+  const parenMatch = title.match(/\((script_summary|segment_strategy|story_beats|beat_table|video_generation_unit_plan|script_body|performance_handoff|storyboard_handoff|risk_notes|next_action)\)/i);
+  if (parenMatch) {
+    return parenMatch[1].toLowerCase() as ScriptDraftSection;
+  }
+
   const normalized = stripHeadingDecorations(title);
   if (!normalized) return null;
 

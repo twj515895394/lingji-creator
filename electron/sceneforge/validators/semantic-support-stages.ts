@@ -297,7 +297,7 @@ export function validateScriptDraftSemantic(content: string): SemanticValidation
   }
 
   const hasBoundaryLock =
-    /boundary_lock|shots_must_not_cross_segment_boundary|镜头不得跨段|镜头不得跨\s*segment\s*边界|不得跨\s*\d+(?:\.\d+)?\s*s\s*边界/i.test(
+    /boundary_lock|boundary\s*lock|shots_must_not_cross_segment_boundary|边界锁定|镜头不得跨段|镜头不得跨\s*segment\s*边界|不得跨\s*\d+(?:\.\d+)?\s*s\s*边界|严禁跨段剪辑|严格锁定在\s*\d+(?:\.\d+)?\s*s?\s*-\s*\d+(?:\.\d+)?\s*s?\s*区间/i.test(
       `${segmentStrategy}\n${storyboardHandoff}`,
     );
   if (!hasBoundaryLock) {

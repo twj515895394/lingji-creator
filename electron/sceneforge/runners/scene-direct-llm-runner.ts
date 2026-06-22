@@ -429,6 +429,40 @@ function buildVideoPromptsPackStructureRules(stageContext: SceneStageContext): s
   return lines.join('\n');
 }
 
+function buildStoryboardMultiPackStructureRules(
+  storyboardPromptPack: string,
+  artifactType: 'control' | 'style',
+): string {
+  const detectedPacks = extractDetectedPackNumbers(storyboardPromptPack);
+  if (detectedPacks.length <= 1) {
+    return '';
+  }
+
+  const packLabels = detectedPacks.map((pack) => `第${String(pack).padStart(2, '0')}包`);
+  const typeName = artifactType === 'control' ? '控制板' : '风格板';
+  const artifactKey = artifactType === 'control' ? 'control_board_prompts' : 'style_board_prompts';
+  const labelPrefix = artifactType === 'control' ? '控制板提示词' : '风格板提示词';
+
+  const lines = [
+    '## Locked Multi-Pack Structure',
+    `已从定稿的 storyboard_prompt_pack 中检测到多包结构，共有 ${detectedPacks.length} 个 Pack：${packLabels.join('、')}。`,
+    `本轮在生成 \`${artifactKey}\` 时，必须按相同顺序输出正好 ${detectedPacks.length} 个正式${typeName}提示词包，禁止压缩或合并成少于该数量的包。`,
+    '每个 Pack 都必须整体包裹在专属的 copy-block 标签中：',
+  ];
+
+  detectedPacks.forEach((pack) => {
+    const pad = String(pack).padStart(2, '0');
+    lines.push(`- \`<copy-block type="storyboard-pack" id="pack-${pad}" label="${labelPrefix} 第${pad}包">\``);
+  });
+
+  lines.push(
+    `每个 Pack 的 copy-block 块内必须以 \`## Pack ${detectedPacks.join('/')}:\` 对应的包号起头（例如 \`## Pack 1:\`）。`,
+    '每个 Pack 的内容必须对应并覆盖 storyboard_prompt_pack 中相同包号 of Segment 与镜头范围，绝不允许漏掉任何一个包。'
+  );
+
+  return lines.join('\n');
+}
+
 async function invokeDirectLlmPhase(
   deps: SceneDirectLlmRunnerDeps,
   phase: SceneDirectLlmPhaseInput,
@@ -601,6 +635,7 @@ export function createDirectLlmStageRunner(deps: SceneDirectLlmRunnerDeps): Scen
           ].join('\n\n'),
           additionalUserSections: [
             lockedStoryboardSummary,
+            buildStoryboardMultiPackStructureRules(lockedStoryboardPromptPack, 'control'),
             [
               '## Control Board Hard Rules',
               '- `control_board_prompts` 必须是中文主导内容；禁止输出“可直接复制的英文主 Prompt”“Copy-Pasteable Master Prompt”“Prompt (EN)”这类英文主导结构。',
@@ -646,6 +681,7 @@ export function createDirectLlmStageRunner(deps: SceneDirectLlmRunnerDeps): Scen
           ].join('\n\n'),
           additionalUserSections: [
             lockedStoryboardSummary,
+            buildStoryboardMultiPackStructureRules(lockedStoryboardPromptPack, 'style'),
             [
               '## Style Board Hard Rules',
               '- `style_board_prompts` 必须是中文主导内容；禁止输出“Pack Master Style Prompt”“Master Style Prompt”“Style Reference Anchor”这类英文主导 prompt 块。',

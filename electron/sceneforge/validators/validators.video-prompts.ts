@@ -430,15 +430,16 @@ export async function validateVideoPromptsStage(projectDir: string): Promise<Sce
 
   const technicalControlBody = extractBlockBody(cnPack, '【Segment 01 技术控制说明】') || extractBlockBody(cnPack, '### Segment 01 技术控制说明');
   const technicalControlChars = technicalControlBody.replace(/\s+/g, '').length;
-  const hasContinuityMarker = VIDEO_CONTINUITY_MARKERS.some((marker) => technicalControlBody.includes(marker));
+  const lowerTechnicalControlBody = technicalControlBody.toLowerCase();
+  const hasContinuityMarker = VIDEO_CONTINUITY_MARKERS.some((marker) => lowerTechnicalControlBody.includes(marker.toLowerCase()));
   const hasBlockingMarker =
-    VIDEO_BLOCKING_MARKERS.some((marker) => technicalControlBody.includes(marker)) ||
+    VIDEO_BLOCKING_MARKERS.some((marker) => lowerTechnicalControlBody.includes(marker.toLowerCase())) ||
     VIDEO_BLOCKING_FALLBACK_PATTERN.test(technicalControlBody);
   const hasPropStateMarker =
-    VIDEO_PROP_STATE_MARKERS.some((marker) => technicalControlBody.includes(marker)) ||
+    VIDEO_PROP_STATE_MARKERS.some((marker) => lowerTechnicalControlBody.includes(marker.toLowerCase())) ||
     VIDEO_PROP_STATE_FALLBACK_PATTERN.test(technicalControlBody);
   const hasNextHandoffMarker = VIDEO_NEXT_HANDOFF_MARKERS.some(
-    (marker) => technicalControlBody.includes(marker),
+    (marker) => lowerTechnicalControlBody.includes(marker.toLowerCase()),
   );
   const missingTechnicalDetails = [
     ...(!hasContinuityMarker ? ['continuity'] : []),

@@ -1135,6 +1135,52 @@ default_pacing_profile: balanced
     expect(result.errors).toEqual([]);
   });
 
+  it('accepts alternative keywords for shot count and pack decision in storyboard validation', async () => {
+    const customPackBody = `<copy-block type="storyboard-pack" id="pack-01" label="故事板提示词 第01包">
+## storyboard_prompt_pack
+整板故事板主包。
+
+## beat_skeleton
+Beat 01 开场，Beat 02 过程，Beat 03 结尾。
+
+## storyboard_content_breakdown
+分镜内容拆解。
+
+## cinematic_language_plan
+镜头语言。
+
+## video_generation_units
+VGU-01 与 VGU-02。
+
+## shot_continuity_plan
+连续性。
+
+## continuity_control_system
+控制系统。
+
+## storyboard_prompt_pack_plan
+segment_duration_seconds: 10
+分包规划：使用单一包承接。整个片段的镜头总数为 12 个。
+- Segment 01 | time_range: 0-10s | pacing_profile: balanced | shot_count: 6 | boundary_lock: true
+- Segment 02 | time_range: 10-20s | pacing_profile: balanced | shot_count: 6 | boundary_lock: true
+
+## storyboard_quality_check
+检查完成。
+
+## design_reconciliation_review
+design_revision_required: false
+</copy-block>`;
+
+    await writeStoryboardArtifact('storyboard_prompt_pack', customPackBody);
+    await writeStoryboardArtifact('control_board_prompts', validControlBoardPromptBody);
+    await writeStoryboardArtifact('style_board_prompts', validStyleBoardPromptBody);
+    await writeStoryboardArtifact('master_board_prompt');
+
+    const result = await validateSceneStage(tmpDir, 'storyboard');
+    expect(result.status).toBe('passed');
+    expect(result.errors).toEqual([]);
+  });
+
   it('accepts storyboard pack with numbered Title Case section headings (no snake_case literals)', async () => {
     const titleCasePackBody = `# Storyboard Prompt Pack: 放学路上的世界杯
 
@@ -1755,6 +1801,21 @@ English compiled prompt with Chinese notes.`,
         '本段承接 VGU-01，continuity_in 为街口摊位建立镜头，continuity_out 为老奶奶抬手示意。blocking 维持老奶奶左前主动位与对手右中受压位，主轴线维持右后到左前，prop state 锁定电子秤开场待机并在结尾进入称重准备，next_handoff 交给下一段的对手迟疑反应。',
         '本段承接 VGU-01，从街口摊位建立镜头推进到老奶奶抬手示意。老奶奶位于左前主动位，对手保持右中受压位，主轴线维持右后到左前；电子秤开场待机并在结尾进入称重准备，下一步承接对手迟疑反应镜头。',
       ),
+    );
+    await writeVideoReviewArtifact();
+    await writeVideoTraceArtifact();
+
+    const result = await validateSceneStage(tmpDir, 'video_prompts');
+    expect(result.status).toBe('passed');
+    expect(result.errors).toEqual([]);
+  });
+
+  it('accepts capitalized Blocking and Next handoff in technical control blocks', async () => {
+    await writeVideoArtifact(
+      'video_prompt_pack_cn',
+      validVideoPromptPackBody
+        .replace('blocking 维持', 'Blocking 维持')
+        .replace('next_handoff 交给', 'Next handoff 交给'),
     );
     await writeVideoReviewArtifact();
     await writeVideoTraceArtifact();
