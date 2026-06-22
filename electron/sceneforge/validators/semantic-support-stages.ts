@@ -122,15 +122,16 @@ function countStoryBeats(text: string): number {
   let count = 0;
   for (const line of lines) {
     const trimmed = line.trim();
-    if (/beat_id\s*:/i.test(trimmed)) {
+    const normalized = stripInlineMarkdownForParsing(trimmed);
+    if (/beat_id\s*:/i.test(normalized)) {
       count += 1;
       continue;
     }
-    if (/^[-*+]\s+\**beat[_-]?\d+/i.test(trimmed)) {
+    if (/^[-*+]\s+\**beat[_-]?\d+/i.test(normalized)) {
       count += 1;
       continue;
     }
-    if (/beat[_-]?\d+\s*\(/i.test(stripInlineMarkdownForParsing(trimmed))) {
+    if (/beat[_-]?\d+\s*\(/i.test(normalized)) {
       count += 1;
     }
   }

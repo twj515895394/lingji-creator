@@ -269,6 +269,60 @@ describe('semantic support stage validators', () => {
       expect(validateScriptDraftSemantic(content).ok).toBe(true);
     });
 
+    it('accepts beat_id lines wrapped in markdown emphasis from real cooking drafts', () => {
+      const content = [
+        '# 剧本草案',
+        '',
+        '## segment_strategy',
+        '* **segment_duration_seconds**: 10',
+        '* **segment_time_range**:',
+        '  * Segment 1: 0s - 10s',
+        '  * Segment 2: 10s - 20s',
+        '  * Segment 3: 20s - 30s',
+        '',
+        '## story_beats',
+        '* **beat_id**: beat_01',
+        '  * **title**: 刀落汁盈',
+        '  * **action_summary**: 切番茄并打蛋。',
+        '* **beat_id**: beat_02',
+        '  * **title**: 金黄初绽',
+        '  * **action_summary**: 蛋液入锅迅速膨胀。',
+        '* **beat_id**: beat_03',
+        '  * **title**: 赤红出沙',
+        '  * **action_summary**: 番茄软化出汁。',
+        '* **beat_id**: beat_04',
+        '  * **title**: 黄金交融',
+        '  * **action_summary**: 鸡蛋与番茄翻炒融合。',
+        '',
+        '## video_generation_unit_plan',
+        '### VGU_01 (0s - 10s)',
+        '- **Narrative Goal**: 展现备菜与入锅起势。',
+        '- **Pacing Profile**: balanced',
+        '- **Shot Density Hint**: 中高密度',
+        '### VGU_02 (10s - 20s)',
+        '- **Narrative Goal**: 展现番茄出沙与融合。',
+        '- **Pacing Profile**: balanced',
+        '- **Shot Density Hint**: 中密度',
+        '',
+        '## script_body',
+        '### Segment 1 (0s - 10s)',
+        '旁白：最平凡的食材，也能有最治愈的温度。',
+        '动作：切番茄、打蛋、蛋液入锅。',
+        '### Segment 2 (10s - 20s)',
+        '旁白：酸甜与金黄在热气中相遇。',
+        '动作：番茄出沙、鸡蛋回锅、翻炒融合。',
+        '',
+        '## performance_handoff',
+        '- 手部动作要自然，停顿点落在蛋液膨胀与撒葱花之前。',
+        '',
+        '## storyboard_handoff',
+        '- 微距镜头优先，锅具与食材位置保持连续。',
+        '- boundary_lock: 10秒处与20秒处绝对剪辑，不得跨段。',
+      ].join('\n');
+
+      expect(validateScriptDraftSemantic(content).ok).toBe(true);
+    });
+
     it('accepts screenshot-style bold beat headings with title inside emphasis', () => {
       const content = [
         '# 剧本草案',
