@@ -10,11 +10,28 @@ import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/
 import { isInitializeRequest } from '@modelcontextprotocol/sdk/types.js';
 import { registerTools } from './tools';
 import { writeEndpointFile, removeEndpointFile } from './endpoint-file';
+import { createSonarInboxStore, type SonarInboxStore } from '../sonar/inbox-store';
+import { getOrCreateSonarToken } from '../sonar/token';
+import { handleSonarHttp, isSonarPath } from '../sonar/routes';
 
 // ─── 模块状态 ─────────────────────────────────────────────
 let httpServer: Server | null = null;
 let currentPort = 19820;
 let getMainWindowFn: (() => BrowserWindow | null) | null = null;
+
+// ─── 声呐桥状态 ───────────────────────────────────────────
+let sonarStore: SonarInboxStore | null = null;
+let sonarToken = '';
+
+/** 暴露给主进程/IPC：待创作箱 store（启动后非空）。 */
+export function getSonarInboxStore(): SonarInboxStore | null {
+  return sonarStore;
+}
+
+/** 暴露给主进程/IPC：桥端点信息（端口 + token），供设置页展示让用户复制进扩展。 */
+export function getSonarBridgeInfo(): { port: number; token: string } {
+  return { port: currentPort, token: sonarToken };
+}
 
 /** sessionId → { transport, server } 映射 */
 const sessions: Record<string, { transport: StreamableHTTPServerTransport; server: McpServer }> = {};
@@ -33,7 +50,7 @@ function createSessionServer(): McpServer {
 function setCorsHeaders(res: ServerResponse): void {
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'GET, POST, DELETE, OPTIONS');
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, mcp-session-id, Last-Event-ID');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, mcp-session-id, Last-Event-ID, x-sonar-token');
   res.setHeader('Access-Control-Expose-Headers', 'mcp-session-id');
 }
 
@@ -78,6 +95,10 @@ export async function startMcpServer(
   currentPort = port;
   getMainWindowFn = getMainWindow;
 
+  // 声呐桥：待创作箱 store + 共享 token（loopback + token 鉴权）
+  sonarStore = createSonarInboxStore();
+  sonarToken = await getOrCreateSonarToken();
+
   // 创建 HTTP 服务
   httpServer = createServer(async (req: IncomingMessage, res: ServerResponse) => {
     const url = new URL(req.url ?? '/', `http://${req.headers.host ?? 'localhost'}`);
@@ -118,6 +139,33 @@ export async function startMcpServer(
       return;
     }
 
+    // ── 声呐桥端点（仅 loopback + token）──
+    if (isSonarPath(pathname)) {
+      try {
+        await handleSonarHttp(req, res, {
+          store: sonarStore!,
+          expectedToken: sonarToken,
+          version: '1.0.0',
+          endpoint: `http://127.0.0.1:${currentPort}`,
+          // 收件箱有新增/刷新 → 通知渲染端待创作箱实时刷新（无需手动点刷新）。
+          onInboxChanged: () => {
+            try {
+              getMainWindowFn?.()?.webContents.send('sonar-inbox-updated');
+            } catch (e) {
+              console.warn('[Sonar] 通知渲染端刷新失败', e);
+            }
+          },
+        });
+      } catch (err) {
+        console.error('[Sonar] 处理请求出错:', err);
+        if (!res.headersSent) {
+          res.writeHead(400, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ error: 'Bad Request' }));
+        }
+      }
+      return;
+    }
+
     // ── 未知路由 ──
     res.writeHead(404, { 'Content-Type': 'application/json' });
     res.end(JSON.stringify({ error: 'Not Found' }));
@@ -126,7 +174,7 @@ export async function startMcpServer(
   return new Promise<void>((resolve, reject) => {
     httpServer!.listen(port, '127.0.0.1', () => {
       console.log(`[MCP] HTTP Server 已启动: http://127.0.0.1:${port}/mcp`);
-      void writeEndpointFile(port).catch((err) =>
+      void writeEndpointFile(port, undefined, sonarToken).catch((err) =>
         console.error('[MCP] 写端点文件失败:', err),
       );
       resolve();

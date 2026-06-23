@@ -41,6 +41,7 @@ const CATEGORY_COLORS: Record<TaskCategory, string> = {
   'tts': '#f472b6',
   'cover': '#c084fc',
   'io': '#9ca3af',
+  'publish': '#10b981',
 };
 
 export function StatusBarProgressLine() {

@@ -1,125 +1,184 @@
 import { useState, useEffect, useCallback } from 'react';
-import { Bot, Eye, EyeOff, RefreshCw, Trash2 } from 'lucide-react';
+import {
+  Bot,
+  FolderOpen,
+  FolderPlus,
+  RefreshCw,
+  Trash2,
+  Hand,
+  ShieldCheck,
+  AlertTriangle,
+  Check,
+} from 'lucide-react';
+import type { LucideIcon } from 'lucide-react';
 import type {
   AgentConfigData,
   AgentEntry,
-  AuthMode,
-  PreflightCheck,
-  PermissionPolicy,
+  ResolvedAgentSkill,
 } from '../../../electron/acp/types';
+import { getAgentPresentation, DEFAULT_AGENT_ID } from '../../lib/agent-presentation';
 import {
   Badge,
   Button,
-  Checkbox,
   ConfirmDialog,
   Divider,
-  Field,
-  Input,
-  PillGroup,
   SaveButton,
   SettingsPageHeader,
-  Textarea,
+  Switch,
 } from '../../ui';
-import type { PillGroupItem } from '../../ui/patterns/PillGroup';
-import commonStyles from './SettingsCommon.module.css';
+import { SkillDetailModal } from './SkillDetailModal';
 import styles from './AgentSettingsTab.module.css';
 
-const AUTH_MODES: PillGroupItem<AuthMode>[] = [
-  { value: 'subscription', label: '官方订阅 (Max/Pro)' },
-  { value: 'custom_api', label: '自定义 API' },
+/** 审批模式三态（与输入框底栏 pill 对齐）。 */
+const APPROVAL_MODES: {
+  id: NonNullable<AgentConfigData['permissionPolicy']>;
+  label: string;
+  description: string;
+  Icon: LucideIcon;
+  caution?: boolean;
+}[] = [
+  { id: 'always_ask', label: '请求批准', description: '编辑外部文件和使用互联网时始终询问', Icon: Hand },
+  { id: 'tiered', label: '替我审批', description: '仅对检测到的风险操作请求批准', Icon: ShieldCheck },
+  { id: 'auto_approve', label: '完全访问', description: '可不受限制地访问互联网和您电脑上的任何文件', Icon: AlertTriangle, caution: true },
 ];
 
-const PERMISSION_POLICIES: PillGroupItem<PermissionPolicy>[] = [
-  { value: 'auto_approve', label: '自动批准所有操作' },
-  { value: 'tiered', label: '分级信任（读自动，写和终端需确认）' },
-  { value: 'always_ask', label: '每次操作都需确认' },
-];
+/** skill 列表行的简介上限：超出截断（来自 SKILL.md frontmatter description）。 */
+const DESC_MAX = 100;
+function truncateDesc(text: string): string {
+  const t = (text ?? '').trim();
+  return t.length > DESC_MAX ? `${t.slice(0, DESC_MAX)}…` : t;
+}
 
-const DEFAULT_AGENT_ENTRY = {
-  enabled: true,
-  authMode: 'custom_api' as const,
-  apiKey: '',
-  apiBaseUrl: 'https://api.anthropic.com',
-  model: 'claude-sonnet-4-20250514',
-  envText: '',
-  configJson: '{}',
-  version: '0.25.0',
-  sortOrder: 0,
-};
+/** pi SDK 化后唯一 agent；默认条目仅保留运行期字段。 */
+function makeDefaultEntry(): AgentEntry {
+  return {
+    enabled: true,
+    version: '',
+    sortOrder: 0,
+    skills: [{ id: 'lingji-video-workflow', enabled: true }],
+  };
+}
 
 export function AgentSettingsTab() {
   const [config, setConfig] = useState<AgentConfigData | null>(null);
-  const [apiKey, setApiKey] = useState('');
-  const [showKey, setShowKey] = useState(false);
-  const [checks, setChecks] = useState<PreflightCheck[]>([]);
-  const [checking, setChecking] = useState(false);
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
-  const [busyAction, setBusyAction] = useState<string | null>(null);
-  const [uninstallDialogOpen, setUninstallDialogOpen] = useState(false);
+  const [skills, setSkills] = useState<ResolvedAgentSkill[]>([]);
+  const [busy, setBusy] = useState(false);
+  const [notice, setNotice] = useState<string | null>(null);
+  const [removeTarget, setRemoveTarget] = useState<ResolvedAgentSkill | null>(null);
+  const [detailSkill, setDetailSkill] = useState<ResolvedAgentSkill | null>(null);
 
-  const agent = config?.agents?.['claude-acp'] ?? DEFAULT_AGENT_ENTRY;
+  const profile = getAgentPresentation(DEFAULT_AGENT_ID);
+  const agent = config?.agents?.[DEFAULT_AGENT_ID] ?? makeDefaultEntry();
+
+  const loadSkills = useCallback(async () => {
+    if (typeof window.agentAPI?.listSkills !== 'function') return;
+    try {
+      setSkills(await window.agentAPI.listSkills(DEFAULT_AGENT_ID));
+    } catch {
+      setSkills([]);
+    }
+  }, []);
+
+  const loadConfig = useCallback(async () => {
+    if (typeof window.agentAPI === 'undefined') return;
+    setConfig(await window.agentAPI.getConfig());
+  }, []);
 
   useEffect(() => {
     if (typeof window === 'undefined' || typeof window.agentAPI === 'undefined') return;
     void loadConfig();
-    void runChecks();
-  }, []);
-
-  const loadConfig = async () => {
-    if (typeof window.agentAPI === 'undefined') return;
-    const data = await window.agentAPI.getConfig();
-    setConfig(data);
-    const key = await window.agentAPI.getApiKey('claude-acp');
-    setApiKey(key);
-  };
-
-  const runChecks = async () => {
-    if (typeof window.agentAPI === 'undefined') return;
-    setChecking(true);
-    const results = await window.agentAPI.runPreflight();
-    setChecks(results);
-    setChecking(false);
-  };
+    void loadSkills();
+  }, [loadConfig, loadSkills]);
 
   const updateAgent = useCallback(
     (patch: Partial<AgentEntry>) => {
       if (!config) return;
       setConfig({
         ...config,
-        agents: {
-          ...config.agents,
-          'claude-acp': { ...agent, ...patch },
-        },
+        agents: { ...config.agents, [DEFAULT_AGENT_ID]: { ...agent, ...patch } },
       });
     },
     [agent, config],
+  );
+
+  // 审批模式：用专用 IPC 即时落盘并同步运行时（与输入框 pill 共享同一全局策略）。
+  const permissionPolicy = config?.permissionPolicy ?? 'tiered';
+  const handlePolicyChange = useCallback(
+    (policy: AgentConfigData['permissionPolicy']) => {
+      setConfig((prev) => (prev ? { ...prev, permissionPolicy: policy } : prev));
+      void window.agentAPI?.setPermissionPolicy?.(policy);
+    },
+    [],
+  );
+
+  // 切换 skill 启用态：写回 config.agents.pi.skills，由「保存配置」落盘。
+  const toggleSkill = useCallback(
+    (skillId: string, enabled: boolean) => {
+      if (!config) return;
+      const current = agent.skills ?? [];
+      const has = current.some((s) => s.id === skillId);
+      const nextSkills = has
+        ? current.map((s) => (s.id === skillId ? { ...s, enabled } : s))
+        : [...current, { id: skillId, enabled }];
+      updateAgent({ skills: nextSkills });
+    },
+    [agent.skills, config, updateAgent],
   );
 
   const handleSave = async () => {
     if (!config) return;
     setSaving(true);
     await window.agentAPI.saveConfig(config);
-    if (apiKey) {
-      await window.agentAPI.setApiKey('claude-acp', apiKey);
-    }
     setSaving(false);
     setSaved(true);
     setTimeout(() => setSaved(false), 2000);
   };
 
-  const handleInstall = async () => {
-    setBusyAction('install');
-    await window.agentAPI.installAgent(agent.version);
-    setBusyAction(null);
-    await runChecks();
+  const handleAddSkill = async () => {
+    if (typeof window.agentAPI?.addSkill !== 'function') return;
+    setBusy(true);
+    setNotice(null);
+    try {
+      const res = await window.agentAPI.addSkill();
+      if (res.canceled) return;
+      if (res.error) {
+        setNotice(`导入失败：${res.error}`);
+        return;
+      }
+      setNotice(`已导入 skill：${res.addedId}`);
+      await loadSkills();
+    } finally {
+      setBusy(false);
+    }
   };
 
-  const handleUninstall = async () => {
-    setBusyAction('uninstall');
-    await window.agentAPI.uninstallAgent();
-    setBusyAction(null);
-    await runChecks();
+  const handleRemoveSkill = async (skill: ResolvedAgentSkill) => {
+    setRemoveTarget(null);
+    if (typeof window.agentAPI?.removeSkill !== 'function') return;
+    setBusy(true);
+    setNotice(null);
+    try {
+      const res = await window.agentAPI.removeSkill(skill.id);
+      if (!res.ok) {
+        setNotice(`删除失败：${res.error ?? '未知错误'}`);
+        return;
+      }
+      // 同步从配置里移除该 skill 的开关项（避免残留），并落盘。
+      if (config) {
+        const next = (agent.skills ?? []).filter((s) => s.id !== skill.id);
+        const nextConfig = {
+          ...config,
+          agents: { ...config.agents, [DEFAULT_AGENT_ID]: { ...agent, skills: next } },
+        };
+        setConfig(nextConfig);
+        await window.agentAPI.saveConfig(nextConfig);
+      }
+      await loadSkills();
+    } finally {
+      setBusy(false);
+    }
   };
 
   if (!config) {
@@ -129,199 +188,172 @@ export function AgentSettingsTab() {
   return (
     <div className={styles.container}>
       <SettingsPageHeader
-        title="Claude Code"
-        description="ACP 适配器 · npx"
+        title="AI Agent"
+        description="内置 Pi（SDK 模式）"
         leading={<Bot size={24} className={styles.agentIcon} />}
-        actions={
-          <Checkbox
-            label="启用"
-            checked={agent.enabled}
-            onChange={(checked) => updateAgent({ enabled: checked })}
-            size="sm"
-          />
-        }
+        actions={<Badge variant="secondary">{profile.displayName}</Badge>}
       />
 
-      <section>
-        <div className={styles.statusHeader}>
-          <h3 className={styles.sectionTitle}>状态检查</h3>
+      <p className={styles.guideText}>
+        Pi 以内置 SDK 运行，无需单独安装。对话使用的模型与凭证统一在「AI Provider」设置中配置，
+        会话内可在输入框下方切换具体模型与思考程度。
+      </p>
+
+      <Divider label="审批模式" />
+      <p className={styles.guideText}>
+        控制 Pi 执行工具调用时的批准方式。该设置全局生效，并与对话输入框底部的审批开关实时同步。
+      </p>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+        {APPROVAL_MODES.map((mode) => {
+          const Icon = mode.Icon;
+          const selected = mode.id === permissionPolicy;
+          return (
+            <button
+              key={mode.id}
+              type="button"
+              onClick={() => handlePolicyChange(mode.id)}
+              className={`flex w-full items-start gap-2.5 rounded-[10px] border px-3 py-2.5 text-left transition-colors ${
+                selected ? 'border-mac-blue bg-mac-blue/10' : 'border-mac-border hover:bg-white/5'
+              }`}
+            >
+              <Icon
+                size={16}
+                className={`mt-0.5 shrink-0 ${mode.caution ? 'text-mac-red' : 'text-mac-text-muted/70'}`}
+              />
+              <span className="flex min-w-0 flex-1 flex-col">
+                <span className="text-[13px] font-medium text-foreground">{mode.label}</span>
+                <span className="text-[12px] text-mac-text-muted/60">{mode.description}</span>
+              </span>
+              {selected ? <Check size={16} className="mt-0.5 shrink-0 text-mac-blue" /> : null}
+            </button>
+          );
+        })}
+      </div>
+
+      <Divider label="Skills" />
+      <p className={styles.guideText}>
+        管理 Pi 可调用的 skill 库。对话中输入 <code>$</code> 或 <code>+</code> 可弹出菜单选择已启用的 skill。
+      </p>
+
+      <div className={styles.statusHeader}>
+        <h3 className={styles.sectionTitle}>已安装 Skill</h3>
+        <div style={{ display: 'inline-flex', gap: 8 }}>
+          <Button
+            type="button"
+            size="sm"
+            variant="secondary"
+            leftIcon={<FolderOpen size={14} />}
+            onClick={() => void window.agentAPI?.openSkillDir?.()}
+          >
+            打开 Skill 目录
+          </Button>
+          <Button
+            type="button"
+            size="sm"
+            variant="secondary"
+            leftIcon={<FolderPlus size={14} />}
+            onClick={handleAddSkill}
+            disabled={busy}
+          >
+            添加 Skill 库…
+          </Button>
           <Button.Icon
             type="button"
             variant="ghost"
             size="sm"
-            onClick={runChecks}
-            disabled={checking}
-            aria-label="刷新状态检查"
+            onClick={() => void loadSkills()}
+            disabled={busy}
+            aria-label="刷新 skill 列表"
           >
-            <RefreshCw size={14} className={checking ? styles.spinning : ''} />
+            <RefreshCw size={14} />
           </Button.Icon>
         </div>
+      </div>
 
-        <div className={styles.statusList}>
-          {checks.map((check, index) => (
-            <div key={`${check.label}-${index}`} className={styles.statusRow}>
-              <Badge variant={getStatusVariant(check.status)}>{getStatusLabel(check.status)}</Badge>
-              <span className={styles.statusLabel}>{check.label}</span>
-              <span className={styles.statusMessage}>{check.message}</span>
-              {renderFixAction(check, busyAction, handleInstall)}
-            </div>
-          ))}
-        </div>
-      </section>
+      {notice ? <p className={styles.guideText}>{notice}</p> : null}
 
-      <Divider label="认证配置" />
-      <PillGroup<AuthMode>
-        items={AUTH_MODES}
-        value={agent.authMode as AuthMode}
-        size="sm"
-        onChange={(mode) => updateAgent({ authMode: mode })}
-      />
-
-      {agent.authMode === 'custom_api' ? (
-        <div className={commonStyles.formStack}>
-          <Field label="API Key">
-            <div className={styles.apiKeyRow}>
-              <Input
-                variant={showKey ? 'text' : 'password'}
-                value={apiKey}
-                onChange={(e) => setApiKey(e.target.value)}
-                placeholder="sk-ant-..."
-                size="sm"
-                wrapperClassName={styles.apiKeyInput}
-              />
-              <Button.Icon
+      {skills.length === 0 ? (
+        <p className={styles.guideText}>暂无可用 skill。点击「添加 Skill 库…」从本地文件夹导入。</p>
+      ) : (
+        skills.map((skill) => {
+          const isBuiltin = skill.source === 'builtin';
+          // 内置强制启用；用户 skill 取配置（缺省默认启用）。
+          const cfgEnabled = isBuiltin
+            ? true
+            : (agent.skills?.find((s) => s.id === skill.id)?.enabled ?? skill.enabled);
+          return (
+            <div key={skill.id} className={styles.skillRow}>
+              <button
                 type="button"
-                variant="ghost"
-                size="sm"
-                onClick={() => setShowKey((state) => !state)}
-                aria-label={showKey ? '隐藏 API Key' : '显示 API Key'}
+                className={styles.skillInfo}
+                onClick={() => setDetailSkill(skill)}
+                aria-label={`查看 ${skill.displayName} 详情`}
               >
-                {showKey ? <EyeOff size={16} /> : <Eye size={16} />}
-              </Button.Icon>
+                <span className={styles.skillTitleRow}>
+                  <span className={styles.skillName}>{skill.displayName}</span>
+                  <Badge variant={isBuiltin ? 'info' : 'secondary'}>
+                    {isBuiltin ? '内置·常驻' : '用户'}
+                  </Badge>
+                  {skill.status !== 'available' ? (
+                    <Badge variant="destructive">
+                      {skill.status === 'missing' ? '缺失' : '配置错误'}
+                    </Badge>
+                  ) : null}
+                </span>
+                {skill.description ? (
+                  <span className={styles.skillDesc}>{truncateDesc(skill.description)}</span>
+                ) : null}
+              </button>
+              <div className={styles.skillActions}>
+                <Switch
+                  checked={cfgEnabled}
+                  disabled={isBuiltin}
+                  onChange={(next) => toggleSkill(skill.id, next)}
+                  aria-label={`${skill.displayName} 启用开关`}
+                  title={isBuiltin ? '内置 skill 强制启用，不可关闭' : undefined}
+                />
+                {skill.source === 'user' ? (
+                  <Button.Icon
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => setRemoveTarget(skill)}
+                    disabled={busy}
+                    aria-label={`删除 ${skill.displayName}`}
+                  >
+                    <Trash2 size={14} />
+                  </Button.Icon>
+                ) : null}
+              </div>
             </div>
-          </Field>
-
-          <Field label="API Base URL">
-            <Input
-              value={agent.apiBaseUrl}
-              onChange={(e) => updateAgent({ apiBaseUrl: e.target.value })}
-              placeholder="https://api.anthropic.com"
-              size="sm"
-            />
-          </Field>
-
-          <Field label="Model">
-            <Input
-              value={agent.model}
-              onChange={(e) => updateAgent({ model: e.target.value })}
-              placeholder="claude-sonnet-4-20250514"
-              size="sm"
-            />
-          </Field>
-        </div>
-      ) : null}
-
-      <Divider label="高级配置" />
-      <Field label="环境变量" hint="KEY=VALUE（每行一条）">
-        <Textarea
-          value={agent.envText}
-          onChange={(e) => updateAgent({ envText: e.target.value })}
-          placeholder="KEY=VALUE（每行一条）"
-          rows={4}
-          size="sm"
-          resize="vertical"
-          className={styles.editorMono}
-        />
-      </Field>
-
-      <Divider label="权限策略" />
-      <PillGroup<PermissionPolicy>
-        items={PERMISSION_POLICIES}
-        value={config.permissionPolicy}
-        direction="vertical"
-        fullWidth
-        size="sm"
-        onChange={(policy) => {
-          setConfig({ ...config, permissionPolicy: policy });
-          window.agentAPI?.setPermissionPolicy(policy);
-        }}
-      />
+          );
+        })
+      )}
 
       <div className={styles.actionsRow}>
-        <Button
-          type="button"
-          variant="destructive"
-          leftIcon={<Trash2 size={14} />}
-          onClick={() => setUninstallDialogOpen(true)}
-          disabled={busyAction !== null}
-        >
-          {busyAction === 'uninstall' ? '卸载中...' : '卸载'}
-        </Button>
         <div className={styles.actionsSpacer} />
         <SaveButton
           onClick={handleSave}
           saving={saving}
           saved={saved}
-          disabled={busyAction !== null}
+          disabled={busy}
           defaultLabel="保存配置"
         />
       </div>
 
       <ConfirmDialog
-        open={uninstallDialogOpen}
-        onOpenChange={setUninstallDialogOpen}
-        title="确认卸载 claude-agent-acp？"
-        description="卸载后将移除当前 ACP 适配器，可稍后重新安装。"
-        confirmText="确认卸载"
+        open={removeTarget !== null}
+        onOpenChange={(open) => !open && setRemoveTarget(null)}
+        title={`删除 skill「${removeTarget?.displayName ?? ''}」？`}
+        description="将从用户 skill 目录移除该文件夹，可稍后重新导入。"
+        confirmText="确认删除"
         confirmVariant="destructive"
-        onConfirm={handleUninstall}
+        onConfirm={() => {
+          if (removeTarget) void handleRemoveSkill(removeTarget);
+        }}
       />
+
+      <SkillDetailModal skill={detailSkill} onClose={() => setDetailSkill(null)} />
     </div>
-  );
-}
-
-function getStatusVariant(status: string): 'success' | 'warning' | 'destructive' | 'secondary' {
-  switch (status) {
-    case 'pass':
-      return 'success';
-    case 'fail':
-      return 'destructive';
-    case 'warn':
-      return 'warning';
-    default:
-      return 'secondary';
-  }
-}
-
-function getStatusLabel(status: string): string {
-  switch (status) {
-    case 'pass':
-      return '通过';
-    case 'fail':
-      return '失败';
-    case 'warn':
-      return '警告';
-    default:
-      return '检查中';
-  }
-}
-
-function renderFixAction(
-  check: PreflightCheck,
-  busyAction: string | null,
-  onInstall: () => Promise<void>,
-) {
-  if (check.fixAction !== 'install' && check.fixAction !== 'upgrade') {
-    return null;
-  }
-
-  const isBusy = busyAction !== null;
-  const variant = check.fixAction === 'upgrade' ? 'warning' : 'primary';
-  const label = isBusy ? '处理中...' : check.fixAction === 'upgrade' ? '升级' : '安装';
-
-  return (
-    <Button type="button" size="sm" variant={variant} disabled={isBusy} onClick={onInstall}>
-      {label}
-    </Button>
   );
 }

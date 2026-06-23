@@ -39,7 +39,10 @@ describe('collectBackup', () => {
     expect(backup.appVersion).toBe('1.0.0');
     expect(backup.platform).toBe(process.platform);
     expect(backup.globalSettings).toBeDefined();
-    expect(backup.agent.config.agents).toEqual({});
+    // 首次使用时 load() 只注入默认的 pi 条目（codex/claude def 已移除）
+    expect(backup.agent.config.agents.pi).toBeDefined();
+    expect(backup.agent.config.agents.claude).toBeUndefined();
+    expect(backup.agent.config.agents.codex).toBeUndefined();
     expect(backup.agent.apiKeys).toEqual({});
   });
 
@@ -51,7 +54,7 @@ describe('collectBackup', () => {
     await config.save({
       permissionPolicy: 'tiered',
       agents: {
-        'claude-acp': {
+        claude: {
           enabled: true,
           authMode: 'custom_api',
           apiKey: '',
@@ -67,7 +70,7 @@ describe('collectBackup', () => {
 
     const backup = await collectBackup(userDataPath, agentConfigPath, '1.0.0');
     expect(backup.globalSettings.selectedRole).toBe('deep-insight-podcast');
-    expect(backup.agent.config.agents['claude-acp']).toBeDefined();
+    expect(backup.agent.config.agents.claude).toBeDefined();
   });
 });
 

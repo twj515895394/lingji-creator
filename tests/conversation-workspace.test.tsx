@@ -10,8 +10,7 @@ import {
 } from '../src/contexts/conversation-workspace-context';
 import { AcpConnectionsProvider } from '../src/contexts/acp-connections-context';
 import { ConversationRuntimeProvider } from '../src/contexts/conversation-runtime-context';
-import { SessionListPane } from '../src/components/agent/SessionListPane';
-import { ConversationDetailPane } from '../src/components/agent/ConversationDetailPane';
+import { ChatPane } from '../src/components/agent/ChatPane';
 
 function buildConversationApiMock(): ConversationAPI {
   const conversations = [
@@ -19,7 +18,7 @@ function buildConversationApiMock(): ConversationAPI {
       id: 101,
       projectId: 'project-a',
       title: '会话 A',
-      agentType: 'claude-acp',
+      agentType: 'claude',
       status: 'active',
       externalId: null,
       parentId: null,
@@ -31,7 +30,7 @@ function buildConversationApiMock(): ConversationAPI {
       id: 102,
       projectId: 'project-a',
       title: '会话 B',
-      agentType: 'claude-acp',
+      agentType: 'claude',
       status: 'draft_local',
       externalId: null,
       parentId: null,
@@ -77,7 +76,7 @@ describe('conversation workspace skeleton', () => {
         id: 101,
         projectId: 'project-a',
         title: '会话 A',
-        agentType: 'claude-acp',
+        agentType: 'claude',
         status: 'active',
         externalId: null,
         parentId: null,
@@ -90,7 +89,7 @@ describe('conversation workspace skeleton', () => {
       id: 101,
       projectId: 'project-a',
       title: '会话 A 已更新',
-      agentType: 'claude-acp',
+      agentType: 'claude',
       status: 'active',
       externalId: null,
       parentId: null,
@@ -141,7 +140,7 @@ describe('conversation workspace skeleton', () => {
         id: 102,
         projectId: 'project-a',
         title: '会话 B',
-        agentType: 'claude-acp',
+        agentType: 'claude',
         status: 'draft_local',
         externalId: null,
         parentId: null,
@@ -153,7 +152,7 @@ describe('conversation workspace skeleton', () => {
         id: 101,
         projectId: 'project-a',
         title: '会话 A',
-        agentType: 'claude-acp',
+        agentType: 'claude',
         status: 'active',
         externalId: null,
         parentId: null,
@@ -181,20 +180,21 @@ describe('conversation workspace skeleton', () => {
         <AcpConnectionsProvider>
           <ConversationRuntimeProvider>
             <div>
-              <SessionListPane
+              <ChatPane
+                projectDir="/tmp/project-a"
+                explicitActivated={false}
                 explicitConversationId={null}
                 onSelectConversation={() => undefined}
-                onDeleteConversation={() => undefined}
                 onCreateConversation={() => undefined}
+                onDeleteConversation={() => undefined}
               />
-              <ConversationDetailPane projectDir="/tmp/project-a" explicitActivated={false} />
             </div>
           </ConversationRuntimeProvider>
         </AcpConnectionsProvider>
       </ConversationWorkspaceProvider>,
     );
 
-    expect(html).toContain('当前项目还没有会话');
-    expect(html).toContain('先创建一个会话');
+    // ChatPane 渲染会话切换入口（ConversationDropdown 触发 icon）。
+    expect(html).toContain('data-testid="conversation-dropdown-trigger"');
   });
 });

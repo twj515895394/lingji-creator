@@ -31,6 +31,7 @@ const pageTitleMap: Record<Exclude<AppPage, 'editor'>, string> = {
   'auto-run': '一键成稿',
   'sceneforge-setup': '视频内容创作工坊',
   'sceneforge-studio': '视频内容创作工坊',
+  publish: '视频发布',
 };
 
 const pageStatusMap: Record<Exclude<AppPage, 'editor'>, string> = {
@@ -41,6 +42,7 @@ const pageStatusMap: Record<Exclude<AppPage, 'editor'>, string> = {
   'auto-run': '一键成稿运行中',
   'sceneforge-setup': '新建工坊项目',
   'sceneforge-studio': '视频内容创作流水线',
+  publish: '视频发布',
 };
 
 export function Toolbar({

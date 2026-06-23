@@ -28,6 +28,8 @@ export interface ConversationTurn {
   role: 'user' | 'assistant' | 'tool' | 'system';
   blocks: ConversationBlock[];
   createdAt: string;
+  agentId?: string;
+  agentName?: string;
 }
 
 export type ConversationBlock =
@@ -49,6 +51,8 @@ export type ConversationBlock =
       path: string;
       before: string | null;
       after: string;
+      diff?: string;
+      operation?: 'edit' | 'create' | 'delete';
     };
 
 export interface ConversationDetail extends ConversationSummary {
@@ -82,6 +86,8 @@ export interface AppendConversationTurnInput {
   role: ConversationTurn['role'];
   blocks: ConversationBlock[];
   sessionStatsJson?: string | null;
+  agentId?: string;
+  agentName?: string;
 }
 
 export interface AppendConversationTurnResult {
@@ -168,7 +174,7 @@ export interface ConnectionLifecycleOptions {
 export interface ConnectionLifecycleResult {
   autoConnectError: string | null;
   selectorsLoading: boolean;
-  send: (contents: PromptInputBlock[]) => Promise<void>;
+  send: (contents: PromptInputBlock[], opts?: { model?: string; reasoning?: string; skillIds?: string[] }) => Promise<void>;
   cancel: () => Promise<void>;
   disconnect: () => Promise<void>;
   setMode: (modeId: string) => Promise<void>;

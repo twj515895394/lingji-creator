@@ -18,6 +18,7 @@ import {
 } from '../types';
 import type { AICardTimelineDraft } from '../types/ai';
 import { getFileNameFromPath } from '../lib/utils';
+import { isAiEditLocked } from './ai-edit';
 import {
   getAudioOverlayTracks,
   getNextAudioOverlayTrack,
@@ -53,6 +54,10 @@ export interface TimelineStore {
   setSubtitleSelection: (indices: number[]) => void;
   clearSubtitleSelection: () => void;
   setTimeline: (timeline: TimelineData) => void;
+  /** 整体替换 timeline（外部 project.json 变更热重载用，不进 undo 历史） */
+  applyExternalTimeline: (timeline: TimelineData) => void;
+  /** 外部 motionCard.tsx 变更：更新对应 overlay 的内存源码并清除旧编译错误，触发预览重编译 */
+  applyExternalCardSource: (overlayId: string, tsx: string) => void;
   setSrtEntries: (entries: SrtEntry[]) => void;
   setSubtitleHighlights: (highlights: SubtitleHighlight[]) => void;
   clearSubtitleHighlights: () => void;
@@ -451,6 +456,21 @@ export function subscribeToSaveStatus(listener: (status: SaveStatus) => void): (
   };
 }
 
+// 反射外部文件变更（project.json 被外部/AI 改动后重载）期间置位。
+// autosave 订阅据此跳过这一次写回——纯 disk→memory 的镜像不应再产生 memory→disk 写，
+// 否则 chokidar 会把回写当成新的外部编辑，形成 watch ⇄ autosave 死循环（UI 卡在"保存中…"）。
+let reflectingExternalChange = false;
+
+/** 在反射外部变更期间执行 fn，使其引发的 store 变更不触发 autosave。 */
+function withExternalReflection(fn: () => void): void {
+  reflectingExternalChange = true;
+  try {
+    fn();
+  } finally {
+    reflectingExternalChange = false;
+  }
+}
+
 export const useTimelineStore = create<TimelineStore>((set, get) => ({
   timeline: createDefaultTimeline(),
   srtEntries: [],
@@ -496,6 +516,34 @@ export const useTimelineStore = create<TimelineStore>((set, get) => ({
         subtitleSelection: [],
       };
     }),
+  applyExternalTimeline: (timeline) =>
+    withExternalReflection(() =>
+      set(() => {
+        const normalizedTimeline = normalizeTimeline(timeline);
+        return {
+          timeline: normalizedTimeline,
+          assets: syncAssetsWithTimeline([], normalizedTimeline),
+        };
+      }),
+    ),
+  applyExternalCardSource: (overlayId, tsx) =>
+    withExternalReflection(() =>
+      set((state) => {
+        if (!state.timeline) return state;
+        const overlays = state.timeline.overlays.map((ov) =>
+          ov.id === overlayId && ov.aiCardData?.motionCard
+            ? {
+                ...ov,
+                aiCardData: {
+                  ...ov.aiCardData,
+                  motionCard: { ...ov.aiCardData.motionCard, tsx, compileError: undefined },
+                },
+              }
+            : ov,
+        );
+        return { timeline: { ...state.timeline, overlays } };
+      }),
+    ),
   setSrtEntries: (entries) =>
     set((state) => {
       const maxChars = state.timeline.subtitle.maxCharsPerEntry;
@@ -1242,6 +1290,17 @@ let saveTimer: ReturnType<typeof setTimeout> | null = null;
 if (typeof window !== 'undefined') {
   useTimelineStore.subscribe((state, previousState) => {
     if (state.timeline === previousState.timeline) {
+      return;
+    }
+
+    // 反射外部变更（applyExternalTimeline / applyExternalCardSource）期间不回写，
+    // 否则会把刚从磁盘读入的内容又写回磁盘，触发 watch ⇄ autosave 死循环。
+    if (reflectingExternalChange) {
+      return;
+    }
+
+    // AI 文件编辑会话锁定期间，暂停自动保存，避免与外部文件写入互相覆盖。
+    if (isAiEditLocked()) {
       return;
     }
 

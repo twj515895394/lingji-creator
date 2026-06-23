@@ -9,6 +9,7 @@ import type { FileEntry } from '../lib/electron-api';
 import type {
   VideoImportProgress,
   VideoImportResult,
+  VideoImportSourceInput,
   VideoImportStatus,
 } from '../lib/video-import-types';
 
@@ -138,8 +139,8 @@ interface ScriptState {
       createdAt: string;
     } | null;
   };
-  /** 从欢迎页传入的待处理抖音链接，进入工作台后自动触发导入 */
-  pendingDouyinUrl: string | null;
+  /** 从欢迎页传入的待处理导入源（抖音链接 / 本地视频 / 本地音频），进入工作台后自动触发导入 */
+  pendingMediaImport: VideoImportSourceInput | null;
   /** 从欢迎页传入的待写入文稿内容，进入工作台后自动写入 original.md 并起飞 AI 写稿 */
   pendingImportedScript: { content: string } | null;
   /** 文件树当前视图：'all' 显示全部文件，'resources' 显示稿件资源过滤视图 */
@@ -150,6 +151,13 @@ interface ScriptActions {
   setProjectDir: (dir: string | null) => void;
   setOriginalText: (text: string) => void;
   setScriptText: (text: string) => void;
+  /**
+   * 外部直接改 script.md / original.md（file-first）后把内容真实灌回工作台。
+   * 与流式生成不同：不播光标/打字动画，直接 set 内存正文（编辑器即绑定该正文）。
+   * kind==='script' 时额外补建一个版本快照（source: 'external'），保住"script.md 保存即生成版本"。
+   * 防回环：内容与当前一致则直接返回，不建版本、不更新。
+   */
+  applyExternalScriptFile: (kind: 'script' | 'original', content: string) => void;
   setSelectedTemplate: (id: string) => void;
   setAnnotations: (annotations: Annotation[]) => void;
   setGenerating: (generating: boolean) => void;
@@ -213,7 +221,7 @@ interface ScriptActions {
   clearVideoImportState: () => void;
   enterHistoryPreview: (versionId: number, content: string, meta: ScriptState['historyPreview']['versionMeta']) => void;
   exitHistoryPreview: () => void;
-  setPendingDouyinUrl: (url: string | null) => void;
+  setPendingMediaImport: (source: VideoImportSourceInput | null) => void;
   setPendingImportedScript: (payload: { content: string } | null) => void;
   setFileTreeView: (view: 'all' | 'resources') => void;
 }
@@ -286,7 +294,7 @@ const initialState: ScriptState = {
     content: null,
     versionMeta: null,
   },
-  pendingDouyinUrl: null,
+  pendingMediaImport: null,
   pendingImportedScript: null,
   fileTreeView: 'resources',
 };
@@ -300,6 +308,29 @@ export const useScriptStore = create<ScriptState & ScriptActions>((set, get) => 
   },
   setOriginalText: (text) => set({ originalText: text }),
   setScriptText: (text) => set({ scriptText: text }),
+  applyExternalScriptFile: (kind, content) => {
+    const { scriptText, originalText, projectDir } = get();
+    if (kind === 'original') {
+      // 防回环：内容一致则不动
+      if (content === originalText) return;
+      set({ originalText: content });
+      return;
+    }
+    // kind === 'script'
+    // 防回环：与当前正文一致则不灌回、不补建版本
+    if (content === scriptText) return;
+    set({ scriptText: content });
+    // 补建版本快照（保住"script.md 保存即生成版本"的能力）。
+    // 复用脚本历史 IPC（与工作台保存同一通道），标记 source: 'external'。
+    if (projectDir && typeof window !== 'undefined' && window.scriptHistoryAPI) {
+      void window.scriptHistoryAPI.create({
+        projectId: projectDir,
+        fileName: 'script.md',
+        content,
+        source: 'external',
+      });
+    }
+  },
   setSelectedTemplate: (id) => set({ selectedTemplate: id }),
   setAnnotations: (annotations) => set({ annotations }),
   setGenerating: (generating) => set({ generating }),
@@ -575,7 +606,7 @@ export const useScriptStore = create<ScriptState & ScriptActions>((set, get) => 
       editorAgent: { readOnly: false, virtualCursorPos: null, streamingActive: false },
     }),
 
-  setPendingDouyinUrl: (url) => set({ pendingDouyinUrl: url }),
+  setPendingMediaImport: (source) => set({ pendingMediaImport: source }),
 
   setPendingImportedScript: (payload) => set({ pendingImportedScript: payload }),
 

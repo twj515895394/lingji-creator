@@ -206,6 +206,13 @@ export class BinaryManager {
     return { command: AGENT_BIN_NAME, args: [] };
   }
 
+  /** 公开：在 nvm 版本目录 / PATH 解析某依赖二进制（供 preflight 查 pi）。返回绝对路径或 null。 */
+  async resolveBinary(name: string): Promise<string | null> {
+    const inVersions = this.findBinaryInNodeVersions(name);
+    if (inVersions) return inVersions;
+    return this.findBinaryPath(name);
+  }
+
   // ── 内部方法 ──────────────────────────────────────────────────────────
 
   private async npmInstallGlobal(
@@ -257,7 +264,7 @@ export class BinaryManager {
     }
   }
 
-  private async findBinaryPath(name: string): Promise<string | null> {
+  async findBinaryPath(name: string): Promise<string | null> {
     return this.whichSync(name);
   }
 

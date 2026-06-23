@@ -4,7 +4,7 @@ import { createWriteStream, existsSync, mkdirSync, writeFileSync } from 'node:fs
 import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
-import { execFile } from 'node:child_process';
+import { execFile, spawn } from 'node:child_process';
 import { promisify } from 'node:util';
 import type { FSWatcher } from 'chokidar';
 import type { MenuContext, MenuEvent, ProjectMetadata } from '../src/lib/electron-api';
@@ -22,6 +22,7 @@ import { resolveStylePresetId } from '../src/lib/card-style';
 import { assertCardRenders } from './remotion/smoke-render';
 import type { ExportConfig } from '../src/lib/export-settings';
 import { generateCoverCandidates } from '../src/lib/cover-generation';
+import { generatePublishMetadata } from '../src/lib/publish-metadata';
 import { resolvePromptBinding } from '../src/lib/llm/binding-resolver';
 import {
   handleGenerateCardImage,
@@ -76,6 +77,11 @@ import { registerConversationIpc } from './conversations/ipc';
 import { registerMcpIpc } from './mcp/ipc';
 import { registerScriptHistoryIpc } from './script-history/ipc';
 import { registerSceneForgeIpc } from './sceneforge/ipc';
+import { registerPublishIpc } from './publish/ipc';
+import { LockMonitor } from './ai-edit/lock-watcher';
+import { validateTimeline, type EditError } from '../src/lib/external-edit-validate';
+import { buildEditResult, writeEditResult } from './ai-edit/result-writer';
+import { consumeSelfWrite } from './ai-edit/self-write-guard';
 import {
   appendAutoRunEvent,
   getAutoRunLogDir,
@@ -84,9 +90,10 @@ import {
   readRunEvents,
   type AutoRunEvent,
 } from './telemetry/auto-run-logger';
-import { startMcpServer, stopMcpServer } from './mcp/server';
+import { startMcpServer, stopMcpServer, getSonarInboxStore, getSonarBridgeInfo } from './mcp/server';
 import { loadProjectFile, saveProjectSection } from './project-file';
 import { createSceneForgeProject } from './sceneforge/project/scene-project-file';
+import { materializePreviewMotionCardDataUris } from './remotion/motion-card-assets';
 import {
   scanProjectDirectory,
   importProject,
@@ -201,6 +208,7 @@ let menuContext: MenuContext = {
   isAutoRunning: false,
 };
 let fileWatcher: FSWatcher | null = null;
+let lockPollTimer: ReturnType<typeof setInterval> | null = null;
 const activeTtsRequests = new Map<string, AbortController>();
 let isAppQuitting = false;
 const videoImportService = getVideoImportService();
@@ -516,9 +524,38 @@ ipcMain.handle('get-audio-duration', async (_event, filePath: string) => {
 
 ipcMain.handle(
   'remotion:compile-cards',
-  async (_event, cards: { overlayId: string; tsx: string }[]) => {
+  async (
+    _event,
+    args:
+      | { cards: { overlayId: string; tsx: string }[]; projectDir?: string | null }
+      | { overlayId: string; tsx: string }[],
+  ) => {
+    const payload = Array.isArray(args) ? { cards: args, projectDir: null } : args;
+    const cards = payload.cards;
     if (!Array.isArray(cards) || cards.length === 0) return {};
-    return compileCards(cards);
+    const projectDir = payload.projectDir?.trim() ? payload.projectDir : null;
+    const normalizedCards = projectDir
+      ? await Promise.all(
+          cards.map(async (card) => ({
+            ...card,
+            tsx: await materializePreviewMotionCardDataUris(card.tsx, {
+              projectDir,
+              overlayId: card.overlayId,
+            }),
+          })),
+        )
+      : cards;
+    return compileCards(normalizedCards, {
+      onCompileErrors: (errors, total) => {
+        const firstError = errors[0];
+        writeAppLog(
+          'warn',
+          'motion-card',
+          `预览编译失败 ${errors.length}/${total}，首个失败卡片=${firstError?.overlayId ?? '<unknown>'}`,
+          firstError?.error,
+        );
+      },
+    });
   },
 );
 
@@ -1023,6 +1060,10 @@ ipcMain.handle(
       projectDir: string;
       projectBindings?: PromptBindingMap | null;
       telemetryRunId?: string | null;
+      /** 画幅比例（发布选项卡按 16:9 / 4:3 / 3:4 生成）；缺省 16:9。 */
+      aspectRatio?: '1:1' | '16:9' | '9:16' | '4:3' | '3:4';
+      /** 每条 prompt 生成的候选数量；缺省 4。 */
+      n?: number;
     },
   ) => {
     const telemetry = makeMainTelemetry(args.telemetryRunId);
@@ -1062,6 +1103,7 @@ ipcMain.handle(
         binding.imageModel,
         coversDir,
         coverProgressCtx,
+        { aspectRatio: args.aspectRatio, n: args.n },
       );
       telemetry.emit('stage.end', {
         stage: 'cover',
@@ -1079,6 +1121,39 @@ ipcMain.handle(
         error: err instanceof Error ? err.message : String(err),
       });
       throw err;
+    }
+  },
+);
+
+ipcMain.handle(
+  'generate-publish-metadata',
+  async (
+    _event,
+    args: {
+      settings: AISettings;
+      sourceText: string;
+      currentTitle?: string;
+    },
+  ) => {
+    writeAppLog(
+      'info',
+      'publish',
+      '收到发布文案生成请求',
+      `sourceLen=${args.sourceText?.length ?? 0}`,
+    );
+    try {
+      return await generatePublishMetadata(args.settings, {
+        sourceText: args.sourceText,
+        currentTitle: args.currentTitle,
+      });
+    } catch (error) {
+      writeAppLog(
+        'error',
+        'publish',
+        '发布文案生成失败',
+        error instanceof Error ? error.stack ?? error.message : String(error),
+      );
+      throw error;
     }
   },
 );
@@ -1691,7 +1766,7 @@ ipcMain.handle('select-setup-file', async (_event, kind: 'audio' | 'srt') => {
   return result.canceled ? null : result.filePaths[0];
 });
 
-ipcMain.handle('select-media-file', async (_event, kind: 'audio' | 'video' | 'srt') => {
+ipcMain.handle('select-media-file', async (_event, kind: 'audio' | 'video' | 'srt' | 'image') => {
   if (!mainWindow) return null;
   const result = await dialog.showOpenDialog(mainWindow, {
     properties: ['openFile'],
@@ -1700,10 +1775,110 @@ ipcMain.handle('select-media-file', async (_event, kind: 'audio' | 'video' | 'sr
         ? [{ name: '音频文件', extensions: AUDIO_EXTENSIONS_FILTER }]
         : kind === 'video'
           ? [{ name: '视频文件', extensions: VIDEO_EXTENSIONS_FILTER }]
-          : [{ name: 'SRT Subtitle', extensions: ['srt'] }],
+          : kind === 'image'
+            ? [{ name: '图片文件', extensions: IMAGE_EXTENSIONS_FILTER }]
+            : [{ name: 'SRT Subtitle', extensions: ['srt'] }],
   });
 
   return result.canceled ? null : result.filePaths[0];
+});
+
+/** 解析图片像素尺寸（PNG / JPEG / WebP 头部）；无法识别返回 null。 */
+function readImageSize(buf: Buffer): { width: number; height: number } | null {
+  // PNG: 8 字节签名 + IHDR(长度4+类型4) 后是 width/height
+  if (buf.length >= 24 && buf[0] === 0x89 && buf[1] === 0x50 && buf[2] === 0x4e && buf[3] === 0x47) {
+    const width = buf.readUInt32BE(16);
+    const height = buf.readUInt32BE(20);
+    return width > 0 && height > 0 ? { width, height } : null;
+  }
+  // JPEG: 扫描 SOF 标记
+  if (buf.length >= 4 && buf[0] === 0xff && buf[1] === 0xd8) {
+    let offset = 2;
+    while (offset + 9 < buf.length) {
+      if (buf[offset] !== 0xff) {
+        offset++;
+        continue;
+      }
+      const marker = buf[offset + 1];
+      if (marker >= 0xc0 && marker <= 0xcf && marker !== 0xc4 && marker !== 0xc8 && marker !== 0xcc) {
+        const height = buf.readUInt16BE(offset + 5);
+        const width = buf.readUInt16BE(offset + 7);
+        return width > 0 && height > 0 ? { width, height } : null;
+      }
+      const segLen = buf.readUInt16BE(offset + 2);
+      if (segLen < 2) return null;
+      offset += 2 + segLen;
+    }
+    return null;
+  }
+  // WebP (RIFF....WEBP)
+  if (
+    buf.length >= 30 &&
+    buf.toString('ascii', 0, 4) === 'RIFF' &&
+    buf.toString('ascii', 8, 12) === 'WEBP'
+  ) {
+    const fmt = buf.toString('ascii', 12, 16);
+    if (fmt === 'VP8 ') {
+      return { width: buf.readUInt16LE(26) & 0x3fff, height: buf.readUInt16LE(28) & 0x3fff };
+    }
+    if (fmt === 'VP8X') {
+      const width = 1 + (buf[24] | (buf[25] << 8) | (buf[26] << 16));
+      const height = 1 + (buf[27] | (buf[28] << 8) | (buf[29] << 16));
+      return { width, height };
+    }
+  }
+  return null;
+}
+
+// 发布封面：扫描项目 covers/ 目录下的图片，读取真实像素尺寸，供发布选项卡按比例分桶展示。
+ipcMain.handle('scan-cover-images', async (_event, projectDir: string) => {
+  if (!projectDir) return [];
+  const dir = path.join(projectDir, 'covers');
+  try {
+    const entries = await fs.readdir(dir, { withFileTypes: true });
+    const out: { path: string; width: number; height: number; mtimeMs: number }[] = [];
+    for (const entry of entries) {
+      if (!entry.isFile()) continue;
+      if (!/\.(png|jpe?g|webp)$/i.test(entry.name)) continue;
+      const full = path.join(dir, entry.name);
+      try {
+        const fh = await fs.open(full, 'r');
+        const head = Buffer.alloc(131072);
+        const { bytesRead } = await fh.read(head, 0, head.length, 0);
+        await fh.close();
+        const size = readImageSize(head.subarray(0, bytesRead));
+        if (!size) continue;
+        const stat = await fs.stat(full);
+        out.push({ path: full, width: size.width, height: size.height, mtimeMs: stat.mtimeMs });
+      } catch {
+        // 跳过无法读取的文件
+      }
+    }
+    return out;
+  } catch {
+    return [];
+  }
+});
+
+// 发布联动兜底：扫描项目目录顶层最新的 .mp4 成片（用于 App 重启后预填发布视频文件）。
+ipcMain.handle('find-latest-export', async (_event, projectDir: string) => {
+  if (!projectDir) return null;
+  try {
+    const entries = await fs.readdir(projectDir, { withFileTypes: true });
+    let best: { path: string; mtimeMs: number } | null = null;
+    for (const entry of entries) {
+      if (!entry.isFile()) continue;
+      if (!entry.name.toLowerCase().endsWith('.mp4')) continue;
+      const full = path.join(projectDir, entry.name);
+      const stat = await fs.stat(full);
+      if (!best || stat.mtimeMs > best.mtimeMs) {
+        best = { path: full, mtimeMs: stat.mtimeMs };
+      }
+    }
+    return best ? best.path : null;
+  } catch {
+    return null;
+  }
 });
 
 ipcMain.handle('add-asset', async () => {
@@ -1883,6 +2058,37 @@ ipcMain.handle(
   },
 );
 
+// —— 声呐「待创作箱」桥（扩展经 /sonar/enqueue 推入，欢迎页消费）——
+ipcMain.handle('sonar-inbox-list', async () => {
+  const store = getSonarInboxStore();
+  return store ? store.list() : [];
+});
+
+ipcMain.handle(
+  'sonar-inbox-mark-status',
+  async (
+    _event,
+    id: string,
+    status: 'pending' | 'creating' | 'drafted' | 'failed',
+    patch?: { projectPath?: string; error?: string },
+  ) => {
+    const store = getSonarInboxStore();
+    return store ? store.markStatus(id, status, patch) : null;
+  },
+);
+
+ipcMain.handle('sonar-inbox-remove', async (_event, id: string) => {
+  const store = getSonarInboxStore();
+  return store ? store.remove(id) : false;
+});
+
+ipcMain.handle('sonar-inbox-clear', async () => {
+  const store = getSonarInboxStore();
+  return store ? store.clear() : 0;
+});
+
+ipcMain.handle('sonar-bridge-info', async () => getSonarBridgeInfo());
+
 ipcMain.handle('save-script-state', async (_event, projectDir: string, state: string) => {
   await fs.mkdir(projectDir, { recursive: true });
   await fs.writeFile(path.join(projectDir, 'script-state.json'), state, 'utf-8');
@@ -1933,6 +2139,12 @@ ipcMain.handle('get-video-import-status', async (_event, importId: string) => {
   return videoImportService.getImportStatus(importId);
 });
 
+// 渲染端取消 MCP/pipeline 任务（底部进度条的取消按钮）。进度推送走
+// attachTaskProgressBridge 的 `pipeline:task-update`；取消走这条反向通道。
+ipcMain.handle('pipeline:cancel-task', async (_event, taskId: string) => {
+  await getPipelineService().cancelTask(taskId);
+});
+
 ipcMain.handle('start-watching', async (_event, dir: string) => {
   await fileWatcher?.close();
 
@@ -1944,10 +2156,24 @@ ipcMain.handle('start-watching', async (_event, dir: string) => {
 
   fileWatcher.on('change', async (filePath: string) => {
     const relative = path.relative(dir, filePath);
-    if (!relative.endsWith('.md') && !relative.endsWith('.json')) return;
+    if (!relative.endsWith('.md') && !relative.endsWith('.json') && !relative.endsWith('.tsx')) return;
 
     try {
       const content = await fs.readFile(filePath, 'utf-8');
+      // 自写抑制：若内容与主进程最近一次自写完全相同，判为自身回声，
+      // 跳过校验与转发，打断 autosave↔watch 回环（不会误伤真实外部编辑——内容不同）。
+      if (consumeSelfWrite(path.resolve(filePath), content)) return;
+      if (relative === 'project.json') {
+        let errors: EditError[] = [];
+        try {
+          const parsed = JSON.parse(content);
+          errors = parsed?.timeline ? validateTimeline(parsed.timeline) : [];
+        } catch (e) {
+          errors = [{ field: 'project.json', message: `非法 JSON: ${(e as Error).message}` }];
+        }
+        await writeEditResult(dir, buildEditResult(errors, new Date().toISOString()));
+        if (errors.length > 0) return; // 脏数据不灌回 Renderer
+      }
       mainWindow?.webContents.send('file-changed', { file: relative, content });
     } catch {
       // 文件可能已被删除，直接忽略。
@@ -1963,11 +2189,28 @@ ipcMain.handle('start-watching', async (_event, dir: string) => {
     const relative = path.relative(dir, filePath);
     mainWindow?.webContents.send('file-tree-changed', { type: 'unlink', file: relative });
   });
+
+  // AI 编辑会话锁轮询（chokidar 默认忽略点目录，这里用独立定时器轮询 .lingji/edit-lock.json）
+  if (lockPollTimer) clearInterval(lockPollTimer);
+  const lockMon = new LockMonitor({
+    readLock: async () => {
+      try {
+        return await fs.readFile(path.join(dir, '.lingji', 'edit-lock.json'), 'utf-8');
+      } catch {
+        return null;
+      }
+    },
+    now: () => Date.now(),
+    onChange: (change) => mainWindow?.webContents.send('ai-edit-lock-changed', change),
+  });
+  lockPollTimer = setInterval(() => { void lockMon.poll(); }, 500);
+  void lockMon.poll();
 });
 
 ipcMain.handle('stop-watching', async () => {
   await fileWatcher?.close();
   fileWatcher = null;
+  if (lockPollTimer) { clearInterval(lockPollTimer); lockPollTimer = null; }
 });
 
 ipcMain.handle('read-directory', async (_event, dir: string) => {
@@ -2288,6 +2531,33 @@ ipcMain.on('open-external', (_event, url: string) => {
   shell.openExternal(url);
 });
 
+ipcMain.handle('open-path', async (_event, filePath: string): Promise<{ ok: boolean; error?: string }> => {
+  try {
+    const error = await shell.openPath(filePath);
+    if (error) return { ok: false, error };
+    return { ok: true };
+  } catch (err) {
+    return { ok: false, error: err instanceof Error ? err.message : String(err) };
+  }
+});
+
+ipcMain.handle('quick-look-file', async (_event, filePath: string): Promise<{ ok: boolean; error?: string }> => {
+  if (process.platform === 'darwin') {
+    try {
+      // qlmanage -p 调出 macOS 原生快速预览；detached + unref 不阻塞主进程。
+      const child = spawn('qlmanage', ['-p', filePath], { detached: true, stdio: 'ignore' });
+      child.on('error', () => {});
+      child.unref();
+      return { ok: true };
+    } catch (err) {
+      return { ok: false, error: err instanceof Error ? err.message : String(err) };
+    }
+  }
+  // 非 macOS 降级为默认 App 打开。
+  const error = await shell.openPath(filePath);
+  return error ? { ok: false, error } : { ok: true };
+});
+
 // ── 最近项目管理 ──
 
 ipcMain.handle('load-recent-projects', async () => {
@@ -2334,6 +2604,15 @@ ipcMain.handle('refresh-recent-projects', async () => {
 ipcMain.handle('render-video', async (_event, args: RenderVideoArgs) => {
   return renderVideoHeadless(args, {
     onProgress: (f) => mainWindow?.webContents.send('render-progress', f),
+    onMotionCardCompileErrors: (errors, total) => {
+      const firstError = errors[0];
+      writeAppLog(
+        'warn',
+        'motion-card',
+        `导出编译失败 ${errors.length}/${total}，首个失败卡片=${firstError?.overlayId ?? '<unknown>'}`,
+        firstError?.error,
+      );
+    },
   });
 });
 
@@ -2368,6 +2647,7 @@ registerConversationIpc(() => mainWindow);
 registerMcpIpc(() => mainWindow);
 registerScriptHistoryIpc();
 registerSceneForgeIpc();
+registerPublishIpc();
 
 // 设置 macOS 系统菜单栏应用名称
 app.setName('灵机剪影');

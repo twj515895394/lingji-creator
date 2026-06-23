@@ -4,6 +4,44 @@
 
 ## [Unreleased]
 
+## [1.3.0] - 2026-06-22
+
+本版本把 AI 对话 agent 收敛为内置、开箱即用的 **Pi**，底层重构为多协议 runtime，并打通「AI 改文件 → 编辑器实时热重载」的 file-first 闭环；同时新增发布视频选项卡的多画幅封面工作台与待创作箱清空等创作链路改进，并修复工作区标签页互切偶发空白。
+
+### Changed
+- **对话面板收敛为唯一「内置 Pi」agent（移除 Codex / Claude 面板路径）**：在本轮多协议 runtime（Claude / Codex / Pi）基础上进一步收敛——AI 对话面板现在只保留 **Pi** 一个 agent，并将其**内置打包**，用户无需自行安装。本条目取代下面「多协议 Runtime」「内置 Pi agent（ACP 接入）」等中间态描述。
+  - **内置打包、开箱即用**：固定版本 `@earendil-works/pi-coding-agent` 经 `scripts/vendor-pi.cjs` 安装到 `resources/pi/`（打包时 asar unpack），用 Electron 自带 Node（`ELECTRON_RUN_AS_NODE`）运行其 `dist/cli.js --mode rpc`；不再要求用户本机安装 `pi`，也不再走 `npx -y pi-acp` 适配器。
+  - **复用 App LLM Provider 配置**：连接时把 `AISettings.llmProviders` 投影成 pi 的 `models.json`（`provider/api/baseUrl/apiKey/models` + 每模型能力默认值），写入 App 托管的 pi 配置目录（`~/.lingji/pi-agent`，经 `PI_CODING_AGENT_DIR`）。用户在 App AI 设置里配好 provider 即可用 agent，无需另填凭证。
+  - **Pi 走 file-first（无 MCP）**：pi 没有 MCP 能力，直接编辑项目 `script.md` / `original.md` / `project.json` / `ai-cards/<id>/motionCard.tsx`，编辑器热重载反映改动（沿用已有 file-first 契约 `CLAUDE.md`/`AGENTS.md`）。移除了原仅服务 in-app Claude 的 MCP 工具引导逻辑；`lingji-editor` MCP server 仍保留给外部 agent。
+  - **移除**：Codex 与 Claude 的面板 agent、其 stream parser、旧 ACP 面板 `connection-registry` 与 `agent-profiles`；设置页 Agent/MCP 配置同步收敛为 Pi。默认 agent 改为 `pi`（旧 `claude`/`codex`/`*-acp` 配置归一化到 pi，不丢用户数据）。`HeadlessAcpProvider`（Claude Code 作为编辑器 AI 的 LLM Provider，即 `claude_code_acp`）保持不变。
+- **AI 对话界面重做（对齐 open-design）**：
+  - 移除左侧会话列表，改为顶部 icon 弹 **ConversationDropdown**（搜索 / 切换 / 新建 / 重命名 / 删除会话）。
+  - Agent 切换收敛到设置中心，**全局只激活一个 agent**（`activeAgentId`）；对话顶部仅只读标记当前 agent，点击直达设置的 Agent 配置页。
+  - 新增 **ModelPicker** 模型选择芯片：手动切换当前 agent 使用的模型（或用默认），所选模型经发送链路透传到 runtime（`sendPrompt` → `buildArgs(ctx.model)`）；设置中心模型配置由文本输入改为下拉。
+  - 工具调用渲染重做为 op-card 风格（状态徽章 + 折叠 input/output），连续同名工具调用聚合为可折叠 **tool-group**（"Edit ×3"）。
+  - 移除对话工具栏顶部多余的 "Claude Code" 标题与 MCP 服务运行状态展示。
+  - 对话侧边栏纳入独立错误边界：渲染异常只关闭面板而非整窗黑屏。
+- **Agent 底层重构为多协议 Runtime（Claude / Codex / Pi）**：参考 open-design 的声明式 agent 架构，把原 ACP-only 的 agent 连接层重写为多协议 runtime（`electron/agent-runtime/`）。新增/切换 agent 只需一个声明式 `RuntimeAgentDef` 文件 + 注册一行。
+  - **声明式注册表 + 协议多态**：`RuntimeAgentDef` 注册表（claude/codex/pi）+ 按 `streamFormat` 分发的解析器（`claude-stream-json` / `codex-json-event` / `pi-rpc`）+ 公用 JSON 行/部分聚合切分器，三种协议归一化成统一 `AgentStreamEvent` 事件流，映射到现有会话事件管线与 SQLite 持久化（保留 Zustand + SQLite，不换状态底座）。
+  - **可替换底层**：`AgentSession`（spawn + 接 parser + 生命周期/resume）+ `RuntimeRegistry`（多会话 + 归一化转发）取代旧 ACP `connection-registry`/`session`/`client`；IPC 通道契约不变。agent id 从 `claude-acp`/`pi-acp` 迁移为 `claude`/`codex`/`pi`（带旧配置兼容迁移，不丢用户数据）。preflight 改为按 def 探测 CLI 是否在 PATH。
+- **AI 对话界面全面重构（对齐 open-design）**：`ConversationDetailPane` 重构为 `ChatPane`（ChatHeader + `MessageList` + `ChatComposer`）；新增 `AssistantMessage`（按 block 分发渲染 + agent 身份头 + 权限卡）、`AgentPicker`（新建会话时显式选 Claude/Codex/Pi，未装的 agent 置灰并给指引）、`AgentIcon`；会话列表支持搜索/重命名/agent 图标。会话 turn 记录 `agentId`/`agentName`，支持同一会话混合 agent 历史展示。修复了此前"按启用顺序隐式选 agent"的限制。
+
+### Added
+- **内置 Pi agent（ACP 接入）**：在原有 Claude Code ACP 之外，新增内置 [Pi coding agent](https://pi.dev) 接入，通过 `npx -y pi-acp` 适配器零安装启动（内部 `pi --mode rpc`）。Agent 设置页可在 Claude Code / Pi 间切换并分别配置/预检；新建会话按"已启用 agent"选择连接目标。引入 `AgentProfile` 注册表把原硬编码 `claude-acp` 的连接/预检参数化（`electron/acp/agent-profiles.ts`）；Pi 走"预检提示、不代管"模式——应用只管 pi-acp 适配器，`pi` 本体与模型 provider 凭证由用户在 pi 侧配置（预检检测 `pi` 是否在 PATH）。
+- **AI File-First 编辑 + 实时热重载**：外部 CLI agent（Claude Code / Codex / Gemini 等）现在可直接编辑项目文件来改视频与文稿，编辑器实时把改动热重载到预览，形成「AI 改文件 → 编辑器实时反映」闭环。
+  - **Motion Card 源码外置**：卡片 TSX 源码从 `project.json` 内嵌字符串外置为独立文件 `ai-cards/<overlayId>/motionCard.tsx`，`project.json` 只存 `tsxPath` 引用；内存态始终带源码、仅落盘时剥离（编译/渲染管线零改动），老项目首次加载自动迁移（`src/lib/motion-card-externalize.ts`）。
+  - **文件信号会话锁**：AI 编辑前写 `.lingji/edit-lock.json`（带 `heartbeat`/`ttlMs`），编辑器据此暂停自动保存、状态栏显示「AI 正在编辑」，避免内存态覆盖外部改动；忘记解锁时按 TTL 自动释放（`electron/ai-edit/`）。
+  - **实时热重载钩子**：`project.json`、`ai-cards/**/motionCard.tsx`、`script.md`/`original.md` 的外部变更经 chokidar 灌回对应 store 并刷新预览；`script.md` 外部保存补建版本历史（`source: external`）（`src/lib/external-edit-sync.ts`）。
+  - **校验守门 + 结果回传**：外部改 `project.json` 经基础约束校验（时间为正、动画枚举合法），结果写 `.lingji/edit-result.json` 供 agent 自查，校验失败的脏数据不灌回预览，无需调用 MCP 工具（`src/lib/external-edit-validate.ts`）。
+  - **文件契约文档 + 两个 Skill**：`docs/ai-contract/`（视频/文稿/锁/结果协议）+ `lingji-video-edit` / `lingji-script-edit` 两个边界清晰的 file-first skill；ACP 连接时把契约要点同步进项目目录的 `CLAUDE.md` / `AGENTS.md` / `GEMINI.md`（`electron/acp/contract-sync.ts`）。
+- **发布视频选项卡：多画幅封面工作台 + 元数据**：新增 `PublishCoverPanel` / `useCoverStudio`，按 16:9 / 4:3 / 3:4 分组生成与管理封面（`CoverCandidate` 新增 `aspectRatio`，旧数据缺省按 16:9）；编辑器封面面板只展示 16:9 整期封面，竖屏/方屏画幅交由发布选项卡管理。新增 `publish-metadata` 生成发布标题 / 简介 / 标签。导出成功后记录 `lastExportPath`，供发布选项卡预填视频文件。
+- **待创作箱一键清空 + 欢迎页双栏工作区布局**：待创作箱支持一键清空（`inbox-store.clear()` 经 `sonar-inbox-clear` IPC 三件套贯通）；欢迎页改为左侧待创作箱 / 右侧本地草稿双栏布局，各自独立滚动。
+- **pi agent 新增「火山方舟 Coding Plan」provider 预设**：内置火山引擎方舟 Coding Plan（OpenAI 兼容端点 `/api/coding/v3`，Doubao-Seed-Code 等编程模型）。
+- **声呐扩展：抖音主页滚动采集 + DOM 提取 + ffmpeg 本地转码**：内容脚本改为滚动 DOM 采集主页（`secUid` 作 id），后台编排采集任务与进度，offscreen 集成 `ffmpeg.wasm` 本地转码（资源由 `scripts/copy-ffmpeg-assets.mjs` 在 predev/prebuild 生成，不入库）。
+
+### Fixed
+- **工作区 tab 切换偶发空白**：写稿工作台 / 视频编辑器 / 发布三个 tab 互切时，`resolvePageTransition` 仍返回随切换变化的 `contentKey`（如 `crossfade:editor->script-workbench`），导致 `AnimatePresence mode="wait"` 触发「旧页 exit(opacity→0) → 新页 remount」的完整周期；framer-motion v12 在 exit 动画帧与新 render 的时序竞态下会卡在「旧节点已退至透明、`onExitComplete` 未触发、新节点永不挂载」的状态，表现为整片空白（概率性出现）。修复为：工作区三页共用稳定 `contentKey: 'workspace'` + 静态 opacity:1，让 `AnimatePresence` 不介入，真正走 `display:contents/none` 切换显隐（兑现 `App.tsx` / `page-transition.ts` 原有注释的设计意图）。跨类别切换（welcome ↔ workspace、workspace → settings）仍保留正常 crossfade 动画。
+
 ## [1.2.0] - 2026-06-13
 
 本版本带来全新的命令行工具 `lingji` 与配套的 headless（无头）主进程执行框架：音频、字幕分析、卡片、封面、导出等流水线步骤现在都能在终端里驱动，无需点开界面逐步操作。全部能力向后兼容，桌面端原有交互不受影响。
@@ -85,6 +123,7 @@
 ### Build / Packaging
 - macOS 多架构（arm64 + x64）DMG，Windows x64 zip 通过 GitHub Actions 自动构建并发布。
 
+[1.3.0]: https://github.com/yoqu/lingji-cut/compare/v1.2.0...v1.3.0
 [1.2.0]: https://github.com/yoqu/lingji-cut/compare/v1.1.0...v1.2.0
 [1.1.0]: https://github.com/yoqu/lingji-cut/compare/v1.0.1...v1.1.0
 [1.0.1]: https://github.com/yoqu/lingji-cut/compare/v1.0.0...v1.0.1

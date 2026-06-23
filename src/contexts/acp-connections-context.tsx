@@ -10,10 +10,11 @@ import type {
 } from '../types/conversation';
 import { useConversationWorkspace } from './conversation-workspace-context';
 import { useAgentStore } from '../store/agent';
+import { getAgentPresentation } from '../lib/agent-presentation';
 
 type ConnectionsMap = Record<number, ConversationConnectionState>;
 
-const DEFAULT_AGENT_TYPE = 'claude-acp';
+const DEFAULT_AGENT_TYPE = 'claude';
 
 function createEmptyConnectionState(conversationId: number, agentType = DEFAULT_AGENT_TYPE): ConversationConnectionState {
   return {
@@ -30,6 +31,23 @@ function createEmptyConnectionState(conversationId: number, agentType = DEFAULT_
     currentModeId: null,
     models: null,
     error: null,
+  };
+}
+
+function mergeRuntimeStatus(
+  current: ConversationConnectionState,
+  status: ConnectionStatus,
+  keepPrompting = false,
+): ConversationConnectionState {
+  const hasActiveTurn = Boolean(current.liveMessage);
+  const nextStatus =
+    status === 'connected' && current.status === 'prompting' && (hasActiveTurn || keepPrompting)
+      ? 'prompting'
+      : status;
+  return {
+    ...current,
+    status: nextStatus,
+    sessionId: status === 'disconnected' ? null : current.sessionId,
   };
 }
 
@@ -113,7 +131,11 @@ function updateLiveToolCall(
           type: 'tool_call',
           info: {
             ...block.info,
-            ...info,
+            toolCallId: block.info.toolCallId,
+            title: info.title ?? block.info.title,
+            kind: info.kind ?? block.info.kind,
+            status: info.status ?? block.info.status,
+            rawInput: info.rawInput ?? block.info.rawInput,
             rawOutput:
               info.rawOutputAppend && typeof info.rawOutput === 'string'
                 ? `${block.info.rawOutput ?? ''}${info.rawOutput}`
@@ -187,6 +209,37 @@ function toPersistedBlocks(message: ConversationConnectionState['liveMessage']):
   });
 }
 
+export interface AssistantTurnPersistInput {
+  role: 'assistant';
+  blocks: ConversationBlock[];
+  sessionStatsJson?: string | null;
+  agentId?: string;
+  agentName?: string;
+}
+
+/**
+ * 由连接状态 + turn_complete 事件构造 assistant turn 的持久化入参。
+ * 关键：带上 per-turn 的 agentId / agentName（来自当前连接的 agentType），
+ * 使同一会话混合 agent 历史能按回合归属到正确的 agent。
+ */
+export function buildAssistantTurnInput(
+  connection: ConversationConnectionState,
+  options: { stopReason: string; sessionStatsJson?: string | null; fallbackAgentType?: string },
+): AssistantTurnPersistInput {
+  const blocks = toPersistedBlocks(connection.liveMessage);
+  const agentId = connection.agentType === DEFAULT_AGENT_TYPE && options.fallbackAgentType
+    ? options.fallbackAgentType
+    : connection.agentType;
+  const agentName = getAgentPresentation(agentId).displayName;
+  return {
+    role: 'assistant',
+    blocks: [...blocks, { type: 'turn_complete', stopReason: options.stopReason }],
+    sessionStatsJson: options.sessionStatsJson,
+    agentId,
+    agentName,
+  };
+}
+
 function isMissingConversationError(error: unknown): boolean {
   if (!(error instanceof Error)) {
     return false;
@@ -208,7 +261,11 @@ export interface AcpConnectionsContextValue {
   getConnection: (conversationId: number) => ConversationConnectionState;
   connect: (input: ConnectionCommandInput) => Promise<void>;
   disconnect: (conversationId: number) => Promise<void>;
-  sendPrompt: (conversationId: number, contents: PromptInputBlock[]) => Promise<void>;
+  sendPrompt: (
+    conversationId: number,
+    contents: PromptInputBlock[],
+    opts?: { model?: string; reasoning?: string; skillIds?: string[] },
+  ) => Promise<void>;
   cancelTurn: (conversationId: number) => Promise<void>;
   setMode: (conversationId: number, modeId: string) => Promise<void>;
   setConfigOption: (conversationId: number, configId: string, valueId: string) => Promise<void>;
@@ -227,6 +284,7 @@ export function AcpConnectionsProvider({ children }: AcpConnectionsProviderProps
   const [activeConversationId, setActiveConversationId] = useState<number | null>(null);
   const connectionsRef = useRef<ConnectionsMap>({});
   const workspaceRef = useRef(workspace);
+  const activePromptIdsRef = useRef<Set<number>>(new Set());
 
   useEffect(() => {
     workspaceRef.current = workspace;
@@ -269,7 +327,13 @@ export function AcpConnectionsProvider({ children }: AcpConnectionsProviderProps
 
   async function persistConversationTurn(
     conversationId: number,
-    input: { role: 'user' | 'assistant'; blocks: ConversationBlock[]; sessionStatsJson?: string | null },
+    input: {
+      role: 'user' | 'assistant';
+      blocks: ConversationBlock[];
+      sessionStatsJson?: string | null;
+      agentId?: string;
+      agentName?: string;
+    },
   ) {
     const projectId = workspaceRef.current.projectId;
     if (!projectId || input.blocks.length === 0) return;
@@ -293,18 +357,21 @@ export function AcpConnectionsProvider({ children }: AcpConnectionsProviderProps
       }
     }
     if (type === 'turn_complete') {
+      activePromptIdsRef.current.delete(conversationId);
       const current = connectionsRef.current[conversationId] ?? createEmptyConnectionState(conversationId);
-      const blocks = toPersistedBlocks(current.liveMessage);
       const stopReason = String(payload.stopReason ?? 'end_turn');
       const usage =
         payload.usage && typeof payload.usage === 'object'
           ? JSON.stringify(payload.usage)
           : undefined;
-      void persistConversationTurn(conversationId, {
-        role: 'assistant',
-        blocks: [...blocks, { type: 'turn_complete', stopReason }],
-        sessionStatsJson: usage,
-      });
+      void persistConversationTurn(
+        conversationId,
+        buildAssistantTurnInput(current, {
+          stopReason,
+          sessionStatsJson: usage,
+          fallbackAgentType: workspaceRef.current.getDetail(conversationId)?.agentType,
+        }),
+      );
     }
 
     updateConversationState(conversationId, (current) => {
@@ -313,7 +380,10 @@ export function AcpConnectionsProvider({ children }: AcpConnectionsProviderProps
           return {
             ...current,
             sessionId: String(payload.sessionId ?? ''),
-            status: 'connected',
+            status:
+              current.status === 'prompting' && activePromptIdsRef.current.has(conversationId)
+                ? 'prompting'
+                : 'connected',
           };
         case 'content_delta':
         case 'text':
@@ -385,10 +455,12 @@ export function AcpConnectionsProvider({ children }: AcpConnectionsProviderProps
         case 'turn_complete':
           return {
             ...current,
+            status: 'connected',
             liveMessage: null,
             pendingPermission: null,
           };
         case 'error':
+          activePromptIdsRef.current.delete(conversationId);
           return nextLiveMessageBlock(
             {
               ...current,
@@ -410,11 +482,13 @@ export function AcpConnectionsProvider({ children }: AcpConnectionsProviderProps
     if (typeof window === 'undefined' || !window.agentAPI) return;
 
     const unsubStatus = window.agentAPI.onRuntimeStatusChanged(({ conversationId, status }) => {
-      updateConversationState(conversationId, (current) => ({
-        ...current,
-        status: status as ConnectionStatus,
-        sessionId: status === 'disconnected' ? null : current.sessionId,
-      }));
+      updateConversationState(conversationId, (current) =>
+        mergeRuntimeStatus(
+          current,
+          status as ConnectionStatus,
+          activePromptIdsRef.current.has(conversationId),
+        ),
+      );
     });
 
     const unsubEvent = window.agentAPI.onRuntimeEvent(({ conversationId, event }) => {
@@ -473,6 +547,7 @@ export function AcpConnectionsProvider({ children }: AcpConnectionsProviderProps
 
   async function connect(input: ConnectionCommandInput): Promise<void> {
     if (!window.agentAPI) return;
+    activePromptIdsRef.current.delete(input.conversationId);
     updateConversationState(input.conversationId, (current) => ({
       ...current,
       agentType: input.agentType ?? current.agentType,
@@ -503,6 +578,7 @@ export function AcpConnectionsProvider({ children }: AcpConnectionsProviderProps
 
   async function disconnect(conversationId: number): Promise<void> {
     if (!window.agentAPI) return;
+    activePromptIdsRef.current.delete(conversationId);
     await window.agentAPI.disconnectRuntime(conversationId);
     updateConversationState(conversationId, (current) => ({
       ...current,
@@ -513,9 +589,14 @@ export function AcpConnectionsProvider({ children }: AcpConnectionsProviderProps
     }));
   }
 
-  async function sendPrompt(conversationId: number, contents: PromptInputBlock[]): Promise<void> {
+  async function sendPrompt(
+    conversationId: number,
+    contents: PromptInputBlock[],
+    opts?: { model?: string; reasoning?: string; skillIds?: string[] },
+  ): Promise<void> {
     if (!window.agentAPI) return;
     setActiveConversationId(conversationId);
+    activePromptIdsRef.current.add(conversationId);
     updateConversationState(conversationId, (current) => ({
       ...current,
       status: 'prompting',
@@ -536,16 +617,27 @@ export function AcpConnectionsProvider({ children }: AcpConnectionsProviderProps
       }
     }
 
-    await persistConversationTurn(conversationId, {
-      role: 'user',
-      blocks: toConversationBlocks(contents),
-    });
-    await window.agentAPI.sendPromptToConversation(conversationId, contents);
+    try {
+      await persistConversationTurn(conversationId, {
+        role: 'user',
+        blocks: toConversationBlocks(contents),
+      });
+      await window.agentAPI.sendPromptToConversation(conversationId, contents, opts);
+    } catch (error) {
+      activePromptIdsRef.current.delete(conversationId);
+      updateConversationState(conversationId, (current) => ({
+        ...current,
+        status: 'error',
+        error: toMessage(error),
+      }));
+      throw error;
+    }
   }
 
   async function cancelTurn(conversationId: number): Promise<void> {
     if (!window.agentAPI) return;
     setActiveConversationId(conversationId);
+    activePromptIdsRef.current.delete(conversationId);
     await window.agentAPI.cancelConversationTurn(conversationId);
     updateConversationState(conversationId, (current) => ({
       ...current,

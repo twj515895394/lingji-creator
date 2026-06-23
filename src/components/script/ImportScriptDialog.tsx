@@ -32,6 +32,43 @@ import {
 import type { AutoWorkflowParams } from '../../store/ai';
 import styles from './ImportScriptDialog.module.css';
 
+export interface ImportDialogSeedInput {
+  defaults: AutoWorkflowParams;
+  defaultModelBinding: AutoModeModelBinding | null;
+  initialContent?: string;
+  initialProjectName?: string;
+  initialParentDir?: string | null;
+  initialAutoMode?: boolean;
+  templateIdOverride?: string;
+}
+
+export interface ImportDialogSeed {
+  content: string;
+  projectName: string;
+  parentDir: string | null;
+  autoMode: boolean;
+  autoParams: AutoWorkflowParams;
+  modelBinding: AutoModeModelBinding | null;
+}
+
+/**
+ * 计算「导入文稿」弹窗打开时的初始状态种子。
+ * 纯函数（无 hooks），便于在 node 测试环境直接断言；模板覆盖逻辑集中于此。
+ */
+export function computeImportDialogSeed(input: ImportDialogSeedInput): ImportDialogSeed {
+  return {
+    content: input.initialContent ?? '',
+    projectName: input.initialProjectName ?? '',
+    parentDir: input.initialParentDir ?? null,
+    autoMode: input.initialAutoMode ?? false,
+    autoParams: {
+      ...input.defaults,
+      templateId: input.templateIdOverride ?? input.defaults.templateId,
+    },
+    modelBinding: input.defaultModelBinding,
+  };
+}
+
 const ALLOWED_EXTENSIONS = ['.md', '.txt', '.html', '.htm'] as const;
 const ALLOWED_LABEL = '.md / .txt / .html';
 const MAX_BYTES = 5 * 1024 * 1024; // 5 MB 上限，避免误拖音视频
@@ -69,6 +106,16 @@ export interface ImportScriptDialogProps {
     defaults: AutoWorkflowParams;
     defaultModelBinding: AutoModeModelBinding | null;
   };
+  /** 打开时预填文稿内容（如声呐转录稿）；缺省为空 */
+  initialContent?: string;
+  /** 打开时预填项目名；缺省为空 */
+  initialProjectName?: string;
+  /** 打开时预填存放目录；缺省为 null */
+  initialParentDir?: string | null;
+  /** 一键成稿开关初值；缺省 false */
+  initialAutoMode?: boolean;
+  /** 写稿模板覆盖（如待创作箱用 'rewrite-remix' 二创转述）；模板在 UI 上不暴露，仅落到一键参数 */
+  templateIdOverride?: string;
 }
 
 export function ImportScriptDialog({
@@ -78,37 +125,70 @@ export function ImportScriptDialog({
   onOpenChange,
   onConfirm,
   autoModeOptions,
+  initialContent,
+  initialProjectName,
+  initialParentDir,
+  initialAutoMode,
+  templateIdOverride,
 }: ImportScriptDialogProps) {
-  const [content, setContent] = useState('');
-  const [projectName, setProjectName] = useState('');
-  const [parentDir, setParentDir] = useState<string | null>(null);
+  const seed0 = computeImportDialogSeed({
+    defaults: autoModeOptions.defaults,
+    defaultModelBinding: autoModeOptions.defaultModelBinding,
+    initialContent,
+    initialProjectName,
+    initialParentDir,
+    initialAutoMode,
+    templateIdOverride,
+  });
+  const [content, setContent] = useState(seed0.content);
+  const [projectName, setProjectName] = useState(seed0.projectName);
+  const [parentDir, setParentDir] = useState<string | null>(seed0.parentDir);
   const [sourceFileName, setSourceFileName] = useState<string | null>(null);
   const [isDragging, setIsDragging] = useState(false);
   const [readingFile, setReadingFile] = useState(false);
   const [localError, setLocalError] = useState<string | null>(null);
-  const [autoMode, setAutoMode] = useState(false);
-  const [autoParams, setAutoParams] = useState<AutoWorkflowParams>(autoModeOptions.defaults);
-  const [modelBinding, setModelBinding] = useState<AutoModeModelBinding | null>(
-    autoModeOptions.defaultModelBinding,
-  );
+  const [autoMode, setAutoMode] = useState(seed0.autoMode);
+  const [autoParams, setAutoParams] = useState<AutoWorkflowParams>(seed0.autoParams);
+  const [modelBinding, setModelBinding] = useState<AutoModeModelBinding | null>(seed0.modelBinding);
   const dragDepthRef = useRef(0);
+  const prevOpenRef = useRef(false);
 
-  // 弹窗关闭时重置状态
+  // 弹窗每次「打开」时按当前 props 播种，保证下一次复用（普通导入 / 待创作箱预填）状态干净。
+  // 用 prevOpenRef 仅在 false→true 跳变时播种，避免 props 变化时清空用户正在编辑的内容。
   useEffect(() => {
-    if (!open) {
-      setContent('');
-      setProjectName('');
-      setParentDir(null);
+    if (open && !prevOpenRef.current) {
+      const seed = computeImportDialogSeed({
+        defaults: autoModeOptions.defaults,
+        defaultModelBinding: autoModeOptions.defaultModelBinding,
+        initialContent,
+        initialProjectName,
+        initialParentDir,
+        initialAutoMode,
+        templateIdOverride,
+      });
+      setContent(seed.content);
+      setProjectName(seed.projectName);
+      setParentDir(seed.parentDir);
       setSourceFileName(null);
       setIsDragging(false);
       setReadingFile(false);
       setLocalError(null);
-      setAutoMode(false);
-      setAutoParams(autoModeOptions.defaults);
-      setModelBinding(autoModeOptions.defaultModelBinding);
+      setAutoMode(seed.autoMode);
+      setAutoParams(seed.autoParams);
+      setModelBinding(seed.modelBinding);
       dragDepthRef.current = 0;
     }
-  }, [open, autoModeOptions.defaults, autoModeOptions.defaultModelBinding]);
+    prevOpenRef.current = open;
+  }, [
+    open,
+    autoModeOptions.defaults,
+    autoModeOptions.defaultModelBinding,
+    initialContent,
+    initialProjectName,
+    initialParentDir,
+    initialAutoMode,
+    templateIdOverride,
+  ]);
 
   const trimmedName = projectName.trim();
   const canConfirm = useMemo(

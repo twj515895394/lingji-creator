@@ -7,11 +7,12 @@ export interface FieldProps {
   error?: ReactNode;
   required?: boolean;
   children: ReactNode;
+  className?: string;
 }
 
-export function Field({ children, error, hint, label, required = false }: FieldProps) {
+export function Field({ children, error, hint, label, required = false, className }: FieldProps) {
   return (
-    <div className={styles.root}>
+    <div className={[styles.root, className].filter(Boolean).join(' ')}>
       {label ? (
         <div className={styles.labelRow}>
           <span className={styles.label}>{label}</span>

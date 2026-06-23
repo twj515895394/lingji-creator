@@ -15,6 +15,9 @@ import type { AICard, AISegment, AISettings, PromptBindingMap } from '../src/typ
 import type { ConversationAPI } from '../src/types/conversation';
 import type { VideoImportRequest } from '../src/lib/video-import-types';
 import type { VideoImportTaskSnapshot } from './video-import/types';
+import type { PipelineTask } from './pipeline/types';
+
+type PipelineTaskUpdate = PipelineTask & { bridgeId: string };
 
 contextBridge.exposeInMainWorld('electronAPI', {
   parseSrtFile: (filePath: string) => ipcRenderer.invoke('parse-srt-file', filePath),
@@ -92,8 +95,11 @@ contextBridge.exposeInMainWorld('electronAPI', {
     projectDir?: string;
     projectBindings?: PromptBindingMap | null;
   }) => ipcRenderer.invoke('generate-card-from-subtitles', args),
-  compileMotionCards: (cards: { overlayId: string; tsx: string }[]) =>
-    ipcRenderer.invoke('remotion:compile-cards', cards) as Promise<Record<string, string>>,
+  compileMotionCards: (args: {
+    cards: { overlayId: string; tsx: string }[];
+    projectDir?: string | null;
+  }) =>
+    ipcRenderer.invoke('remotion:compile-cards', args) as Promise<Record<string, string>>,
   regenerateCoverPrompt: (args: {
     entries: SrtEntry[];
     settings: AISettings;
@@ -108,7 +114,14 @@ contextBridge.exposeInMainWorld('electronAPI', {
     projectDir: string;
     projectBindings?: PromptBindingMap | null;
     telemetryRunId?: string | null;
+    aspectRatio?: '1:1' | '16:9' | '9:16' | '4:3' | '3:4';
+    n?: number;
   }) => ipcRenderer.invoke('generate-cover-images', args),
+  generatePublishMetadata: (args: {
+    settings: AISettings;
+    sourceText: string;
+    currentTitle?: string;
+  }) => ipcRenderer.invoke('generate-publish-metadata', args),
   generateCardImage: (args: import('../src/lib/electron-api').GenerateCardImageArgs) =>
     ipcRenderer.invoke('generate-card-image', args),
   generateCardVideo: (args: import('../src/lib/electron-api').GenerateCardVideoArgs) =>
@@ -216,7 +229,9 @@ contextBridge.exposeInMainWorld('electronAPI', {
     ipcRenderer.invoke('get-project-metadata', projectDir) as Promise<ProjectMetadata>,
   selectProjectDirectory: () => ipcRenderer.invoke('select-project-directory'),
   selectSetupFile: (kind: 'audio' | 'srt') => ipcRenderer.invoke('select-setup-file', kind),
-  selectMediaFile: (kind: 'audio' | 'video' | 'srt') => ipcRenderer.invoke('select-media-file', kind),
+  selectMediaFile: (kind: 'audio' | 'video' | 'srt' | 'image') => ipcRenderer.invoke('select-media-file', kind),
+  findLatestExport: (projectDir: string) => ipcRenderer.invoke('find-latest-export', projectDir),
+  scanCoverImages: (projectDir: string) => ipcRenderer.invoke('scan-cover-images', projectDir),
   getPathForFile: (file: File) => webUtils.getPathForFile(file),
   addAsset: () => ipcRenderer.invoke('add-asset'),
   scanProjectAssets: (projectDir: string) =>
@@ -247,6 +262,13 @@ contextBridge.exposeInMainWorld('electronAPI', {
     ipcRenderer.on('pipeline:project-updated', handler);
     return () => ipcRenderer.removeListener('pipeline:project-updated', handler);
   },
+  onPipelineTaskUpdate: (callback: (task: PipelineTaskUpdate) => void) => {
+    const handler = (_event: unknown, task: PipelineTaskUpdate) => callback(task);
+    ipcRenderer.on('pipeline:task-update', handler);
+    return () => ipcRenderer.removeListener('pipeline:task-update', handler);
+  },
+  cancelPipelineTask: (taskId: string) =>
+    ipcRenderer.invoke('pipeline:cancel-task', taskId) as Promise<void>,
   onMenuAction: (callback: (event: MenuEvent) => void) => {
     const handler = (_event: unknown, event: MenuEvent) => callback(event);
     ipcRenderer.on('menu-action', handler);
@@ -262,10 +284,29 @@ contextBridge.exposeInMainWorld('electronAPI', {
   toggleDevTools: () => ipcRenderer.invoke('toggle-devtools'),
   showItemInFolder: (filePath: string) => ipcRenderer.send('show-item-in-folder', filePath),
   openExternal: (url: string) => ipcRenderer.send('open-external', url),
+  openPath: (filePath: string) =>
+    ipcRenderer.invoke('open-path', filePath) as Promise<{ ok: boolean; error?: string }>,
+  quickLookFile: (filePath: string) =>
+    ipcRenderer.invoke('quick-look-file', filePath) as Promise<{ ok: boolean; error?: string }>,
   saveScriptFile: (projectDir: string, filename: string, content: string) =>
     ipcRenderer.invoke('save-script-file', projectDir, filename, content),
   loadScriptFile: (projectDir: string, filename: string) =>
     ipcRenderer.invoke('load-script-file', projectDir, filename),
+  // —— 声呐「待创作箱」桥 ——
+  sonarInboxList: () => ipcRenderer.invoke('sonar-inbox-list'),
+  sonarInboxMarkStatus: (
+    id: string,
+    status: 'pending' | 'creating' | 'drafted' | 'failed',
+    patch?: { projectPath?: string; error?: string },
+  ) => ipcRenderer.invoke('sonar-inbox-mark-status', id, status, patch),
+  sonarInboxRemove: (id: string) => ipcRenderer.invoke('sonar-inbox-remove', id),
+  sonarInboxClear: () => ipcRenderer.invoke('sonar-inbox-clear'),
+  sonarBridgeInfo: () => ipcRenderer.invoke('sonar-bridge-info'),
+  onSonarInboxUpdated: (callback: () => void) => {
+    const handler = () => callback();
+    ipcRenderer.on('sonar-inbox-updated', handler);
+    return () => ipcRenderer.removeListener('sonar-inbox-updated', handler);
+  },
   getFileMtime: (filePath: string) =>
     ipcRenderer.invoke('get-file-mtime', filePath) as Promise<number | null>,
   saveScriptState: (projectDir: string, state: string) =>
@@ -297,6 +338,14 @@ contextBridge.exposeInMainWorld('electronAPI', {
     const handler = (_event: unknown, data: { file: string; content: string }) => callback(data);
     ipcRenderer.on('file-changed', handler);
     return () => ipcRenderer.removeListener('file-changed', handler);
+  },
+  onAiEditLockChanged: (
+    callback: (change: { active: boolean; scope?: 'video' | 'script' }) => void,
+  ) => {
+    const handler = (_event: unknown, change: { active: boolean; scope?: 'video' | 'script' }) =>
+      callback(change);
+    ipcRenderer.on('ai-edit-lock-changed', handler);
+    return () => ipcRenderer.removeListener('ai-edit-lock-changed', handler);
   },
   onFileTreeChanged: (callback: (data: { type: string; file: string }) => void) => {
     const handler = (_event: unknown, data: { type: string; file: string }) => callback(data);
@@ -505,12 +554,14 @@ contextBridge.exposeInMainWorld('electronAPI', {
 contextBridge.exposeInMainWorld('agentAPI', {
   getConfig: () => ipcRenderer.invoke('agent:get-config'),
   saveConfig: (data: unknown) => ipcRenderer.invoke('agent:save-config', data),
+  setActiveAgent: (agentId: string) => ipcRenderer.invoke('agent:set-active-agent', agentId),
   getApiKey: (agentId: string) => ipcRenderer.invoke('agent:get-api-key', agentId),
   setApiKey: (agentId: string, key: string) => ipcRenderer.invoke('agent:set-api-key', agentId, key),
   getPermissionPolicy: () => ipcRenderer.invoke('agent:get-permission-policy'),
   setPermissionPolicy: (policy: string) => ipcRenderer.invoke('agent:set-permission-policy', policy),
 
-  runPreflight: () => ipcRenderer.invoke('agent:run-preflight'),
+  runPreflight: (agentId?: string) => ipcRenderer.invoke('agent:run-preflight', agentId),
+  listModels: (agentId: string) => ipcRenderer.invoke('agent:list-models', agentId),
   installAgent: (version: string) => ipcRenderer.invoke('agent:install', version),
   uninstallAgent: () => ipcRenderer.invoke('agent:uninstall'),
   getLatestVersion: () => ipcRenderer.invoke('agent:get-latest-version'),
@@ -518,8 +569,18 @@ contextBridge.exposeInMainWorld('agentAPI', {
   connectRuntime: (input: { conversationId: number; projectDir: string; sessionId?: string | null; agentType?: string }) =>
     ipcRenderer.invoke('agent:connect-runtime', input),
   disconnectRuntime: (conversationId: number) => ipcRenderer.invoke('agent:disconnect-runtime', conversationId),
-  sendPromptToConversation: (conversationId: number, contents: unknown[]) =>
-    ipcRenderer.invoke('agent:send-prompt-runtime', conversationId, contents),
+  listSkills: (agentId: string) => ipcRenderer.invoke('agent:list-skills', agentId),
+  addSkill: () => ipcRenderer.invoke('agent:add-skill'),
+  removeSkill: (skillId: string) => ipcRenderer.invoke('agent:remove-skill', skillId),
+  readSkillTree: (skillId: string) => ipcRenderer.invoke('agent:read-skill-tree', skillId),
+  readSkillFile: (skillId: string, relPath: string) =>
+    ipcRenderer.invoke('agent:read-skill-file', skillId, relPath),
+  openSkillDir: (skillId?: string) => ipcRenderer.invoke('agent:open-skill-dir', skillId),
+  sendPromptToConversation: (
+    conversationId: number,
+    contents: unknown[],
+    opts?: { model?: string; reasoning?: string; skillIds?: string[] },
+  ) => ipcRenderer.invoke('agent:send-prompt-runtime', conversationId, contents, opts),
   cancelConversationTurn: (conversationId: number) =>
     ipcRenderer.invoke('agent:cancel-turn-runtime', conversationId),
   setConversationMode: (conversationId: number, modeId: string) =>
@@ -691,4 +752,45 @@ contextBridge.exposeInMainWorld('scriptHistoryAPI', {
     ipcRenderer.invoke('script-history:update-label', projectId, versionId, label),
   delete: (projectId: string, versionId: number) =>
     ipcRenderer.invoke('script-history:delete', projectId, versionId),
+});
+
+// ─── Publish API ──────────────────────────────────────────
+
+contextBridge.exposeInMainWorld('publishAPI', {
+  listAccounts: () => ipcRenderer.invoke('publish:list-accounts'),
+  deleteAccount: (id: string) => ipcRenderer.invoke('publish:delete-account', id),
+  login: (platform: string, accountName: string) =>
+    ipcRenderer.invoke('publish:login', platform, accountName),
+  check: (id: string) => ipcRenderer.invoke('publish:check', id),
+  run: (job: import('../src/lib/electron-api').PublishJobInput, headless?: boolean) =>
+    ipcRenderer.invoke('publish:run', job, headless),
+  cancel: () => ipcRenderer.invoke('publish:cancel'),
+  onQrcode: (cb: (payload: { platform: string; accountName: string; png: string }) => void) => {
+    const handler = (_e: unknown, payload: { platform: string; accountName: string; png: string }) =>
+      cb(payload);
+    ipcRenderer.on('publish:qrcode', handler);
+    return () => ipcRenderer.removeListener('publish:qrcode', handler);
+  },
+  onProgress: (
+    cb: (payload: {
+      jobId: string;
+      accountId: string;
+      state: string;
+      percent?: number;
+      message?: string;
+    }) => void,
+  ) => {
+    const handler = (
+      _e: unknown,
+      payload: {
+        jobId: string;
+        accountId: string;
+        state: string;
+        percent?: number;
+        message?: string;
+      },
+    ) => cb(payload);
+    ipcRenderer.on('publish:progress', handler);
+    return () => ipcRenderer.removeListener('publish:progress', handler);
+  },
 });

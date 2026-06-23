@@ -1,22 +1,24 @@
 import { useCallback, useRef, useState } from 'react';
-import { ArrowLeft, Bot, Cpu, DatabaseBackup, Server, Sparkles, Volume2 } from 'lucide-react';
+import { ArrowLeft, Bot, Cpu, DatabaseBackup, Server, Share2, Sparkles, Volume2 } from 'lucide-react';
 import { ConfigBackupTab } from '../components/settings/ConfigBackupTab';
 import { AIConfigTab } from '../components/settings/AIConfigTab';
 import { TTSConfigTab } from '../components/settings/TTSConfigTab';
 import { AgentSettingsTab } from '../components/settings/AgentSettingsTab';
 import { McpSettingsTab } from '../components/settings/McpSettingsTab';
 import { PromptsConfigTab } from '../components/settings/PromptsConfigTab';
+import { PublishAccountsTab } from '../components/settings/PublishAccountsTab';
 import { Button, Tabs, TabsContent } from '../ui';
 import styles from './Settings.module.css';
 import type { SettingsLeaveGuard } from '../components/settings/useSettingsTabGuard';
 
-type SettingsTab =
+export type SettingsTab =
   | 'ai-config'
   | 'tts'
   | 'agent'
   | 'mcp'
   | 'prompts'
-  | 'backup';
+  | 'backup'
+  | 'publish-accounts';
 
 const TABS: { id: SettingsTab; label: string; icon: typeof Bot }[] = [
   { id: 'ai-config', label: 'AI 基础配置', icon: Bot },
@@ -25,14 +27,17 @@ const TABS: { id: SettingsTab; label: string; icon: typeof Bot }[] = [
   { id: 'mcp', label: 'MCP 服务', icon: Server },
   { id: 'prompts', label: '提示词配置', icon: Sparkles },
   { id: 'backup', label: '配置备份', icon: DatabaseBackup },
+  { id: 'publish-accounts', label: '发布账号', icon: Share2 },
 ];
 
 interface SettingsProps {
   onBack: () => void;
+  /** 初始定位的 tab（如从对话头部 agent 标记进入时定位 'agent'）。 */
+  initialTab?: SettingsTab;
 }
 
-export function Settings({ onBack }: SettingsProps) {
-  const [activeTab, setActiveTab] = useState<SettingsTab>('ai-config');
+export function Settings({ onBack, initialTab }: SettingsProps) {
+  const [activeTab, setActiveTab] = useState<SettingsTab>(initialTab ?? 'ai-config');
   const tabLeaveGuardRef = useRef<SettingsLeaveGuard | null>(null);
 
   const handleProtectedLeave = useCallback(
@@ -122,6 +127,9 @@ export function Settings({ onBack }: SettingsProps) {
         </TabsContent>
         <TabsContent value="backup" className={styles.contentPanel}>
           <ConfigBackupTab />
+        </TabsContent>
+        <TabsContent value="publish-accounts" className={styles.contentPanel}>
+          <PublishAccountsTab />
         </TabsContent>
       </div>
     </Tabs>

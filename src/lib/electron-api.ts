@@ -20,6 +20,7 @@ import type {
   VideoImportRequest,
 } from './video-import-types';
 import type { VideoImportTaskSnapshot } from '../../electron/video-import/types';
+import type { PipelineTask } from '../../electron/pipeline/types';
 import type {
   PromptKind,
   PromptKindMeta,
@@ -49,6 +50,7 @@ import type { SceneAssetRegistryEntry } from '../../electron/sceneforge/assets/s
 import type { SceneArtifact } from '../../electron/sceneforge/artifacts/scene-artifact-store';
 import type { SceneValidationResult } from '../../electron/sceneforge/validators/scene-validator';
 import type { SceneState } from '../../electron/sceneforge/pipeline/scene-state-machine';
+import type { PublishAccount, PublishPlatform } from '../../electron/publish/types';
 
 export type SceneRunStageInput = SceneRunStageIpcInput;
 export type SceneAnalyzeTopicGateInput = SceneAnalyzeTopicGateIpcInput;
@@ -56,6 +58,7 @@ export type SceneUpdateStyleSelectionInput = SceneUpdateStyleSelectionIpcInput;
 export type SceneStageRunProgressPayload = SceneStageRunProgressPayloadType;
 
 export type { SceneGetStageContextOptions, SceneStageRunnerResult };
+export type { PublishAccount, PublishPlatform };
 
 export type {
   SceneAssetRegistryEntry,
@@ -77,7 +80,8 @@ export type AppPage =
   | 'settings'
   | 'auto-run'
   | 'sceneforge-setup'
-  | 'sceneforge-studio';
+  | 'sceneforge-studio'
+  | 'publish';
 
 export interface FileEntry {
   name: string;
@@ -300,7 +304,10 @@ export interface ElectronAPI {
     projectBindings?: PromptBindingMap | null;
   }) => Promise<AICard>;
   /** 把 motion 卡片 TSX 批量编译为可执行 CJS（overlayId → js）。 */
-  compileMotionCards: (cards: { overlayId: string; tsx: string }[]) => Promise<Record<string, string>>;
+  compileMotionCards: (args: {
+    cards: { overlayId: string; tsx: string }[];
+    projectDir?: string | null;
+  }) => Promise<Record<string, string>>;
   regenerateCoverPrompt: (args: {
     entries: SrtEntry[];
     settings: AISettings;
@@ -315,7 +322,14 @@ export interface ElectronAPI {
     projectDir: string;
     projectBindings?: PromptBindingMap | null;
     telemetryRunId?: string | null;
+    aspectRatio?: ImageAspectRatio;
+    n?: number;
   }) => Promise<CoverCandidate[]>;
+  generatePublishMetadata: (args: {
+    settings: AISettings;
+    sourceText: string;
+    currentTitle?: string;
+  }) => Promise<{ title: string; desc: string; tags: string[] }>;
   generateCardImage: (args: GenerateCardImageArgs) => Promise<MediaCardContent>;
   generateCardVideo: (args: GenerateCardVideoArgs) => Promise<MediaCardContent>;
   cancelCardMediaGeneration: (cardId: string) => Promise<{ ok: true }>;
@@ -408,7 +422,13 @@ export interface ElectronAPI {
   getProjectMetadata: (projectDir: string) => Promise<ProjectMetadata>;
   selectProjectDirectory: () => Promise<string | null>;
   selectSetupFile: (kind: ImportKind) => Promise<string | null>;
-  selectMediaFile: (kind: 'audio' | 'video' | 'srt') => Promise<string | null>;
+  selectMediaFile: (kind: 'audio' | 'video' | 'srt' | 'image') => Promise<string | null>;
+  /** 扫描项目目录顶层最新的 .mp4 成片；无则返回 null（发布选项卡联动兜底）。 */
+  findLatestExport: (projectDir: string) => Promise<string | null>;
+  /** 扫描项目 covers/ 下的图片并读取真实像素尺寸（发布选项卡按比例分桶）。 */
+  scanCoverImages: (
+    projectDir: string,
+  ) => Promise<{ path: string; width: number; height: number; mtimeMs: number }[]>;
   getPathForFile: (file: File) => string;
   addAsset: () => Promise<{
     path: string;
@@ -434,14 +454,37 @@ export interface ElectronAPI {
   onProjectUpdated: (
     callback: (payload: { projectPath: string; sections: string[] }) => void,
   ) => () => void;
+  /** 订阅 MCP/pipeline 任务进度（导出/TTS/分析/封面/卡片/Motion）。 */
+  onPipelineTaskUpdate: (
+    callback: (task: PipelineTask & { bridgeId: string }) => void,
+  ) => () => void;
+  /** 取消 MCP/pipeline 任务。 */
+  cancelPipelineTask: (taskId: string) => Promise<void>;
   onMenuAction: (callback: (event: MenuEvent) => void) => () => void;
   onAppLog: (callback: (entry: AppLogEntry) => void) => () => void;
   toggleDevTools: () => Promise<void>;
   showItemInFolder: (filePath: string) => void;
   openExternal: (url: string) => void;
+  /** 用系统默认 App 打开文件，返回成功标记。 */
+  openPath: (filePath: string) => Promise<{ ok: boolean; error?: string }>;
+  /** macOS 调用 Quick Look 预览；非 macOS 降级为默认 App 打开。 */
+  quickLookFile: (filePath: string) => Promise<{ ok: boolean; error?: string }>;
   // Script workbench
   saveScriptFile: (projectDir: string, filename: string, content: string) => Promise<void>;
   loadScriptFile: (projectDir: string, filename: string) => Promise<string | null>;
+  // —— 声呐「待创作箱」桥（扩展推入的二创素材）——
+  sonarInboxList: () => Promise<import('./sonar-inbox').SonarInboxItem[]>;
+  sonarInboxMarkStatus: (
+    id: string,
+    status: import('./sonar-inbox').SonarInboxStatus,
+    patch?: { projectPath?: string; error?: string },
+  ) => Promise<import('./sonar-inbox').SonarInboxItem | null>;
+  sonarInboxRemove: (id: string) => Promise<boolean>;
+  /** 清空待创作箱全部素材，返回删除条数。 */
+  sonarInboxClear: () => Promise<number>;
+  sonarBridgeInfo: () => Promise<{ port: number; token: string }>;
+  /** 收件箱新增/刷新时触发（扩展推送到桥后），用于待创作箱实时刷新。返回取消订阅函数。 */
+  onSonarInboxUpdated: (callback: () => void) => () => void;
   saveScriptState: (projectDir: string, state: string) => Promise<void>;
   loadScriptState: (projectDir: string) => Promise<string | null>;
   selectTextFile: () => Promise<{ path: string; content: string } | null>;
@@ -458,6 +501,9 @@ export interface ElectronAPI {
   startWatching: (dir: string) => Promise<void>;
   stopWatching: () => Promise<void>;
   onFileChanged: (callback: (data: { file: string; content: string }) => void) => () => void;
+  onAiEditLockChanged: (
+    callback: (change: { active: boolean; scope?: 'video' | 'script' }) => void,
+  ) => () => void;
   onFileTreeChanged: (callback: (data: { type: string; file: string }) => void) => () => void;
   readDirectory: (dir: string) => Promise<FileEntry[]>;
   setMenuContext: (context: MenuContext) => Promise<void>;
@@ -672,5 +718,53 @@ declare global {
 
 // 引入 AgentAPI 类型声明
 import './agent-api';
+
+// ─── PublishAPI ───────────────────────────────────────────
+
+export interface PublishProgressPayload {
+  jobId: string;
+  accountId: string;
+  state: string;
+  percent?: number;
+  message?: string;
+}
+
+export interface PublishShared {
+  title: string;
+  desc: string;
+  tags: string[];
+  thumbnail?: string;
+  scheduleAt?: number;
+}
+
+export interface PublishTarget {
+  accountId: string;
+  overrides?: { title?: string; desc?: string; tags?: string[] };
+  bilibili?: { tid: number };
+}
+
+export interface PublishJobInput {
+  id: string;
+  filePath: string;
+  shared: PublishShared;
+  targets: PublishTarget[];
+}
+
+export interface PublishAPI {
+  listAccounts(): Promise<PublishAccount[]>;
+  deleteAccount(id: string): Promise<void>;
+  login(platform: PublishPlatform, accountName: string): Promise<{ success: boolean; message: string }>;
+  check(id: string): Promise<boolean>;
+  run(job: PublishJobInput, headless?: boolean): Promise<void>;
+  cancel(): Promise<void>;
+  onQrcode(cb: (p: { platform: string; accountName: string; png: string }) => void): () => void;
+  onProgress(cb: (payload: PublishProgressPayload) => void): () => void;
+}
+
+declare global {
+  interface Window {
+    publishAPI: PublishAPI;
+  }
+}
 
 export {};

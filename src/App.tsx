@@ -16,7 +16,7 @@ import { resolveProjectLandingPage } from './lib/project-navigation';
 import { createBlankScriptProjectState } from './lib/script-project';
 import { Editor } from './pages/Editor';
 import { ScriptWorkbench } from './pages/ScriptWorkbench';
-import { Settings } from './pages/Settings';
+import { Settings, type SettingsTab } from './pages/Settings';
 import { Setup } from './pages/Setup';
 import { SceneForgeStudio } from './sceneforge/pages/SceneForgeStudio';
 import { SceneForgeCreateDialog } from './sceneforge/components/SceneForgeCreateDialog';
@@ -25,14 +25,23 @@ import { AutoRunController } from './components/AutoRunController';
 import { ImportProjectDialog } from './components/ImportProjectDialog';
 import { AppErrorBoundary } from './components/AppErrorBoundary';
 import type { ImportProjectResult } from './lib/project-import-types';
+import type { VideoImportSourceInput } from './lib/video-import-types';
 import { prefersReducedMotion } from './ui/lib/animation-config';
 import { WorkspaceTabs } from './components/WorkspaceTabs';
+import { PublishWorkbench } from './components/publish/PublishWorkbench';
 import { getFileNameFromPath, readAudioDurationMs } from './lib/utils';
 import { createDefaultTimeline } from './types';
 import type { AICard, AIAnalysisResult } from './types/ai';
 import { getCurrentAISaveStatus, loadAISettings, subscribeToAISaveStatus, useAIStore, type AutoWorkflowParams } from './store/ai';
 import type { ProjectData } from './lib/project-persistence';
+import { handleExternalEdit } from './lib/external-edit-sync';
+import { useAiEditStore } from './store/ai-edit';
 import { useScriptStore } from './store/script';
+import { useTaskProgressStore } from './store/task-progress';
+import {
+  createPipelineProgressBridge,
+  type PipelineTaskSnapshot,
+} from './lib/pipeline-progress-bridge';
 import { getRoleById } from './lib/script-templates';
 import { SCRIPT_TEMPLATE_SEEDS } from './lib/prompts/script-template-defaults';
 import { userPromptBindingKey } from './lib/prompts';
@@ -56,6 +65,7 @@ export default function App() {
   const [page, setPageRaw] = useState<AppPage>('welcome');
   const [previousPage, setPreviousPage] = useState<AppPage>('welcome');
   const [pageTransitionReason, setPageTransitionReason] = useState<PageTransitionReason>('default');
+  const [settingsInitialTab, setSettingsInitialTab] = useState<SettingsTab | undefined>(undefined);
 
   const setPage = useCallback(
     (next: AppPage, reason: PageTransitionReason = 'default') => {
@@ -555,6 +565,61 @@ export default function App() {
     return unsubscribe;
   }, [reloadProjectSections]);
 
+  // MCP/pipeline 任务（含内置 pi 触发的导出/TTS/分析/封面/卡片/Motion）进度联动：
+  // 主进程 attachTaskProgressBridge 把任务发到 `pipeline:task-update`，这里映射进
+  // 底部统一进度系统。视频导入走另一条 `video-import-progress` 通道，已有各自的桥。
+  useEffect(() => {
+    if (!window.electronAPI?.onPipelineTaskUpdate) return;
+    const bridge = createPipelineProgressBridge({
+      subscribe: (cb) =>
+        window.electronAPI!.onPipelineTaskUpdate((task) =>
+          cb(task as unknown as PipelineTaskSnapshot),
+        ),
+      startTask: (input) => useTaskProgressStore.getState().startTask(input),
+      updateTask: (id, patch) => useTaskProgressStore.getState().updateTask(id, patch),
+      completeTask: (id) => useTaskProgressStore.getState().completeTask(id),
+      failTask: (id, error) => useTaskProgressStore.getState().failTask(id, error),
+      removeTask: (id) => useTaskProgressStore.getState().removeTask(id),
+      hasTask: (id) => useTaskProgressStore.getState().tasks.has(id),
+      cancel: (taskId) => {
+        void window.electronAPI!.cancelPipelineTask?.(taskId);
+      },
+    });
+    return () => bridge.dispose();
+  }, []);
+
+  // AI file-first：订阅外部文件变更（file-changed）与会话锁态（ai-edit-lock-changed）。
+  // - project.json 变更 → 重载并替换 timeline
+  // - motionCard.tsx 变更 → 替换该卡内存源码触发预览重编译
+  // - script.md / original.md → 留钩子给后续脚本灌回（Task 12）
+  // - 锁态 → 更新 useAiEditStore（锁定期间 timeline 自动保存会暂停，避免覆盖外部改动）
+  // 注意：ScriptWorkbench 另有一个独立的 onFileChanged 订阅（脚本工作台冲突检测），
+  // preload 用 ipcRenderer.on 注册，多处订阅互不覆盖，各自返回独立 cleanup。
+  useEffect(() => {
+    if (!currentProjectDir) return;
+    const offEdit = window.electronAPI?.onFileChanged?.((data) => {
+      void handleExternalEdit(data, {
+        loadProject: async (dir) => {
+          const raw = await window.electronAPI.loadProject(dir);
+          const project = JSON.parse(raw) as ProjectData;
+          return { timeline: project.timeline ?? null };
+        },
+        projectDir: currentProjectDir,
+        applyCardSource: (id, tsx) =>
+          useTimelineStore.getState().applyExternalCardSource(id, tsx),
+        onScriptChanged: (kind, content) =>
+          useScriptStore.getState().applyExternalScriptFile(kind, content),
+      });
+    });
+    const offLock = window.electronAPI?.onAiEditLockChanged?.((change) => {
+      useAiEditStore.getState().setLock({ active: change.active, scope: change.scope });
+    });
+    return () => {
+      offEdit?.();
+      offLock?.();
+    };
+  }, [currentProjectDir]);
+
   useEffect(() => {
     void syncWorkspaceState();
   }, [syncWorkspaceState]);
@@ -669,6 +734,12 @@ export default function App() {
   );
 
   const handleOpenSettings = useCallback(() => {
+    setSettingsInitialTab(undefined);
+    setPage('settings');
+  }, [setPage]);
+
+  const handleOpenAgentSettings = useCallback(() => {
+    setSettingsInitialTab('agent');
     setPage('settings');
   }, [setPage]);
 
@@ -736,14 +807,14 @@ export default function App() {
   );
 
   /**
-   * 抖音导入回调：在指定父目录下创建以视频标题命名的项目文件夹，
-   * 初始化空白脚本项目状态，保存抖音链接到 store，
-   * 导航到脚本工作台后自动触发完整的视频下载+转录流程。
+   * 媒体导入回调：在指定父目录下创建以标题命名的项目文件夹，
+   * 初始化空白脚本项目状态，保存待导入源（抖音链接 / 本地视频 / 本地音频）到 store，
+   * 导航到脚本工作台后自动触发导入 + 转录流程。
    */
-  const handleDouyinImport = useCallback(async (
+  const handleMediaImport = useCallback(async (
     parentDir: string,
     title: string,
-    douyinUrl: string,
+    source: VideoImportSourceInput,
     autoMode: boolean,
     autoParams: AutoWorkflowParams,
     modelBinding: { providerId: string; model: string } | null,
@@ -753,8 +824,8 @@ export default function App() {
     clearCurrentProject();
     useScriptStore.getState().clearProjectSession();
     useScriptStore.getState().restoreState(createBlankScriptProjectState(projectDir));
-    // 设置待处理的抖音链接，进入工作台后自动触发导入
-    useScriptStore.getState().setPendingDouyinUrl(douyinUrl);
+    // 设置待处理导入源，进入工作台后自动触发导入
+    useScriptStore.getState().setPendingMediaImport(source);
 
     setTimeline(createDefaultTimeline());
     setSrtEntries([]);
@@ -778,8 +849,8 @@ export default function App() {
         );
       }
       useAIStore.getState().setPendingAutoParams(autoParams);
-      // 注意：pendingDouyinUrl 不在这里清理，由 AutoRunController（Task 10/11）
-      // 在抖音下载启动后自行清掉，避免 ScriptWorkbench 后续误消费
+      // 注意：pendingMediaImport 不在这里清理，由 AutoRunController（Task 10/11）
+      // 在导入启动后自行清掉，避免 ScriptWorkbench 后续误消费
       setPage('auto-run');
       return;
     }
@@ -1070,14 +1141,14 @@ export default function App() {
   }, [currentProjectDir]);
 
   const handleWorkspaceTabSwitch = useCallback(
-    (tab: 'script-workbench' | 'editor') => {
+    (tab: 'script-workbench' | 'editor' | 'publish') => {
       if (tab === page) return;
       setPage(tab);
     },
     [page, setPage],
   );
 
-  const showWorkspaceTabs = page === 'editor' || page === 'script-workbench';
+  const showWorkspaceTabs = page === 'editor' || page === 'script-workbench' || page === 'publish';
   const reducedMotion = prefersReducedMotion();
   const pageTransition = resolvePageTransition({
     fromPage: previousPage,
@@ -1168,7 +1239,7 @@ export default function App() {
       />
       {showWorkspaceTabs && (
         <WorkspaceTabs
-          active={page as 'script-workbench' | 'editor'}
+          active={page as 'script-workbench' | 'editor' | 'publish'}
           onSwitch={handleWorkspaceTabSwitch}
           scriptProgress={scriptProgress}
         />
@@ -1199,12 +1270,12 @@ export default function App() {
                   onRemoveRecentProject={handleRemoveRecentProject}
                   onImportScript={handleImportScript}
                   onOpenSettings={() => setPage('settings')}
-                  onDouyinImport={handleDouyinImport}
+                  onMediaImport={handleMediaImport}
                   onImportProject={handleOpenImportProject}
                   onCreateSceneForgeProject={handleCreateSceneForgeProject}
                 />
               ) : page === 'settings' ? (
-                <Settings onBack={() => setPage(previousPage)} />
+                <Settings onBack={() => setPage(previousPage)} initialTab={settingsInitialTab} />
               ) : page === 'auto-run' ? (
                 <AutoRunController setPage={setPage} />
               ) : page === 'sceneforge-studio' ? (
@@ -1231,6 +1302,9 @@ export default function App() {
                       setPage={setPage}
                     />
                   </div>
+                  <div style={{ display: page === 'publish' ? 'contents' : 'none' }}>
+                    <PublishWorkbench projectDir={currentProjectDir} />
+                  </div>
                 </>
               )}
             </m.div>
@@ -1239,7 +1313,12 @@ export default function App() {
           </AppErrorBoundary>
         </div>
         <AnimatePresence initial={false}>
-          {agentSidebarOpen && <AgentSidebar />}
+          {agentSidebarOpen && (
+            // 对话侧边栏独立纳入错误边界：任一渲染异常只关闭面板，不整窗黑屏
+            <AppErrorBoundary onReset={() => useAgentStore.getState().toggleSidebar()}>
+              <AgentSidebar onOpenAgentSettings={handleOpenAgentSettings} />
+            </AppErrorBoundary>
+          )}
         </AnimatePresence>
       </div>
       <AppStatusBar />
