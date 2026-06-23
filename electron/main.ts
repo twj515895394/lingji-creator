@@ -77,6 +77,7 @@ import { registerConversationIpc } from './conversations/ipc';
 import { registerMcpIpc } from './mcp/ipc';
 import { registerScriptHistoryIpc } from './script-history/ipc';
 import { registerSceneForgeIpc } from './sceneforge/ipc';
+import { registerSceneForgeRemixIpc } from './sceneforge/remix/remix-ipc';
 import { registerPublishIpc } from './publish/ipc';
 import { LockMonitor } from './ai-edit/lock-watcher';
 import { validateTimeline, type EditError } from '../src/lib/external-edit-validate';
@@ -2647,6 +2648,7 @@ registerConversationIpc(() => mainWindow);
 registerMcpIpc(() => mainWindow);
 registerScriptHistoryIpc();
 registerSceneForgeIpc();
+registerSceneForgeRemixIpc();
 registerPublishIpc();
 
 // 设置 macOS 系统菜单栏应用名称

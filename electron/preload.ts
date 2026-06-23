@@ -16,6 +16,16 @@ import type { ConversationAPI } from '../src/types/conversation';
 import type { VideoImportRequest } from '../src/lib/video-import-types';
 import type { VideoImportTaskSnapshot } from './video-import/types';
 import type { PipelineTask } from './pipeline/types';
+import type {
+  CreateSourceAssetFromImportInput,
+  CreateVariantFromSourceAssetInput,
+  RegisterEditedKeyframeInput,
+  RemixSourceAssetRefInput,
+  RemixVariantRefInput,
+  RunSourceAssetStageInput,
+  UpdateEditedKeyframeStatusInput,
+  UpdateVariantConfigInput,
+} from './sceneforge/remix/remix-ipc-types';
 
 type PipelineTaskUpdate = PipelineTask & { bridgeId: string };
 
@@ -190,6 +200,42 @@ contextBridge.exposeInMainWorld('electronAPI', {
     ) => callback(payload);
     ipcRenderer.on('sceneforge:stage-run-progress', handler);
     return () => ipcRenderer.removeListener('sceneforge:stage-run-progress', handler);
+  },
+  sceneForgeRemix: {
+    listSourceAssets: () =>
+      ipcRenderer.invoke('sceneForgeRemix:listSourceAssets'),
+    getSourceAsset: (input: RemixSourceAssetRefInput) =>
+      ipcRenderer.invoke('sceneForgeRemix:getSourceAsset', input),
+    createSourceAssetFromImport: (input: CreateSourceAssetFromImportInput) =>
+      ipcRenderer.invoke('sceneForgeRemix:createSourceAssetFromImport', input),
+    runSourceSegmentation: (input: RunSourceAssetStageInput) =>
+      ipcRenderer.invoke('sceneForgeRemix:runSourceSegmentation', input),
+    runSourceKeyframes: (input: RunSourceAssetStageInput) =>
+      ipcRenderer.invoke('sceneForgeRemix:runSourceKeyframes', input),
+    runSourceUnderstanding: (input: RunSourceAssetStageInput) =>
+      ipcRenderer.invoke('sceneForgeRemix:runSourceUnderstanding', input),
+    publishSourceAssetToLibrary: (input: RemixSourceAssetRefInput) =>
+      ipcRenderer.invoke('sceneForgeRemix:publishSourceAssetToLibrary', input),
+    createVariantFromSourceAsset: (input: CreateVariantFromSourceAssetInput) =>
+      ipcRenderer.invoke('sceneForgeRemix:createVariantFromSourceAsset', input),
+    getCreationWorkspace: (input: RemixVariantRefInput) =>
+      ipcRenderer.invoke('sceneForgeRemix:getCreationWorkspace', input),
+    updateVariantConfig: (input: UpdateVariantConfigInput) =>
+      ipcRenderer.invoke('sceneForgeRemix:updateVariantConfig', input),
+    runRemixStrategy: (input: RemixVariantRefInput) =>
+      ipcRenderer.invoke('sceneForgeRemix:runRemixStrategy', input),
+    runRemixDesign: (input: RemixVariantRefInput) =>
+      ipcRenderer.invoke('sceneForgeRemix:runRemixDesign', input),
+    runKeyframeEditPrompts: (input: RemixVariantRefInput) =>
+      ipcRenderer.invoke('sceneForgeRemix:runKeyframeEditPrompts', input),
+    registerEditedKeyframe: (input: RegisterEditedKeyframeInput) =>
+      ipcRenderer.invoke('sceneForgeRemix:registerEditedKeyframe', input),
+    updateEditedKeyframeStatus: (input: UpdateEditedKeyframeStatusInput) =>
+      ipcRenderer.invoke('sceneForgeRemix:updateEditedKeyframeStatus', input),
+    runSeedancePrompts: (input: RemixVariantRefInput) =>
+      ipcRenderer.invoke('sceneForgeRemix:runSeedancePrompts', input),
+    exportPromptBundle: (input: RemixVariantRefInput) =>
+      ipcRenderer.invoke('sceneForgeRemix:exportPromptBundle', input),
   },
   saveProjectSection: (projectDir: string, section: string, data: string) =>
     ipcRenderer.invoke('save-project-section', projectDir, section, data),

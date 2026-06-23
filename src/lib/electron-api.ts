@@ -51,6 +51,22 @@ import type { SceneArtifact } from '../../electron/sceneforge/artifacts/scene-ar
 import type { SceneValidationResult } from '../../electron/sceneforge/validators/scene-validator';
 import type { SceneState } from '../../electron/sceneforge/pipeline/scene-state-machine';
 import type { PublishAccount, PublishPlatform } from '../../electron/publish/types';
+import type {
+  CreateSourceAssetFromImportInput,
+  CreateVariantFromSourceAssetInput,
+  ExportPromptBundleResult,
+  RegisterEditedKeyframeInput,
+  RemixSourceAssetRefInput,
+  RemixVariantRefInput,
+  RunSourceAssetStageInput,
+  UpdateEditedKeyframeStatusInput,
+  UpdateVariantConfigInput,
+} from '../../electron/sceneforge/remix/remix-ipc-types';
+import type {
+  RemixAssetLibrarySnapshot,
+  RemixAssetProcessingSnapshot,
+  RemixCreationWorkspaceSnapshot,
+} from '../sceneforge/remix/types';
 
 export type SceneRunStageInput = SceneRunStageIpcInput;
 export type SceneAnalyzeTopicGateInput = SceneAnalyzeTopicGateIpcInput;
@@ -59,6 +75,20 @@ export type SceneStageRunProgressPayload = SceneStageRunProgressPayloadType;
 
 export type { SceneGetStageContextOptions, SceneStageRunnerResult };
 export type { PublishAccount, PublishPlatform };
+export type {
+  CreateSourceAssetFromImportInput,
+  CreateVariantFromSourceAssetInput,
+  ExportPromptBundleResult,
+  RegisterEditedKeyframeInput,
+  RemixSourceAssetRefInput,
+  RemixVariantRefInput,
+  RunSourceAssetStageInput,
+  UpdateEditedKeyframeStatusInput,
+  UpdateVariantConfigInput,
+  RemixAssetLibrarySnapshot,
+  RemixAssetProcessingSnapshot,
+  RemixCreationWorkspaceSnapshot,
+};
 
 export type {
   SceneAssetRegistryEntry,
@@ -400,6 +430,57 @@ export interface ElectronAPI {
   onSceneStageRunProgress: (
     callback: (payload: SceneStageRunProgressPayload) => void,
   ) => () => void;
+  sceneForgeRemix: {
+    listSourceAssets: () => Promise<RemixAssetLibrarySnapshot>;
+    getSourceAsset: (
+      input: RemixSourceAssetRefInput,
+    ) => Promise<RemixAssetProcessingSnapshot>;
+    createSourceAssetFromImport: (
+      input: CreateSourceAssetFromImportInput,
+    ) => Promise<RemixAssetProcessingSnapshot>;
+    runSourceSegmentation: (
+      input: RunSourceAssetStageInput,
+    ) => Promise<RemixAssetProcessingSnapshot>;
+    runSourceKeyframes: (
+      input: RunSourceAssetStageInput,
+    ) => Promise<RemixAssetProcessingSnapshot>;
+    runSourceUnderstanding: (
+      input: RunSourceAssetStageInput,
+    ) => Promise<RemixAssetProcessingSnapshot>;
+    publishSourceAssetToLibrary: (
+      input: RemixSourceAssetRefInput,
+    ) => Promise<RemixAssetProcessingSnapshot>;
+    createVariantFromSourceAsset: (
+      input: CreateVariantFromSourceAssetInput,
+    ) => Promise<RemixCreationWorkspaceSnapshot>;
+    getCreationWorkspace: (
+      input: RemixVariantRefInput,
+    ) => Promise<RemixCreationWorkspaceSnapshot>;
+    updateVariantConfig: (
+      input: UpdateVariantConfigInput,
+    ) => Promise<RemixCreationWorkspaceSnapshot>;
+    runRemixStrategy: (
+      input: RemixVariantRefInput,
+    ) => Promise<RemixCreationWorkspaceSnapshot>;
+    runRemixDesign: (
+      input: RemixVariantRefInput,
+    ) => Promise<RemixCreationWorkspaceSnapshot>;
+    runKeyframeEditPrompts: (
+      input: RemixVariantRefInput,
+    ) => Promise<RemixCreationWorkspaceSnapshot>;
+    registerEditedKeyframe: (
+      input: RegisterEditedKeyframeInput,
+    ) => Promise<RemixCreationWorkspaceSnapshot>;
+    updateEditedKeyframeStatus: (
+      input: UpdateEditedKeyframeStatusInput,
+    ) => Promise<RemixCreationWorkspaceSnapshot>;
+    runSeedancePrompts: (
+      input: RemixVariantRefInput,
+    ) => Promise<RemixCreationWorkspaceSnapshot>;
+    exportPromptBundle: (
+      input: RemixVariantRefInput,
+    ) => Promise<ExportPromptBundleResult>;
+  };
   saveProjectSection: (projectDir: string, section: string, data: string) => Promise<void>;
   scanProjectDirectory: (
     projectDir: string,
