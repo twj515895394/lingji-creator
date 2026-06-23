@@ -1,0 +1,97 @@
+.root {
+  display: grid;
+  gap: 10px;
+}
+
+.header {
+  display: grid;
+  gap: 6px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.eyebrow {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: #d6a95f;
+}
+
+.title {
+  font-size: 20px;
+  font-weight: 700;
+  color: rgba(255, 248, 235, 0.94);
+}
+
+.description {
+  font-size: 13px;
+  line-height: 1.6;
+  color: rgba(214, 221, 232, 0.74);
+}
+
+.list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 10px;
+}
+
+.item {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 12px;
+  align-items: start;
+  padding: 12px 14px;
+  border-radius: 16px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.045), rgba(255, 255, 255, 0.025)),
+    rgba(9, 14, 23, 0.94);
+}
+
+.itemActive {
+  border-color: rgba(214, 169, 95, 0.45);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.08);
+  background:
+    linear-gradient(180deg, rgba(214, 169, 95, 0.14), rgba(214, 169, 95, 0.04)),
+    rgba(12, 18, 28, 0.96);
+}
+
+.index {
+  width: 30px;
+  height: 30px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  font-size: 12px;
+  font-weight: 700;
+  color: rgba(255, 248, 235, 0.9);
+  background: rgba(255, 255, 255, 0.05);
+}
+
+.itemActive .index {
+  color: #11161f;
+  background: #d6a95f;
+  border-color: rgba(214, 169, 95, 0.55);
+}
+
+.content {
+  display: grid;
+  gap: 4px;
+}
+
+.itemTitle {
+  font-size: 14px;
+  font-weight: 700;
+  color: rgba(255, 248, 235, 0.92);
+}
+
+.itemCaption {
+  font-size: 12px;
+  line-height: 1.5;
+  color: rgba(214, 221, 232, 0.66);
+}

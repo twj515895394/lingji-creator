@@ -20,6 +20,17 @@ import { Settings, type SettingsTab } from './pages/Settings';
 import { Setup } from './pages/Setup';
 import { SceneForgeStudio } from './sceneforge/pages/SceneForgeStudio';
 import { SceneForgeCreateDialog } from './sceneforge/components/SceneForgeCreateDialog';
+import { RemixAssetLibrary } from './sceneforge/remix/pages/RemixAssetLibrary';
+import { RemixAssetProcessing } from './sceneforge/remix/pages/RemixAssetProcessing';
+import { RemixCreationWorkspace } from './sceneforge/remix/pages/RemixCreationWorkspace';
+import {
+  buildRemixPath,
+  getAppPageForRemixRoute,
+  isRemixAppPage,
+  parseRemixPath,
+  readRemixPathFromHash,
+  type RemixRoute,
+} from './sceneforge/remix/lib/remix-routing';
 import type { SceneEntryPath } from './types/sceneforge';
 import { AutoRunController } from './components/AutoRunController';
 import { ImportProjectDialog } from './components/ImportProjectDialog';
@@ -86,6 +97,7 @@ export default function App() {
   const [isSettingUp, setIsSettingUp] = useState(false);
   const [setupError, setSetupError] = useState<string | null>(null);
   const [currentProjectDir, setCurrentProjectDir] = useState(() => getCurrentProjectDir());
+  const [remixRoute, setRemixRoute] = useState<RemixRoute>({ kind: 'asset-library' });
   const [recentProjects, setRecentProjects] = useState<RecentProjectEntry[]>([]);
   const [saveStatus, setSaveStatus] = useState(() => getCurrentSaveStatus());
   const [aiSaveStatus, setAISaveStatus] = useState(() => getCurrentAISaveStatus());
@@ -411,6 +423,54 @@ export default function App() {
     useScriptStore.getState().clearProjectSession();
     setPage('welcome', reason);
   }, [clearAIAnalysis, setSrtEntries, setTimeline]);
+
+  const applyRemixRoute = useCallback(
+    (route: RemixRoute, historyMode: 'push' | 'replace' | 'none' = 'push') => {
+      setRemixRoute(route);
+      setPage(getAppPageForRemixRoute(route));
+      if (typeof window === 'undefined' || historyMode === 'none') {
+        return;
+      }
+      const path = buildRemixPath(route);
+      const state = { appPage: getAppPageForRemixRoute(route), remixPath: path };
+      if (historyMode === 'replace') {
+        window.history.replaceState(state, '', `#${path}`);
+      } else {
+        window.history.pushState(state, '', `#${path}`);
+      }
+    },
+    [setPage],
+  );
+
+  useEffect(() => {
+    if (typeof window === 'undefined') {
+      return;
+    }
+    const initialPath = readRemixPathFromHash(window.location.hash);
+    if (initialPath) {
+      const route = parseRemixPath(initialPath);
+      if (route) {
+        setRemixRoute(route);
+        setPage(getAppPageForRemixRoute(route));
+      }
+    }
+
+    const onPopState = () => {
+      const nextPath = readRemixPathFromHash(window.location.hash);
+      if (!nextPath) {
+        return;
+      }
+      const route = parseRemixPath(nextPath);
+      if (!route) {
+        return;
+      }
+      setRemixRoute(route);
+      setPage(getAppPageForRemixRoute(route));
+    };
+
+    window.addEventListener('popstate', onPopState);
+    return () => window.removeEventListener('popstate', onPopState);
+  }, [setPage]);
 
   const openProject = useCallback(
     async (projectDir: string) => {
@@ -1273,6 +1333,9 @@ export default function App() {
                   onMediaImport={handleMediaImport}
                   onImportProject={handleOpenImportProject}
                   onCreateSceneForgeProject={handleCreateSceneForgeProject}
+                  onOpenRemixMode={() =>
+                    applyRemixRoute({ kind: 'asset-library' })
+                  }
                 />
               ) : page === 'settings' ? (
                 <Settings onBack={() => setPage(previousPage)} initialTab={settingsInitialTab} />
@@ -1280,6 +1343,29 @@ export default function App() {
                 <AutoRunController setPage={setPage} />
               ) : page === 'sceneforge-studio' ? (
                 <SceneForgeStudio projectDir={currentProjectDir} />
+              ) : page === 'sceneforge-remix-assets' || page === 'sceneforge-remix-asset-details' ? (
+                <RemixAssetLibrary
+                  selectedSourceAssetId={remixRoute.kind === 'asset-details' ? remixRoute.sourceAssetId : null}
+                  onOpenProcessing={(sourceAssetId) =>
+                    applyRemixRoute({ kind: 'asset-processing', sourceAssetId })
+                  }
+                  onOpenDetails={(sourceAssetId) =>
+                    applyRemixRoute({ kind: 'asset-details', sourceAssetId })
+                  }
+                  onOpenCreation={(sourceAssetId) =>
+                    applyRemixRoute({ kind: 'creation', variantId: `${sourceAssetId}-variant-001` })
+                  }
+                />
+              ) : page === 'sceneforge-remix-asset-processing' ? (
+                <RemixAssetProcessing
+                  sourceAssetId={remixRoute.kind === 'asset-processing' ? remixRoute.sourceAssetId : 'source-001'}
+                  onBackToLibrary={() => applyRemixRoute({ kind: 'asset-library' })}
+                />
+              ) : page === 'sceneforge-remix-creation' ? (
+                <RemixCreationWorkspace
+                  variantId={remixRoute.kind === 'creation' ? remixRoute.variantId : 'variant-001'}
+                  onBackToLibrary={() => applyRemixRoute({ kind: 'asset-library' })}
+                />
               ) : (
                 <>
                   {/* 写稿工作台和编辑器保持同时挂载，用 display 切换，避免重新挂载引起的布局振荡 */}

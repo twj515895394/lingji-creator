@@ -428,12 +428,14 @@ describe('Setup SceneForge entry', () => {
         onOpenRecentProject={noopAsync}
         onImportScript={noopAsync}
         onOpenSettings={() => undefined}
-        onDouyinImport={noopAsync}
+        onMediaImport={noopAsync}
         onImportProject={() => undefined}
         onCreateSceneForgeProject={noopAsync}
+        onOpenRemixMode={noopAsync}
       />,
     );
 
     expect(html).toContain('视频内容创作工坊');
+    expect(html).toContain('Remix Mode');
   });
 });

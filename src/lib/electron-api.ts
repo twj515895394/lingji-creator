@@ -111,6 +111,10 @@ export type AppPage =
   | 'auto-run'
   | 'sceneforge-setup'
   | 'sceneforge-studio'
+  | 'sceneforge-remix-assets'
+  | 'sceneforge-remix-asset-processing'
+  | 'sceneforge-remix-asset-details'
+  | 'sceneforge-remix-creation'
   | 'publish';
 
 export interface FileEntry {

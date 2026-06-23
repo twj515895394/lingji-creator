@@ -71,6 +71,8 @@ interface SetupProps {
   onImportProject: () => void;
   /** 创建视频内容创作工坊（SceneForge）项目 */
   onCreateSceneForgeProject: () => Promise<void> | void;
+  /** 进入 Remix Mode 资产库 */
+  onOpenRemixMode?: () => Promise<void> | void;
 }
 
 interface ScanResult {
@@ -92,6 +94,7 @@ export function Setup({
   onMediaImport,
   onImportProject,
   onCreateSceneForgeProject,
+  onOpenRemixMode,
 }: SetupProps) {
   // ── 音频导入弹窗状态 ──
   const [importDialogOpen, setImportDialogOpen] = useState(false);
@@ -509,6 +512,17 @@ export function Setup({
               <Sparkles size={22} strokeWidth={1.5} />
             </div>
             <span className={styles.quickItemLabel}>视频内容创作工坊</span>
+          </button>
+          <button
+            type="button"
+            className={styles.quickItem}
+            onClick={() => onOpenRemixMode?.()}
+            data-testid="setup-remix-mode-entry"
+          >
+            <div className={styles.quickItemIcon}>
+              <Link size={22} strokeWidth={1.5} />
+            </div>
+            <span className={styles.quickItemLabel}>Remix Mode</span>
           </button>
         </div>
 

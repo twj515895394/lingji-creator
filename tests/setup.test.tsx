@@ -15,6 +15,9 @@ describe('Setup', () => {
         onImportScript={async () => undefined}
         onOpenSettings={() => undefined}
         onMediaImport={async () => undefined}
+        onImportProject={() => undefined}
+        onCreateSceneForgeProject={() => undefined}
+        onOpenRemixMode={() => undefined}
       />,
     );
 
@@ -23,6 +26,7 @@ describe('Setup', () => {
     expect(html).toContain('导入音频');
     expect(html).toContain('抖音导入');
     expect(html).toContain('本地视频');
+    expect(html).toContain('Remix Mode');
     expect(html).not.toContain('所有文件均在本地处理');
   });
 
@@ -38,6 +42,9 @@ describe('Setup', () => {
         onImportScript={async () => undefined}
         onOpenSettings={() => undefined}
         onMediaImport={async () => undefined}
+        onImportProject={() => undefined}
+        onCreateSceneForgeProject={() => undefined}
+        onOpenRemixMode={() => undefined}
       />,
     );
 
@@ -63,6 +70,9 @@ describe('Setup', () => {
         onImportScript={async () => undefined}
         onOpenSettings={() => undefined}
         onMediaImport={async () => undefined}
+        onImportProject={() => undefined}
+        onCreateSceneForgeProject={() => undefined}
+        onOpenRemixMode={() => undefined}
       />,
     );
 
