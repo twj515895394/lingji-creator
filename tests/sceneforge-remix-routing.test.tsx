@@ -36,11 +36,11 @@ describe('SceneForge Remix routing', () => {
 
   it('renders the Remix page skeletons with distinct workspace boundaries', () => {
     const libraryHtml = renderToStaticMarkup(
-      <RemixAssetLibrary selectedSourceAssetId="source-001" />,
+      <RemixAssetLibrary selectedSourceAssetId="source-library-001" />,
     );
     expect(libraryHtml).toContain('data-testid="remix-asset-library-page"');
     expect(libraryHtml).toContain('data-testid="remix-asset-grid"');
-    expect(libraryHtml).toContain('资产详情视图');
+    expect(libraryHtml).toContain('天台谈判名场面');
 
     const processingHtml = renderToStaticMarkup(
       <RemixAssetProcessing sourceAssetId="source-001" />,

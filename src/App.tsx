@@ -1352,8 +1352,8 @@ export default function App() {
                   onOpenDetails={(sourceAssetId) =>
                     applyRemixRoute({ kind: 'asset-details', sourceAssetId })
                   }
-                  onOpenCreation={(sourceAssetId) =>
-                    applyRemixRoute({ kind: 'creation', variantId: `${sourceAssetId}-variant-001` })
+                  onOpenCreation={(variantId) =>
+                    applyRemixRoute({ kind: 'creation', variantId })
                   }
                 />
               ) : page === 'sceneforge-remix-asset-processing' ? (
