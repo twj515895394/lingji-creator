@@ -157,6 +157,7 @@ describe('SceneForge Remix creation workspace', () => {
     expect(html).toContain('剧情结构');
     expect(html).toContain('梗机制');
     expect(html).not.toContain('导入原片');
+    expect(html).toContain('data-testid="remix-creation-reference-preview"');
   });
 
   it('renders copy-ready prompt and inspector-focused selection states', () => {
@@ -168,8 +169,8 @@ describe('SceneForge Remix creation workspace', () => {
       />,
     );
     expect(promptHtml).toContain('data-testid="remix-keyframe-prompt-list"');
-    expect(promptHtml).toContain('复制 Prompt');
-    expect(promptHtml).toContain('当前 Prompt 预览');
+    expect(promptHtml).toContain('复制提示词');
+    expect(promptHtml).toContain('当前改图提示词预览');
 
     const editedHtml = renderToStaticMarkup(
       <RemixCreationWorkspace
@@ -192,8 +193,8 @@ describe('SceneForge Remix creation workspace', () => {
       />,
     );
     expect(seedanceHtml).toContain('data-testid="remix-seedance-prompt-preview"');
-    expect(seedanceHtml).toContain('Visual');
-    expect(seedanceHtml).toContain('Ambient');
+    expect(seedanceHtml).toContain('画面');
+    expect(seedanceHtml).toContain('环境声');
 
     const publishHtml = renderToStaticMarkup(
       <RemixCreationWorkspace
@@ -275,7 +276,7 @@ describe('SceneForge Remix creation workspace', () => {
     });
 
     const generateButton = Array.from(container.querySelectorAll('button')).find((element) =>
-      element.textContent?.includes('生成 Seedance Prompt'),
+      element.textContent?.includes('生成视频提示词'),
     );
     expect(generateButton?.getAttribute('disabled')).toBeNull();
     await act(async () => {

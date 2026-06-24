@@ -19,6 +19,7 @@ import {
   MOCK_ASSET_PROCESSING_SNAPSHOTS,
   MOCK_CREATION_WORKSPACE_SNAPSHOT,
 } from '../mock/mock-data';
+import { REMIX_CREATION_NAV_ITEMS } from './remix-stage-nav';
 
 export type AssetProcessingStepId =
   | 'source-import'
@@ -78,6 +79,20 @@ export interface SeedanceDisplayItem {
   title: string;
   generationModeLabel: string;
   summary: string;
+}
+
+export interface SourceOverviewSummaryItem {
+  label: string;
+  value: string;
+}
+
+export interface SegmentAnalysisItem {
+  id: string;
+  title: string;
+  timeRange: string;
+  boundaryLabel: string;
+  keyframeSummary: string;
+  note: string;
 }
 
 const STAGE_STATUS_LABELS: Record<RemixStageStatus, string> = {
@@ -236,6 +251,29 @@ export function formatRemixTimeRange(segment: SourceSegment): string {
   return `${formatRemixTimestamp(segment.timeRange.startMs)} - ${formatRemixTimestamp(segment.timeRange.endMs)}`;
 }
 
+export function findSourceSegmentAtTime(
+  asset: SourceAsset,
+  timeMs: number,
+): SourceSegment | null {
+  if (!asset.segments.length) {
+    return null;
+  }
+
+  const clampedTimeMs = Math.max(0, timeMs);
+  return (
+    asset.segments.find((segment, index) => {
+      const isLast = index === asset.segments.length - 1;
+      return isLast
+        ? clampedTimeMs >= segment.timeRange.startMs && clampedTimeMs <= segment.timeRange.endMs
+        : clampedTimeMs >= segment.timeRange.startMs && clampedTimeMs < segment.timeRange.endMs;
+    }) ?? asset.segments[0]
+  );
+}
+
+export function getCreationStepTitle(stepId: CreationStepId): string {
+  return REMIX_CREATION_NAV_ITEMS.find((item) => item.id === stepId)?.title ?? stepId;
+}
+
 export function getStageStatusLabel(status: RemixStageStatus): string {
   return STAGE_STATUS_LABELS[status];
 }
@@ -338,6 +376,37 @@ export function buildSourceOverviewMarkdown(asset: SourceAsset): string {
     `## 处理判断`,
     `当前素材更适合先沉淀压迫感、停顿节奏和镜头边界，再决定哪些结构能被二创保留。`,
   ].join('\n');
+}
+
+export function buildSourceOverviewSummary(asset: SourceAsset): SourceOverviewSummaryItem[] {
+  return [
+    { label: '素材时长', value: formatRemixDuration(asset.videoMetadata.durationMs) },
+    { label: '画面规格', value: `${asset.videoMetadata.width} × ${asset.videoMetadata.height}` },
+    { label: '镜头分段', value: `${asset.segments.length} 段` },
+    { label: '关键帧', value: `${flattenAssetKeyframes(asset).length} 张` },
+    { label: '音频情况', value: asset.videoMetadata.hasAudio ? '保留原音轨' : '无音频' },
+    { label: '标签', value: asset.tags.length > 0 ? asset.tags.join(' / ') : '未打标签' },
+  ];
+}
+
+export function buildSourceOverviewFocus(asset: SourceAsset): string {
+  const dominantBoundary = asset.segments.some((segment) => segment.boundaryType === 'split_long_shot')
+    ? '优先盯长镜头拆分后的情绪断点，避免把节奏切碎。'
+    : asset.segments.some((segment) => segment.boundaryType === 'merged_short_shots')
+      ? '优先盯短镜头合并后的反打节奏，确认包袱点没有被抹平。'
+      : '优先盯原始镜头边界和表演停顿，确认后续二创不会破坏压迫感。';
+  return dominantBoundary;
+}
+
+export function buildSegmentAnalysisItems(asset: SourceAsset): SegmentAnalysisItem[] {
+  return asset.segments.map((segment) => ({
+    id: segment.id,
+    title: `${String(segment.index).padStart(2, '0')} · ${segment.title}`,
+    timeRange: `${formatRemixTimeRange(segment)} (${formatRemixDuration(segment.timeRange.durationMs)})`,
+    boundaryLabel: getSegmentBoundaryLabel(segment.boundaryType),
+    keyframeSummary: segment.keyframes.map((frame) => getKeyframeRoleLabel(frame.frameRole)).join(' / '),
+    note: buildSegmentNote(segment),
+  }));
 }
 
 export function buildSegmentAnalysisMarkdown(asset: SourceAsset): string {
@@ -465,7 +534,7 @@ export function buildCreationPublishChecklist(
     },
     {
       id: 'design-approved',
-      label: 'Remix Design 已完成',
+      label: '画面设计已完成',
       passed:
         (snapshot.creationStageStates.remix_design ?? 'not_started') === 'approved',
       note: '角色、场景和风格连续性已对齐。',
@@ -617,6 +686,7 @@ export function buildCreationInspectorSummary(
   snapshot: RemixCreationWorkspaceSnapshot,
   selectedPromptId: string | null,
   selectedEditedKeyframeId: string | null,
+  stepStatuses?: Record<CreationStepId, RemixStageStatus>,
 ): Array<{ label: string; value: string }> {
   if (stepId === 'keyframe-prompts') {
     const prompt = getSelectedPromptDisplay(
@@ -624,7 +694,7 @@ export function buildCreationInspectorSummary(
       selectedPromptId,
     );
     return [
-      { label: '当前 Prompt', value: prompt?.title ?? '无' },
+      { label: '当前提示词', value: prompt?.title ?? '无' },
       { label: '引用强度', value: getReferenceStrengthLabel(snapshot.variant.referenceStrength) },
       { label: '默认生成', value: getGenerationModeLabel(snapshot.variant.defaultGenerationMode) },
     ];
@@ -649,8 +719,12 @@ export function buildCreationInspectorSummary(
   }
 
   return [
-    { label: '源资产（Source Asset）', value: snapshot.sourceAsset.title },
-    { label: '二创版本（Variant）', value: snapshot.variant.name },
-    { label: '当前阶段', value: stepId },
+    { label: '当前步骤', value: getCreationStepTitle(stepId) },
+    { label: '源资产', value: snapshot.sourceAsset.title },
+    { label: '二创版本', value: snapshot.variant.name },
+    {
+      label: '步骤状态',
+      value: stepStatuses ? getStageStatusLabel(stepStatuses[stepId]) : '—',
+    },
   ];
 }

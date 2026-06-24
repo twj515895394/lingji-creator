@@ -4,6 +4,7 @@ import {
   formatRemixTimestamp,
   getKeyframeRoleLabel,
 } from '../lib/remix-workspace-view-model';
+import { RemixFrameImage } from './RemixFrameImage';
 import styles from './RemixWorkspacePanels.module.css';
 
 interface KeyframeGalleryProps {
@@ -17,7 +18,7 @@ export function KeyframeGallery({ asset }: KeyframeGalleryProps) {
     <div className={styles.galleryGrid} data-testid="remix-keyframe-gallery">
       {keyframes.map((frame) => (
         <article key={frame.id} className={styles.galleryCard}>
-          <div className={styles.galleryImage} />
+          <RemixFrameImage imagePath={frame.imagePath} alt={frame.id} />
           <div className={styles.galleryTitle}>
             {getKeyframeRoleLabel(frame.frameRole)}
           </div>

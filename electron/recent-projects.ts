@@ -79,6 +79,7 @@ export async function addRecentProject(
     coverImageUrl,
     projectKind: normalizedIdentity.projectKind,
     remixEntryIntent: normalizedIdentity.remixEntryIntent ?? null,
+    remixRoutePath: normalizedIdentity.remixRoutePath ?? null,
   };
 
   // 移除已存在的同路径项目，添加到开头
@@ -131,13 +132,13 @@ export async function refreshRecentProjects(
       createdAt: projectData?.createdAt ?? entry.createdAt,
       updatedAt: projectData?.updatedAt ?? entry.updatedAt,
       coverImageUrl,
-      projectKind:
-        entry.projectKind ??
-        (projectData?.type === 'sceneforge' ? 'sceneforge' : 'script'),
-      remixEntryIntent:
-        entry.projectKind === 'remix'
-          ? (entry.remixEntryIntent === 'creation' ? 'creation' : 'asset-ingestion')
-          : null,
+      ...normalizeRecentProjectIdentity({
+        projectKind:
+          entry.projectKind ??
+          (projectData?.type === 'sceneforge' ? 'sceneforge' : 'script'),
+        remixEntryIntent: entry.remixEntryIntent,
+        remixRoutePath: entry.remixRoutePath,
+      }),
     });
   }
 

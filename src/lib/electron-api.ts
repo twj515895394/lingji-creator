@@ -291,6 +291,7 @@ export type RemixProjectIntent = 'asset-ingestion' | 'creation';
 export interface RecentProjectIdentity {
   projectKind: RecentProjectKind;
   remixEntryIntent?: RemixProjectIntent | null;
+  remixRoutePath?: string | null;
 }
 
 export interface RecentProjectEntry {
@@ -302,6 +303,7 @@ export interface RecentProjectEntry {
   coverImageUrl?: string;
   projectKind?: RecentProjectKind;
   remixEntryIntent?: RemixProjectIntent | null;
+  remixRoutePath?: string | null;
 }
 
 export interface ElectronAPI {

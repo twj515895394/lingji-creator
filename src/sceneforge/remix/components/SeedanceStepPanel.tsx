@@ -39,7 +39,7 @@ export function SeedanceStepPanel({
       disabled={!canGenerateSeedance || Boolean(activeAction)}
       onClick={onGenerate}
     >
-      {activeAction === 'seedance-prompts' ? '生成中…' : '生成 Seedance Prompt'}
+      {activeAction === 'seedance-prompts' ? '生成中…' : '生成视频提示词'}
     </Button>
   );
 

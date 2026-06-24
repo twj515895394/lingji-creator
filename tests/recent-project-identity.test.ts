@@ -37,10 +37,23 @@ describe('recent project identity helpers', () => {
     expect(normalizeRecentProjectIdentity()).toEqual({
       projectKind: 'script',
       remixEntryIntent: null,
+      remixRoutePath: null,
     });
     expect(normalizeRecentProjectIdentity({ projectKind: 'remix' })).toEqual({
       projectKind: 'remix',
       remixEntryIntent: 'asset-ingestion',
+      remixRoutePath: null,
+    });
+    expect(
+      normalizeRecentProjectIdentity({
+        projectKind: 'remix',
+        remixEntryIntent: 'creation',
+        remixRoutePath: '/remix/projects/variant-001',
+      }),
+    ).toEqual({
+      projectKind: 'remix',
+      remixEntryIntent: 'creation',
+      remixRoutePath: '/remix/projects/variant-001',
     });
   });
 
@@ -52,9 +65,10 @@ describe('recent project identity helpers', () => {
         lastOpenedAt: 1,
         projectKind: 'remix',
         remixEntryIntent: 'creation',
+        remixRoutePath: '/remix/projects/variant-001',
       }),
     ).toEqual({
-      remixRoute: { kind: 'asset-library' },
+      remixRoute: { kind: 'creation', variantId: 'variant-001' },
       remixEntryIntent: 'creation',
     });
     expect(
@@ -65,5 +79,21 @@ describe('recent project identity helpers', () => {
         projectKind: 'script',
       }),
     ).toEqual({});
+  });
+
+  it('falls back to asset library when remix route path is invalid', () => {
+    expect(
+      resolveRecentProjectOpenOptions({
+        path: '/tmp/remix',
+        name: 'remix',
+        lastOpenedAt: 1,
+        projectKind: 'remix',
+        remixEntryIntent: 'asset-ingestion',
+        remixRoutePath: '/remix/not-a-real-route',
+      }),
+    ).toEqual({
+      remixRoute: { kind: 'asset-library' },
+      remixEntryIntent: 'asset-ingestion',
+    });
   });
 });

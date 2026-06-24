@@ -15,8 +15,8 @@
 }
 
 .filterLabel {
-  font-size: 11px;
-  font-weight: 700;
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-bold);
   letter-spacing: 0.16em;
   text-transform: uppercase;
   color: rgba(214, 221, 232, 0.56);
@@ -80,6 +80,49 @@
     linear-gradient(180deg, rgba(70, 110, 83, 0.42), rgba(6, 10, 17, 0.9));
 }
 
+.coverImage,
+.coverVideo,
+.detailPreview img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+.coverFallback {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  background:
+    linear-gradient(180deg, rgba(24, 32, 48, 0.16), rgba(5, 9, 15, 0.92)),
+    linear-gradient(135deg, rgba(214, 169, 95, 0.24), transparent 55%),
+    linear-gradient(180deg, rgba(70, 110, 83, 0.42), rgba(6, 10, 17, 0.9));
+}
+
+.coverFallbackGlow {
+  position: absolute;
+  inset: 18px;
+  border-radius: 18px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background:
+    radial-gradient(circle at 20% 20%, rgba(255, 255, 255, 0.12), transparent 32%),
+    radial-gradient(circle at 70% 30%, rgba(214, 169, 95, 0.2), transparent 36%);
+}
+
+.coverFallbackLabel {
+  position: relative;
+  z-index: 1;
+  padding: 6px 10px;
+  border-radius: 999px;
+  background: rgba(6, 10, 17, 0.72);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  font-size: var(--font-size-sm);
+  line-height: 1;
+  color: rgba(255, 248, 235, 0.88);
+  font-weight: var(--font-weight-bold);
+}
+
 .cover::after {
   content: '';
   position: absolute;
@@ -102,13 +145,13 @@
 }
 
 .coverTitle {
-  font-size: 18px;
-  font-weight: 700;
+  font-size: var(--font-size-heading-md);
+  font-weight: var(--font-weight-bold);
   color: rgba(255, 248, 235, 0.96);
 }
 
 .coverSubtitle {
-  font-size: 12px;
+  font-size: var(--font-size-md);
   color: rgba(214, 221, 232, 0.74);
 }
 
@@ -117,6 +160,26 @@
   align-items: flex-start;
   justify-content: space-between;
   gap: 12px;
+}
+
+.cardSummary {
+  display: grid;
+  gap: 6px;
+}
+
+.cardMetaLine {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  font-size: var(--font-size-sm);
+  line-height: 1.4;
+  color: rgba(214, 221, 232, 0.58);
+}
+
+.cardText {
+  font-size: var(--font-size-lg);
+  line-height: 1.55;
+  color: rgba(214, 221, 232, 0.76);
 }
 
 .metricGrid {
@@ -135,13 +198,13 @@
 }
 
 .metricValue {
-  font-size: 16px;
-  font-weight: 700;
+  font-size: var(--font-size-heading-sm);
+  font-weight: var(--font-weight-bold);
   color: rgba(255, 248, 235, 0.94);
 }
 
 .metricLabel {
-  font-size: 11px;
+  font-size: var(--font-size-sm);
   letter-spacing: 0.1em;
   text-transform: uppercase;
   color: rgba(214, 221, 232, 0.58);
@@ -158,7 +221,7 @@
   border-radius: 999px;
   border: 1px solid rgba(255, 255, 255, 0.08);
   background: rgba(255, 255, 255, 0.03);
-  font-size: 12px;
+  font-size: var(--font-size-md);
   color: rgba(214, 221, 232, 0.8);
 }
 
@@ -167,9 +230,19 @@
   gap: 16px;
 }
 
+.detailPreview {
+  min-height: 180px;
+  border-radius: 22px;
+  overflow: hidden;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background:
+    linear-gradient(135deg, rgba(214, 169, 95, 0.12), transparent 55%),
+    linear-gradient(180deg, rgba(70, 110, 83, 0.2), rgba(6, 10, 17, 0.9));
+}
+
 .inspectorTitle {
-  font-size: 18px;
-  font-weight: 700;
+  font-size: var(--font-size-heading-md);
+  font-weight: var(--font-weight-bold);
   color: rgba(255, 248, 235, 0.94);
 }
 
@@ -194,7 +267,7 @@
   align-items: center;
   justify-content: space-between;
   gap: 12px;
-  font-size: 13px;
+  font-size: var(--font-size-lg);
   color: rgba(214, 221, 232, 0.72);
 }
 
@@ -202,8 +275,14 @@
   color: rgba(255, 248, 235, 0.95);
 }
 
+.compactValue {
+  max-width: 240px;
+  text-align: right;
+  word-break: break-all;
+}
+
 .detailNote {
-  font-size: 13px;
+  font-size: var(--font-size-lg);
   line-height: 1.65;
   color: rgba(214, 221, 232, 0.72);
 }
@@ -220,13 +299,13 @@
 }
 
 .emptyTitle {
-  font-size: 18px;
-  font-weight: 700;
+  font-size: var(--font-size-heading-md);
+  font-weight: var(--font-weight-bold);
   color: rgba(255, 248, 235, 0.94);
 }
 
 .emptyText {
-  font-size: 13px;
+  font-size: var(--font-size-lg);
   line-height: 1.7;
   color: rgba(214, 221, 232, 0.7);
 }

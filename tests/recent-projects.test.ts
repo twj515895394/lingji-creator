@@ -73,6 +73,7 @@ describe('recent projects identity', () => {
     await addRecentProject(userDataPath, projectDir, 'remix-demo', {
       projectKind: 'remix',
       remixEntryIntent: 'creation',
+      remixRoutePath: '/remix/projects/variant-001',
     });
 
     const refreshed = await refreshRecentProjects(userDataPath);
@@ -82,6 +83,7 @@ describe('recent projects identity', () => {
       path: projectDir,
       projectKind: 'remix',
       remixEntryIntent: 'creation',
+      remixRoutePath: '/remix/projects/variant-001',
       updatedAt: '2026-06-24T10:05:00.000Z',
     });
   });

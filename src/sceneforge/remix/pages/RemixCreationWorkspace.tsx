@@ -8,6 +8,7 @@ import { KeyframePromptList } from '../components/KeyframePromptList';
 import { PublishChecklist } from '../components/PublishChecklist';
 import { RemixStageNav } from '../components/RemixStageNav';
 import { RetentionMatrixEditor } from '../components/RetentionMatrixEditor';
+import { CreationReferencePreview } from '../components/CreationReferencePreview';
 import { SeedanceStepPanel } from '../components/SeedanceStepPanel';
 import { StrategyPreview } from '../components/StrategyPreview';
 import { VariantConfigPanel } from '../components/VariantConfigPanel';
@@ -28,6 +29,8 @@ import {
   getSelectedPromptDisplay,
   getSelectedSeedancePrompt,
   getStageStatusLabel,
+  getReferenceStrengthLabel,
+  getGenerationModeLabel,
   isPromptBundleReady,
   type CreationStepId,
 } from '../lib/remix-workspace-view-model';
@@ -286,6 +289,7 @@ export function RemixCreationWorkspace({
         snapshot,
         selectedPromptId,
         selectedEditedKeyframeId,
+        stepStatuses,
       )
     : [];
 
@@ -414,7 +418,7 @@ export function RemixCreationWorkspace({
           <div className={panelStyles.panelTitleBlock}>
             <h2 className={panelStyles.panelTitle}>选择资产</h2>
             <p className={panelStyles.panelDescription}>
-              当前二创版本（Variant）绑定的是已经入库的源资产（Source Asset），不再回到处理工作台改原片本体。
+              当前二创版本绑定已入库源资产，不会回到原片处理工作台。
             </p>
           </div>
           <div className={panelStyles.chip}>{getStageStatusLabel(stepStatuses['select-asset'])}</div>
@@ -436,9 +440,9 @@ export function RemixCreationWorkspace({
       <section className={panelStyles.panelCard} data-testid="remix-creation-step-create-variant">
         <div className={panelStyles.panelHeaderRow}>
           <div className={panelStyles.panelTitleBlock}>
-            <h2 className={panelStyles.panelTitle}>创建二创版本（Variant）与保留矩阵</h2>
+            <h2 className={panelStyles.panelTitle}>创建二创版本与保留矩阵</h2>
             <p className={panelStyles.panelDescription}>
-              Step 02 直接完成名称、概念、引用强度和九维 retentionMatrix，不拆成多个零散页面。
+              在本步完成名称、概念、引用强度与九维保留矩阵配置。
             </p>
           </div>
           <div className={panelStyles.chip}>{getStageStatusLabel(stepStatuses['create-variant'])}</div>
@@ -515,7 +519,7 @@ export function RemixCreationWorkspace({
       <section className={panelStyles.panelCard} data-testid="remix-creation-step-design">
         <div className={panelStyles.panelHeaderRow}>
           <div className={panelStyles.panelTitleBlock}>
-            <h2 className={panelStyles.panelTitle}>Remix Design</h2>
+            <h2 className={panelStyles.panelTitle}>画面设计</h2>
             <p className={panelStyles.panelDescription}>
               全局角色、空间、风格和连续性规则在这里收敛，避免后续逐段漂移。
             </p>
@@ -535,7 +539,7 @@ export function RemixCreationWorkspace({
               );
             }}
           >
-            {activeAction === 'design' ? '生成中…' : '生成 Remix Design'}
+            {activeAction === 'design' ? '生成中…' : '生成 画面设计'}
           </Button>
         </div>
         <DesignPreview sections={designSections} />
@@ -547,7 +551,7 @@ export function RemixCreationWorkspace({
           <div className={panelStyles.panelTitleBlock}>
             <h2 className={panelStyles.panelTitle}>关键帧改图提示词</h2>
             <p className={panelStyles.panelDescription}>
-              每个 Prompt 都是 copy-ready 的，不只是路径占位。点击后右侧 Inspector 会随之切换。
+              每条提示词都可直接复制使用；选中后右侧摘要会同步切换。
             </p>
           </div>
           <div className={panelStyles.chip}>{getStageStatusLabel(stepStatuses['keyframe-prompts'])}</div>
@@ -686,10 +690,10 @@ export function RemixCreationWorkspace({
         <div className={shellStyles.panelContent}>
           <section className={panelStyles.heroPanel}>
             <div className={panelStyles.heroCopy}>
-              <div className={panelStyles.heroEyebrow}>Remix Creation Workspace</div>
-              <h1 className={panelStyles.heroTitle}>围绕已入库资产做二创，而不是把原片再处理一遍</h1>
+              <div className={panelStyles.heroEyebrow}>二创创作工作台</div>
+              <h1 className={panelStyles.heroTitle}>{variantName}</h1>
               <p className={panelStyles.heroDescription}>
-                当前二创版本（Variant）是 <strong>{variantName}</strong>。这里专注于策略、设计、改图提示词、改后关键帧验收与 Seedance 输出，不再出现导入、切片或原片理解步骤。
+                当前处于 <strong>{getStageStatusLabel(stepStatuses[activeStepId])}</strong> 阶段。基于已入库源资产「{snapshot.sourceAsset.title}」做策略、设计、改图与视频提示词，不回写原片处理流程。
               </p>
               {errorMessage ? (
                 <p className={panelStyles.heroDescription} data-testid="remix-creation-error">
@@ -709,42 +713,26 @@ export function RemixCreationWorkspace({
 
             <div className={panelStyles.heroMetaGrid}>
               <div className={panelStyles.heroMetaCard}>
-                <div className={panelStyles.heroMetaLabel}>Reference</div>
-                <div className={panelStyles.heroMetaValue}>{referenceStrength}</div>
+                <div className={panelStyles.heroMetaLabel}>引用强度</div>
+                <div className={panelStyles.heroMetaValue}>{getReferenceStrengthLabel(referenceStrength)}</div>
               </div>
               <div className={panelStyles.heroMetaCard}>
-                <div className={panelStyles.heroMetaLabel}>Mode</div>
-                <div className={panelStyles.heroMetaValue}>{defaultGenerationMode === 'keyframes_only' ? 'KF' : 'Hybrid'}</div>
+                <div className={panelStyles.heroMetaLabel}>生成模式</div>
+                <div className={panelStyles.heroMetaValue}>{getGenerationModeLabel(defaultGenerationMode)}</div>
               </div>
               <div className={panelStyles.heroMetaCard}>
-                <div className={panelStyles.heroMetaLabel}>Edited</div>
+                <div className={panelStyles.heroMetaLabel}>改后关键帧</div>
                 <div className={panelStyles.heroMetaValue}>{snapshot.editedKeyframes.length}</div>
               </div>
               <div className={panelStyles.heroMetaCard}>
-                <div className={panelStyles.heroMetaLabel}>Seedance</div>
+                <div className={panelStyles.heroMetaLabel}>视频提示词</div>
                 <div className={panelStyles.heroMetaValue}>{snapshot.seedancePrompts.length}</div>
               </div>
             </div>
           </section>
 
           <section className={panelStyles.workspaceGrid}>
-            <article className={panelStyles.previewSurface}>
-              <div className={panelStyles.previewTopline}>
-                <div>
-                  <div className={panelStyles.previewTitle}>二创版本预览（Variant Preview）</div>
-                  <div className={panelStyles.previewSubtitle}>
-                    {snapshot.sourceAsset.title} · {formatRemixDuration(snapshot.sourceAsset.durationMs)}
-                  </div>
-                </div>
-                <div className={panelStyles.chip}>{snapshot.variant.currentStage ?? 'draft'}</div>
-              </div>
-              <div className={panelStyles.previewCanvas} />
-              <div className={panelStyles.surfaceCaption}>
-                <span className={panelStyles.chip}>{referenceStrength}</span>
-                <span className={panelStyles.chip}>{defaultGenerationMode}</span>
-                <span className={panelStyles.chip}>{snapshot.sourceAsset.segmentCount} 段</span>
-              </div>
-            </article>
+            <CreationReferencePreview snapshot={snapshot} />
 
             {stepPanels[activeStepId]}
           </section>
@@ -754,10 +742,10 @@ export function RemixCreationWorkspace({
       <aside className={shellStyles.panel}>
         <div className={shellStyles.panelContent}>
           <PanelHeader
-            eyebrow="Inspector"
+            eyebrow="状态摘要"
             title="创作摘要"
             description="这栏跟着当前步骤走，只保留真正帮助判断的摘要和选中项。"
-            meta={<Badge variant={canExportBundle ? 'success' : 'info'}>{canExportBundle ? 'Bundle Ready' : 'In Progress'}</Badge>}
+            meta={<Badge variant={canExportBundle ? 'success' : 'info'}>{canExportBundle ? '可导出' : '进行中'}</Badge>}
           />
           <div className={shellStyles.summaryList} data-testid="remix-creation-inspector">
             {inspectorRows.map((row) => (
@@ -769,7 +757,7 @@ export function RemixCreationWorkspace({
           </div>
           {activeStepId === 'keyframe-prompts' && selectedPromptDisplay ? (
             <section className={panelStyles.panelCardDense}>
-              <div className={panelStyles.panelTitle}>当前 Prompt 预览</div>
+              <div className={panelStyles.panelTitle}>当前改图提示词预览</div>
               <div className={panelStyles.promptText}>{selectedPromptDisplay.body}</div>
             </section>
           ) : null}

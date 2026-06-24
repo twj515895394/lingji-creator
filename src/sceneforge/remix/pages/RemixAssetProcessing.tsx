@@ -8,9 +8,12 @@ import { PublishToLibraryButton } from '../components/PublishToLibraryButton';
 import { RemixStageNav } from '../components/RemixStageNav';
 import { SegmentTable } from '../components/SegmentTable';
 import { SegmentTimeline } from '../components/SegmentTimeline';
+import { SourceVideoPreview } from '../components/SourceVideoPreview';
 import { SourceOverviewPanel } from '../components/SourceOverviewPanel';
+import { formatAssetLibraryDate, getSourceAssetFilename } from '../lib/asset-library-view-model';
 import panelStyles from '../components/RemixWorkspacePanels.module.css';
 import {
+  findSourceSegmentAtTime,
   formatRemixDuration,
   getAssetProcessingSnapshot,
   getAssetProcessingStepStatuses,
@@ -18,6 +21,7 @@ import {
   isAssetPublishReady,
   type AssetProcessingStepId,
 } from '../lib/remix-workspace-view-model';
+import { REMIX_ASSET_PROCESSING_NAV_ITEMS } from '../lib/remix-stage-nav';
 import { DEFAULT_REMIX_PROJECT_DIR } from '../mock/mock-data';
 import { remixApiClient, resolveRemixApiClientMode } from '../services/remix-api-client';
 import { REMIX_ROUTE_PATTERNS, type RemixAssetProcessingSnapshot } from '../types';
@@ -67,7 +71,7 @@ function buildProcessingChecklist(
       id: 'understanding',
       label: '原片理解已整理',
       passed: statuses.understanding === 'approved',
-      note: 'Source Overview 与 Segment Analysis 已可阅读。',
+      note: '素材摘要与分段分析已经整理成可扫读内容。',
     },
     {
       id: 'annotate',
@@ -81,47 +85,56 @@ function buildProcessingChecklist(
 function buildInspectorRows(
   stepId: AssetProcessingStepId,
   assetId: string,
+  assetTitle: string,
+  sourceFilename: string,
   tagCount: number,
   note: string,
+  canPublish: boolean,
   statuses: ReturnType<typeof getAssetProcessingStepStatuses>,
 ) {
   switch (stepId) {
     case 'segmentation':
       return [
-        { label: '当前资产', value: assetId },
+        { label: '当前步骤', value: '真实镜头切片' },
+        { label: '当前素材', value: assetTitle },
         { label: '切片状态', value: getStageStatusLabel(statuses.segmentation) },
-        { label: '下一步', value: '关键帧提取' },
+        { label: '下一步', value: '逐段核对边界后进入关键帧提取' },
       ];
     case 'keyframes':
       return [
-        { label: '当前资产', value: assetId },
+        { label: '当前步骤', value: '关键帧提取' },
+        { label: '源文件', value: sourceFilename },
         { label: '关键帧状态', value: getStageStatusLabel(statuses.keyframes) },
-        { label: '下一步', value: '原片理解' },
+        { label: '下一步', value: '确认首帧/尾帧后进入原片理解' },
       ];
     case 'understanding':
       return [
-        { label: '当前资产', value: assetId },
+        { label: '当前步骤', value: '原片理解' },
+        { label: '当前素材', value: assetTitle },
         { label: '理解状态', value: getStageStatusLabel(statuses.understanding) },
-        { label: '下一步', value: '人工标注' },
+        { label: '下一步', value: '补人工标注，明确保留点与替换点' },
       ];
     case 'annotate':
       return [
+        { label: '当前步骤', value: '人工标注' },
         { label: '人工标签', value: `${tagCount} 个` },
         { label: '人工备注', value: note.trim() ? '已填写' : '待填写' },
-        { label: '下一步', value: '保存入库' },
+        { label: '下一步', value: canPublish ? '可以进入保存入库' : '先保存标注再进入入库筛选' },
       ];
     case 'publish-source':
       return [
-        { label: '当前资产', value: assetId },
+        { label: '当前步骤', value: '保存入库' },
+        { label: '素材编号', value: assetId },
         { label: '发布状态', value: getStageStatusLabel(statuses['publish-source']) },
-        { label: '前置阶段', value: isAssetPublishReady(statuses) ? '已满足' : '未满足' },
+        { label: '前置阶段', value: canPublish ? '已满足' : '未满足' },
       ];
     case 'source-import':
     default:
       return [
-        { label: '当前资产', value: assetId },
+        { label: '当前步骤', value: '导入原片' },
+        { label: '源文件', value: sourceFilename },
         { label: '导入状态', value: getStageStatusLabel(statuses['source-import']) },
-        { label: '下一步', value: '真实镜头切片' },
+        { label: '下一步', value: '进入真实镜头切片' },
       ];
   }
 }
@@ -154,6 +167,8 @@ export function RemixAssetProcessing({
   const [isLoading, setIsLoading] = useState(!useMockSnapshot);
   const [activeAction, setActiveAction] = useState<string | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [previewCurrentTimeMs, setPreviewCurrentTimeMs] = useState(0);
+  const [previewSeekMs, setPreviewSeekMs] = useState<number | null>(null);
 
   useEffect(() => {
     async function loadSnapshot() {
@@ -204,6 +219,12 @@ export function RemixAssetProcessing({
   const stepStatuses = snapshot
     ? getAssetProcessingStepStatuses(snapshot, hasUnsavedAnnotationChanges)
     : EMPTY_STEP_STATUSES;
+  const activePreviewSegment = asset ? findSourceSegmentAtTime(asset, previewCurrentTimeMs) : null;
+
+  useEffect(() => {
+    setPreviewCurrentTimeMs(0);
+    setPreviewSeekMs(0);
+  }, [asset?.id]);
 
   async function runAction(
     actionId: string,
@@ -239,6 +260,11 @@ export function RemixAssetProcessing({
     setTags((current) => current.filter((item) => item !== tag));
   }
 
+  function syncPreviewTo(timeMs: number) {
+    setPreviewSeekMs(timeMs);
+    setPreviewCurrentTimeMs(timeMs);
+  }
+
   if (!asset) {
     return (
       <div
@@ -267,11 +293,15 @@ export function RemixAssetProcessing({
     tags.length,
     stepStatuses,
   );
+  const sourceFilename = getSourceAssetFilename(asset);
   const inspectorRows = buildInspectorRows(
     activeStepId,
     asset.id,
+    asset.title,
+    sourceFilename,
     tags.length,
     annotationNote,
+    canPublish,
     stepStatuses,
   );
 
@@ -286,7 +316,7 @@ export function RemixAssetProcessing({
           <div className={panelStyles.panelTitleBlock}>
             <h2 className={panelStyles.panelTitle}>导入原片与元数据登记</h2>
             <p className={panelStyles.panelDescription}>
-              当前阶段只负责把视频、字幕和基础元数据登记成 Source Asset。
+              当前阶段只负责把视频、字幕和基础元数据登记成可追踪的源素材。
             </p>
           </div>
           <div className={panelStyles.chip}>{getStageStatusLabel(stepStatuses['source-import'])}</div>
@@ -332,8 +362,30 @@ export function RemixAssetProcessing({
             {activeAction === 'segmentation' ? '处理中…' : '运行切片'}
           </Button>
         </div>
-        <SegmentTimeline asset={asset} />
-        <SegmentTable asset={asset} />
+        <SegmentTimeline
+          asset={asset}
+          activeSegmentId={activePreviewSegment?.id ?? null}
+          currentTimeMs={previewCurrentTimeMs}
+          onSeek={syncPreviewTo}
+          onSelectSegment={(segmentId) => {
+            const segment = asset.segments.find((item) => item.id === segmentId);
+            if (!segment) {
+              return;
+            }
+            syncPreviewTo(segment.timeRange.startMs);
+          }}
+        />
+        <SegmentTable
+          asset={asset}
+          activeSegmentId={activePreviewSegment?.id ?? null}
+          onSelectSegment={(segmentId) => {
+            const segment = asset.segments.find((item) => item.id === segmentId);
+            if (!segment) {
+              return;
+            }
+            syncPreviewTo(segment.timeRange.startMs);
+          }}
+        />
       </section>
     ),
     keyframes: (
@@ -402,7 +454,7 @@ export function RemixAssetProcessing({
           <div className={panelStyles.panelTitleBlock}>
             <h2 className={panelStyles.panelTitle}>人工标注</h2>
             <p className={panelStyles.panelDescription}>
-              这里记录必须保留的动作、停顿和替换点，为后续 Variant 创作打底。
+              这里记录必须保留的动作、停顿和替换点，为后续二创创作打底。
             </p>
           </div>
           <div className={panelStyles.chip}>{getStageStatusLabel(stepStatuses.annotate)}</div>
@@ -448,7 +500,7 @@ export function RemixAssetProcessing({
           <div className={panelStyles.panelTitleBlock}>
             <h2 className={panelStyles.panelTitle}>保存入库</h2>
             <p className={panelStyles.panelDescription}>
-              只有前置步骤和人工标注都完成，这个 Source Asset 才能进入资产库。
+              只有前置步骤和人工标注都完成，这份素材才能进入资产库。
             </p>
           </div>
           <div className={panelStyles.chip}>{getStageStatusLabel(stepStatuses['publish-source'])}</div>
@@ -491,10 +543,10 @@ export function RemixAssetProcessing({
         <div className={shellStyles.panelContent}>
           <section className={panelStyles.heroPanel}>
             <div className={panelStyles.heroCopy}>
-              <div className={panelStyles.heroEyebrow}>Source Asset Processing Workspace</div>
-              <h1 className={panelStyles.heroTitle}>先把原片沉淀成资产，再决定它值不值得被二创</h1>
+              <div className={panelStyles.heroEyebrow}>素材处理工作台</div>
+              <h1 className={panelStyles.heroTitle}>{asset.title}</h1>
               <p className={panelStyles.heroDescription}>
-                当前处理对象是 <strong>{asset.title}</strong>。这一页只做导入、切片、关键帧、原片理解和人工标注，不出现任何 Variant、策略或 Seedance 相关内容。
+                当前处于 <strong>{getStageStatusLabel(stepStatuses[activeStepId])}</strong> 阶段。这里专门处理源素材，不进入二创版本、策略或 Seedance 工作区。
               </p>
               {errorMessage ? <p className={panelStyles.heroDescription} data-testid="remix-processing-error">{errorMessage}</p> : null}
               <div className={panelStyles.copyRow}>
@@ -510,51 +562,52 @@ export function RemixAssetProcessing({
 
             <div className={panelStyles.heroMetaGrid}>
               <div className={panelStyles.heroMetaCard}>
-                <div className={panelStyles.heroMetaLabel}>时长</div>
+                <div className={panelStyles.heroMetaLabel}>源文件</div>
+                <div className={panelStyles.heroMetaValue}>{sourceFilename}</div>
+              </div>
+              <div className={panelStyles.heroMetaCard}>
+                <div className={panelStyles.heroMetaLabel}>画面规格</div>
+                <div className={panelStyles.heroMetaValue}>{asset.videoMetadata.width} × {asset.videoMetadata.height}</div>
+              </div>
+              <div className={panelStyles.heroMetaCard}>
+                <div className={panelStyles.heroMetaLabel}>时长 / 切片</div>
                 <div className={panelStyles.heroMetaValue}>
-                  {formatRemixDuration(asset.videoMetadata.durationMs)}
+                  {formatRemixDuration(asset.videoMetadata.durationMs)} · {asset.segments.length} 段
                 </div>
               </div>
               <div className={panelStyles.heroMetaCard}>
-                <div className={panelStyles.heroMetaLabel}>Segments</div>
-                <div className={panelStyles.heroMetaValue}>{asset.segments.length}</div>
-              </div>
-              <div className={panelStyles.heroMetaCard}>
-                <div className={panelStyles.heroMetaLabel}>Keyframes</div>
+                <div className={panelStyles.heroMetaLabel}>最近更新</div>
                 <div className={panelStyles.heroMetaValue}>
-                  {asset.segments.reduce((sum, segment) => sum + segment.keyframes.length, 0)}
-                </div>
-              </div>
-              <div className={panelStyles.heroMetaCard}>
-                <div className={panelStyles.heroMetaLabel}>Stage</div>
-                <div className={panelStyles.heroMetaValue}>
-                  {getStageStatusLabel(stepStatuses[activeStepId])}
+                  {formatAssetLibraryDate(asset.updatedAt)}
                 </div>
               </div>
             </div>
           </section>
 
+
+          <section className={panelStyles.panelCardDense} data-testid="remix-processing-current-task">
+            <div className={panelStyles.panelTitle}>
+              {REMIX_ASSET_PROCESSING_NAV_ITEMS.find((item) => item.id === activeStepId)?.title ?? '当前任务'}
+            </div>
+            <div className={panelStyles.panelDescription}>
+              {activeAction
+                ? '系统正在执行当前步骤，请稍候。'
+                : stepStatuses[activeStepId] === 'approved'
+                  ? '本步骤已完成，可从左侧进入下一步。'
+                  : '完成本步骤主操作后，再进入后续切片、关键帧或入库流程。'}
+            </div>
+          </section>
+
           <section className={panelStyles.workspaceGrid}>
-            <article className={panelStyles.previewSurface}>
-              <div className={panelStyles.previewTopline}>
-                <div>
-                  <div className={panelStyles.previewTitle}>Source Preview</div>
-                  <div className={panelStyles.previewSubtitle}>
-                    {asset.videoMetadata.width} × {asset.videoMetadata.height} ·{' '}
-                    {asset.videoMetadata.fps ?? 25}fps
-                  </div>
-                </div>
-                <div className={panelStyles.chip}>{asset.status}</div>
-              </div>
-              <div className={panelStyles.previewCanvas} />
-              <div className={panelStyles.surfaceCaption}>
-                {asset.tags.map((tag) => (
-                  <span key={tag} className={panelStyles.chip}>
-                    {tag}
-                  </span>
-                ))}
-              </div>
-            </article>
+            <SourceVideoPreview
+              asset={asset}
+              activeSegment={activePreviewSegment}
+              currentTimeMs={previewCurrentTimeMs}
+              seekToMs={previewSeekMs}
+              onTimeUpdate={(timeMs) => {
+                setPreviewCurrentTimeMs(timeMs);
+              }}
+            />
 
             {stepPanels[activeStepId]}
           </section>
@@ -564,10 +617,10 @@ export function RemixAssetProcessing({
       <aside className={shellStyles.panel}>
         <div className={shellStyles.panelContent}>
           <PanelHeader
-            eyebrow="Inspector"
+            eyebrow="状态摘要"
             title="处理摘要"
-            description="右侧只展示当前步骤真正需要盯的状态，不把所有信息都塞进来。"
-            meta={<Badge variant={canPublish ? 'success' : 'warning'}>{canPublish ? 'Ready' : 'Pending'}</Badge>}
+            description="只保留当前步骤需要盯的状态和下一步，不在这里复读整页内容。"
+            meta={<Badge variant={canPublish ? 'success' : 'warning'}>{canPublish ? '可发布' : '待补齐'}</Badge>}
           />
           <div className={shellStyles.summaryList} data-testid="remix-processing-inspector">
             {inspectorRows.map((row) => (

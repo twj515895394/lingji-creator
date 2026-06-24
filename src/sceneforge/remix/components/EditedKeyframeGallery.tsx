@@ -4,6 +4,7 @@ import {
   getEditedKeyframeStatusLabel,
   getKeyframeRoleLabel,
 } from '../lib/remix-workspace-view-model';
+import { RemixFrameImage } from './RemixFrameImage';
 import styles from './RemixWorkspacePanels.module.css';
 
 interface EditedKeyframeGalleryProps {
@@ -34,7 +35,7 @@ export function EditedKeyframeGallery({
             className={styles.selectionButtonReset}
             onClick={() => onSelectEditedKeyframe(item.id)}
           >
-            <div className={styles.galleryImage} />
+            <RemixFrameImage imagePath={item.editedFramePath} alt={item.id} />
             <div className={styles.galleryTitle}>
               {item.segmentId} · {getKeyframeRoleLabel(item.frameRole)}
             </div>

@@ -1,23 +1,18 @@
 import { useEffect, useState } from 'react';
 import { Badge, Button, Input } from '../../../ui';
+import {
+  formatAssetLibraryDate,
+  formatAssetLibraryDuration,
+  getSourceAssetFilename,
+  getSourceAssetKeyframeCount,
+  getSourceAssetNextStep,
+  getVariantStageLabel,
+  REMIX_SOURCE_STATUS_BADGE_VARIANTS,
+  REMIX_SOURCE_STATUS_LABELS,
+} from '../lib/asset-library-view-model';
 import type { RemixVariantSummary, SourceAsset } from '../types';
+import { SourceAssetThumbnail } from './SourceAssetThumbnail';
 import styles from './AssetLibrary.module.css';
-
-const STATUS_LABELS = {
-  draft: '未处理',
-  processing: '处理中',
-  ready_for_review: '待确认',
-  published_to_library: '已入库',
-  failed: '解析失败',
-} as const;
-
-const STATUS_BADGE_VARIANTS = {
-  draft: 'outline',
-  processing: 'warning',
-  ready_for_review: 'info',
-  published_to_library: 'success',
-  failed: 'destructive',
-} as const;
 
 interface AssetDetailSidebarProps {
   asset: SourceAsset | null;
@@ -57,7 +52,7 @@ export function AssetDetailSidebar({
   if (!asset) {
     return (
       <div className={styles.emptyState} data-testid="remix-asset-library-inspector">
-        <div className={styles.emptyTitle}>选择一份源资产（Source Asset）</div>
+        <div className={styles.emptyTitle}>选择一份源素材</div>
         <div className={styles.emptyText}>
           右侧会展示原片状态、素材规模和下一步动作。资产库只负责资产治理，不在这里直接展开二创配置。
         </div>
@@ -65,26 +60,38 @@ export function AssetDetailSidebar({
     );
   }
 
-  const keyframeCount = asset.segments.reduce((sum, segment) => sum + segment.keyframes.length, 0);
+  const keyframeCount = getSourceAssetKeyframeCount(asset);
 
   return (
     <div className={styles.detailRail} data-testid="remix-asset-library-inspector">
+      <div className={styles.detailPreview}>
+        <SourceAssetThumbnail asset={asset} />
+      </div>
+
       <div className={styles.detailHero}>
-        <Badge variant={STATUS_BADGE_VARIANTS[asset.status]}>{STATUS_LABELS[asset.status]}</Badge>
+        <Badge variant={REMIX_SOURCE_STATUS_BADGE_VARIANTS[asset.status]}>
+          {REMIX_SOURCE_STATUS_LABELS[asset.status]}
+        </Badge>
         <div className={styles.inspectorTitle}>{asset.title}</div>
-        <div className={styles.detailNote}>
-          这份原片已经沉淀为可管理资产。下一步要么继续补完处理链路，要么在入库后发起新的二创版本（Variant）。
-        </div>
+        <div className={styles.detailNote}>{getSourceAssetNextStep(asset)}</div>
       </div>
 
       <div className={styles.detailMeta}>
         <div className={styles.detailRow}>
-          <span>源资产（Source Asset）</span>
-          <strong>{asset.id}</strong>
+          <span>源文件</span>
+          <strong>{getSourceAssetFilename(asset)}</strong>
+        </div>
+        <div className={styles.detailRow}>
+          <span>素材编号</span>
+          <strong className={styles.compactValue}>{asset.id}</strong>
+        </div>
+        <div className={styles.detailRow}>
+          <span>画面规格</span>
+          <strong>{asset.videoMetadata.width} × {asset.videoMetadata.height}</strong>
         </div>
         <div className={styles.detailRow}>
           <span>原片时长</span>
-          <strong>{Math.round(asset.videoMetadata.durationMs / 1000)}s</strong>
+          <strong>{formatAssetLibraryDuration(asset.videoMetadata.durationMs)}</strong>
         </div>
         <div className={styles.detailRow}>
           <span>镜头分段</span>
@@ -95,8 +102,12 @@ export function AssetDetailSidebar({
           <strong>{keyframeCount}</strong>
         </div>
         <div className={styles.detailRow}>
-          <span>已派生二创版本（Variant）</span>
+          <span>已派生二创版本</span>
           <strong>{asset.variantCount}</strong>
+        </div>
+        <div className={styles.detailRow}>
+          <span>最近更新</span>
+          <strong>{formatAssetLibraryDate(asset.updatedAt)}</strong>
         </div>
       </div>
 
@@ -117,18 +128,16 @@ export function AssetDetailSidebar({
 
       {asset.status === 'published_to_library' ? (
         <div className={styles.detailHero}>
-          <div className={styles.inspectorTitle}>已有二创版本（Variant）</div>
-          <div className={styles.detailNote}>
-            同一份源资产（Source Asset）可以沉淀多个二创版本；继续已有二创版本（Variant）和创建新二创版本的入口在这里分开。
-          </div>
-          {isLoadingVariants ? <div className={styles.detailNote}>正在同步二创版本（Variant）列表…</div> : null}
+          <div className={styles.inspectorTitle}>已有二创版本</div>
+          <div className={styles.detailNote}>继续已有版本，或基于这份源资产新开一个二创版本。</div>
+          {isLoadingVariants ? <div className={styles.detailNote}>正在同步二创版本列表…</div> : null}
           {variants.length === 0 && !isLoadingVariants ? (
-            <div className={styles.detailNote}>当前还没有已保存的二创版本（Variant）。</div>
+            <div className={styles.detailNote}>当前还没有已保存的二创版本。</div>
           ) : null}
           {variants.map((variant) => (
             <div key={variant.id} className={styles.detailMeta}>
               <div className={styles.detailRow}>
-                <span>{variant.currentStage ?? 'draft'}</span>
+                <span>{getVariantStageLabel(variant.currentStage)}</span>
                 <strong>{variant.updatedAt.slice(0, 10)}</strong>
               </div>
               {editingVariantId === variant.id ? (
@@ -158,7 +167,7 @@ export function AssetDetailSidebar({
               ) : (
                 <>
                   <div className={styles.detailRow}>
-                    <span>二创版本（Variant）</span>
+                    <span>二创版本</span>
                     <strong>{variant.name}</strong>
                   </div>
                   <div className={styles.actionRow}>

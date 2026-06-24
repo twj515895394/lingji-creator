@@ -2,18 +2,15 @@
   height: 100%;
   min-height: 0;
   display: grid;
-  grid-template-columns: 290px minmax(0, 1fr) 320px;
-  gap: 18px;
-  padding: 20px;
-  background:
-    radial-gradient(circle at top left, rgba(214, 169, 95, 0.1), transparent 28%),
-    radial-gradient(circle at bottom right, rgba(71, 111, 84, 0.18), transparent 24%),
-    linear-gradient(180deg, rgba(8, 11, 17, 0.98), rgba(11, 16, 24, 1));
-  color: rgba(255, 248, 235, 0.92);
+  grid-template-columns: 268px minmax(0, 1fr) 300px;
+  gap: 12px;
+  padding: 12px;
+  background: var(--color-window-bg);
+  color: var(--color-text-primary);
 }
 
 .libraryShell {
-  grid-template-columns: 250px minmax(0, 1fr) 320px;
+  grid-template-columns: 236px minmax(0, 1fr) 300px;
 }
 
 .rail {
@@ -25,52 +22,49 @@
 .panel {
   min-height: 0;
   overflow: auto;
-  border-radius: 24px;
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  background:
-    linear-gradient(180deg, rgba(255, 255, 255, 0.045), rgba(255, 255, 255, 0.02)),
-    rgba(9, 14, 23, 0.96);
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.05);
+  border-radius: 18px;
+  border: 1px solid var(--color-separator);
+  background: var(--color-panel-bg);
 }
 
 .panelContent {
   display: grid;
-  gap: 18px;
-  padding: 20px;
+  gap: 14px;
+  padding: 16px;
 }
 
 .heroBlock {
   display: grid;
-  gap: 10px;
-  padding: 18px 20px;
-  border-radius: 22px;
-  border: 1px solid rgba(214, 169, 95, 0.14);
+  gap: 8px;
+  padding: 16px;
+  border-radius: 16px;
+  border: 1px solid var(--color-border-subtle);
   background:
-    linear-gradient(135deg, rgba(214, 169, 95, 0.14), rgba(214, 169, 95, 0.02)),
-    rgba(14, 19, 28, 0.98);
+    linear-gradient(180deg, rgba(255, 255, 255, 0.035), rgba(255, 255, 255, 0.015)),
+    rgba(18, 22, 28, 0.94);
 }
 
 .eyebrow {
-  font-size: 11px;
-  font-weight: 700;
-  letter-spacing: 0.16em;
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-bold);
+  letter-spacing: 0.12em;
   text-transform: uppercase;
-  color: #d6a95f;
+  color: var(--color-text-tertiary);
 }
 
 .title {
-  font-size: 28px;
-  line-height: 1.05;
-  font-weight: 800;
-  letter-spacing: -0.03em;
-  color: rgba(255, 248, 235, 0.97);
+  font-size: 22px;
+  line-height: 1.12;
+  font-weight: var(--font-weight-bold);
+  letter-spacing: -0.02em;
+  color: var(--color-text-primary);
 }
 
 .description {
-  max-width: 66ch;
-  font-size: 14px;
-  line-height: 1.65;
-  color: rgba(214, 221, 232, 0.74);
+  max-width: 62ch;
+  font-size: var(--font-size-lg);
+  line-height: var(--line-height-relaxed);
+  color: var(--color-text-secondary);
 }
 
 .actionRow {
@@ -190,7 +184,7 @@
 
 .summaryList {
   display: grid;
-  gap: 10px;
+  gap: 8px;
 }
 
 .summaryRow {
@@ -198,13 +192,18 @@
   align-items: center;
   justify-content: space-between;
   gap: 12px;
-  font-size: 13px;
-  color: rgba(214, 221, 232, 0.7);
+  min-height: 40px;
+  padding: 0 12px;
+  border-radius: 12px;
+  border: 1px solid rgba(255, 255, 255, 0.05);
+  background: rgba(255, 255, 255, 0.03);
+  font-size: var(--font-size-lg);
+  color: var(--color-text-secondary);
 }
 
 .summaryRow strong {
-  color: rgba(255, 248, 235, 0.92);
-  font-weight: 700;
+  color: var(--color-text-primary);
+  font-weight: var(--font-weight-bold);
 }
 
 .inspectorTitle {

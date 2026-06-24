@@ -13,15 +13,15 @@ export function StrategyPreview({ items }: StrategyPreviewProps) {
           <div className={styles.strategyTitle}>{item.title}</div>
           <div className={styles.strategyColumns}>
             <div className={styles.strategyColumn}>
-              <div className={styles.strategyColumnLabel}>Keep</div>
+              <div className={styles.strategyColumnLabel}>保留</div>
               <div className={styles.strategyText}>{item.keep}</div>
             </div>
             <div className={styles.strategyColumn}>
-              <div className={styles.strategyColumnLabel}>Change</div>
+              <div className={styles.strategyColumnLabel}>改写</div>
               <div className={styles.strategyText}>{item.change}</div>
             </div>
             <div className={styles.strategyColumn}>
-              <div className={styles.strategyColumnLabel}>Risk</div>
+              <div className={styles.strategyColumnLabel}>风险</div>
               <div className={styles.strategyText}>{item.risk}</div>
             </div>
           </div>

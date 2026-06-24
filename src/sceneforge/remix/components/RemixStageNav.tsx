@@ -25,7 +25,7 @@ export function RemixStageNav({
     >
       <div className={styles.header}>
         <div className={styles.eyebrow}>
-          {isProcessing ? 'Source Asset Processing' : 'Remix Creation Workspace'}
+          {isProcessing ? '素材处理工作台' : '二创创作工作台'}
         </div>
         <div className={styles.title}>
           {isProcessing ? '资产处理流程' : '二创创作流程'}
@@ -33,7 +33,7 @@ export function RemixStageNav({
         <div className={styles.description}>
           {isProcessing
             ? '先把原片拆解成可复用资产，再决定它能否进入二创库。'
-            : '所有创作动作都围绕已入库 Source Asset 展开，不回写原片本体。'}
+            : '所有创作动作都围绕已入库素材展开，不回写原片本体。'}
         </div>
       </div>
 

@@ -169,7 +169,7 @@ export function RemixAssetLibrary({
       setVariantMap((current) => ({ ...current, [sourceAssetId]: variants }));
       onOpenCreation?.(workspace.variant.id, sourceAssetId);
     } catch (error) {
-      setErrorMessage(error instanceof Error ? error.message : '创建二创版本（Variant）失败。');
+      setErrorMessage(error instanceof Error ? error.message : '创建二创版本失败。');
     } finally {
       setCreatingVariantFor(null);
     }
@@ -249,7 +249,7 @@ export function RemixAssetLibrary({
   }
 
   async function handleDeleteVariant(variantId: string) {
-    if (!activeAsset || !window.confirm('删除这个二创版本（Variant）只会移除二创产物，不会影响原始源资产（Source Asset）。确认继续吗？')) {
+    if (!activeAsset || !window.confirm('删除这个二创版本只会移除二创产物，不会影响原始素材。确认继续吗？')) {
       return;
     }
     const variants = await client.deleteVariant({ projectDir: effectiveProjectDir, variantId });
@@ -279,12 +279,12 @@ export function RemixAssetLibrary({
       <section className={[styles.panel, styles.rail].join(' ')}>
         <div className={styles.panelContent}>
           <PanelHeader
-            eyebrow="Remix Asset Library"
+            eyebrow="素材资产库"
             title={isCreationEntry ? '已入库资产' : '原片资产库'}
             description={
               isCreationEntry
-                ? '选择已入库的源资产（Source Asset），继续已有二创版本（Variant）或创建新的二创版本。'
-                : '先把可复用原片做成稳定的源资产（Source Asset），再从这里发起二创版本（Variant）创作。'
+                ? '选择已入库的源素材，继续已有二创版本，或创建新的二创版本。'
+                : '先把可复用原片沉淀成稳定资产，再从这里发起二创创作。'
             }
           />
           <AssetFilterBar
@@ -300,12 +300,12 @@ export function RemixAssetLibrary({
       <main className={styles.panel}>
         <div className={styles.panelContent}>
           <div className={styles.heroBlock}>
-            <div className={styles.eyebrow}>Asset First, Remix Later</div>
-            <div className={styles.title}>{isCreationEntry ? '先选已入库资产，再发起二创' : '资产先入库，创作再引用'}</div>
+            <div className={styles.eyebrow}>素材治理区</div>
+            <div className={styles.title}>{isCreationEntry ? '先选已入库资产，再发起二创' : '先确认素材，再决定怎么二创'}</div>
             <div className={styles.description}>
               {isCreationEntry
-                ? '这里优先展示已经完成入库确认的源资产（Source Asset）。你可以继续已有二创版本（Variant），或基于当前资产新建一个二创版本。'
-                : '这里先管理原片的切片、关键帧和分析状态。只有完成入库确认的源资产（Source Asset），才允许进入二创工作区。'}
+                ? '这里只展示已经完成入库确认的素材。你可以继续已有二创版本，或基于当前素材新建一个二创版本。'
+                : '这里负责确认原片的切片、关键帧和分析状态。只有完成入库确认的素材，才允许进入二创工作区。'}
             </div>
             {errorMessage ? (
               <div className={styles.description} data-testid="remix-asset-library-error">
@@ -324,7 +324,7 @@ export function RemixAssetLibrary({
                     }
                   }}
                 >
-                  {creatingVariantFor ? '创建中…' : '基于当前资产创建二创版本（Variant）'}
+                  {creatingVariantFor ? '创建中…' : '基于当前素材创建二创版本'}
                 </Button>
               ) : (
                 <Button
@@ -352,10 +352,10 @@ export function RemixAssetLibrary({
                   }
                 }}
               >
-                {isCreationEntry ? '补充导入新原片' : '基于已入库资产创建二创版本（Variant）'}
+                {isCreationEntry ? '补充导入新原片' : '基于已入库素材创建二创版本'}
               </Button>
               {isLoading ? <span className={styles.description}>正在同步资产库…</span> : null}
-              {creatingVariantFor ? <span className={styles.description}>正在创建二创版本（Variant）…</span> : null}
+              {creatingVariantFor ? <span className={styles.description}>正在创建二创版本…</span> : null}
             </div>
           </div>
 

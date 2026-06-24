@@ -3,7 +3,18 @@ import type {
   RecentProjectIdentity,
   RemixProjectIntent,
 } from './electron-api';
-import type { RemixRoute } from '../sceneforge/remix/lib/remix-routing';
+import {
+  parseRemixPath,
+  type RemixRoute,
+} from '../sceneforge/remix/lib/remix-routing';
+
+function normalizeRemixRoutePath(routePath?: string | null): string | null {
+  if (!routePath?.trim()) {
+    return null;
+  }
+
+  return parseRemixPath(routePath.trim()) ? routePath.trim() : null;
+}
 
 export function getRecentProjectDisplayLabel(project: RecentProjectEntry): string {
   if (project.projectKind === 'remix') {
@@ -24,14 +35,15 @@ export function normalizeRecentProjectIdentity(
     return {
       projectKind: 'remix',
       remixEntryIntent: identity.remixEntryIntent === 'creation' ? 'creation' : 'asset-ingestion',
+      remixRoutePath: normalizeRemixRoutePath(identity.remixRoutePath),
     };
   }
 
   if (identity?.projectKind === 'sceneforge') {
-    return { projectKind: 'sceneforge', remixEntryIntent: null };
+    return { projectKind: 'sceneforge', remixEntryIntent: null, remixRoutePath: null };
   }
 
-  return { projectKind: 'script', remixEntryIntent: null };
+  return { projectKind: 'script', remixEntryIntent: null, remixRoutePath: null };
 }
 
 export function resolveRecentProjectOpenOptions(project: RecentProjectEntry): {
@@ -39,8 +51,9 @@ export function resolveRecentProjectOpenOptions(project: RecentProjectEntry): {
   remixEntryIntent?: RemixProjectIntent;
 } {
   if (project.projectKind === 'remix') {
+    const route = normalizeRemixRoutePath(project.remixRoutePath);
     return {
-      remixRoute: { kind: 'asset-library' },
+      remixRoute: route ? parseRemixPath(route) ?? { kind: 'asset-library' } : { kind: 'asset-library' },
       remixEntryIntent: project.remixEntryIntent === 'creation' ? 'creation' : 'asset-ingestion',
     };
   }

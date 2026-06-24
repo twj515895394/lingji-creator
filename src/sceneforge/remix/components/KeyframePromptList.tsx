@@ -40,7 +40,7 @@ export function KeyframePromptList({
           </button>
           <div className={styles.copyRow}>
             <Button variant="outline" size="sm" onClick={() => onCopyPrompt(item.id)}>
-              复制 Prompt
+              复制提示词
             </Button>
             {copiedPromptId === item.id ? (
               <span className={styles.copyFeedback}>已复制</span>

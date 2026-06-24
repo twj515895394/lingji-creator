@@ -14,15 +14,15 @@ interface SeedancePromptPreviewProps {
 }
 
 const structuredFieldLabels: Record<keyof SeedancePrompt['structuredFields'], string> = {
-  visual: 'Visual',
-  motion: 'Motion',
-  camera: 'Camera',
-  performance: 'Performance',
-  dialogue: 'Dialogue',
-  voice: 'Voice',
-  soundEffects: 'SFX',
-  ambientAudio: 'Ambient',
-  negative: 'Negative',
+  visual: '画面',
+  motion: '动作',
+  camera: '镜头',
+  performance: '表演',
+  dialogue: '对白',
+  voice: '人声',
+  soundEffects: '音效',
+  ambientAudio: '环境声',
+  negative: '负向',
 };
 
 export function SeedancePromptPreview({
@@ -77,7 +77,7 @@ export function SeedancePromptPreview({
 
       {selectedPrompt?.audioPlan ? (
         <section className={styles.panelCardDense}>
-          <div className={styles.panelTitle}>Audio Plan</div>
+          <div className={styles.panelTitle}>音频计划</div>
           <div className={styles.qualityList}>
             {selectedPrompt.audioPlan.globalAudioRules.map((rule) => (
               <div key={rule} className={styles.qualityItem}>
@@ -108,7 +108,7 @@ export function SeedancePromptPreview({
           disabled={!selectedPrompt}
           onClick={() => selectedPrompt && onCopyMarkdownPrompt(selectedPrompt.id)}
         >
-          复制 Markdown Prompt
+          复制 Markdown
         </Button>
         <Button
           variant="outline"
@@ -116,7 +116,7 @@ export function SeedancePromptPreview({
           disabled={!selectedPrompt}
           onClick={() => selectedPrompt && onCopyPlainPrompt(selectedPrompt.id)}
         >
-          复制纯文本 Prompt
+          复制纯文本
         </Button>
         {selectedPrompt && copiedPromptId === selectedPrompt.id ? (
           <span className={styles.copyFeedback}>已复制</span>

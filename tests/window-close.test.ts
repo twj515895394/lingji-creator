@@ -16,6 +16,14 @@ describe('resolveWindowCloseAction', () => {
     })).toBe('allow-window-close');
   });
 
+  it('closes back to welcome for remix workspace shells even before a project is bound', () => {
+    expect(resolveWindowCloseAction({
+      hasProject: false,
+      isAppQuitting: false,
+      shouldCloseWorkspaceShell: true,
+    })).toBe('close-project');
+  });
+
   it('allows app quit to proceed even if a project is open', () => {
     expect(resolveWindowCloseAction({
       hasProject: true,

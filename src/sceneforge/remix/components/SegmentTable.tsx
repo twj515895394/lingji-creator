@@ -4,13 +4,19 @@ import {
   formatRemixTimeRange,
   getSegmentBoundaryLabel,
 } from '../lib/remix-workspace-view-model';
-import styles from './RemixWorkspacePanels.module.css';
+import styles from './RemixSegmentReview.module.css';
 
 interface SegmentTableProps {
   asset: SourceAsset;
+  activeSegmentId?: string | null;
+  onSelectSegment?: (segmentId: string) => void;
 }
 
-export function SegmentTable({ asset }: SegmentTableProps) {
+export function SegmentTable({
+  asset,
+  activeSegmentId = null,
+  onSelectSegment,
+}: SegmentTableProps) {
   return (
     <table className={styles.dataTable} data-testid="remix-segment-table">
       <thead>
@@ -24,7 +30,11 @@ export function SegmentTable({ asset }: SegmentTableProps) {
       </thead>
       <tbody>
         {asset.segments.map((segment) => (
-          <tr key={segment.id}>
+          <tr
+            key={segment.id}
+            className={activeSegmentId === segment.id ? styles.dataTableRowActive : undefined}
+            onClick={() => onSelectSegment?.(segment.id)}
+          >
             <td>
               <div className={styles.tableStrong}>{segment.title}</div>
               <div className={styles.tableSubtle}>#{String(segment.index).padStart(2, '0')}</div>

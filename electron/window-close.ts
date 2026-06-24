@@ -3,6 +3,7 @@ export type WindowCloseAction = 'close-project' | 'allow-window-close';
 interface WindowCloseContext {
   hasProject: boolean;
   isAppQuitting: boolean;
+  shouldCloseWorkspaceShell?: boolean;
 }
 
 /**
@@ -13,12 +14,13 @@ interface WindowCloseContext {
 export function resolveWindowCloseAction({
   hasProject,
   isAppQuitting,
+  shouldCloseWorkspaceShell = false,
 }: WindowCloseContext): WindowCloseAction {
   if (isAppQuitting) {
     return 'allow-window-close';
   }
 
-  if (hasProject) {
+  if (hasProject || shouldCloseWorkspaceShell) {
     return 'close-project';
   }
 

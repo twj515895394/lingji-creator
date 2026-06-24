@@ -5,6 +5,8 @@ import { createRoot, type Root } from 'react-dom/client';
 import { renderToStaticMarkup } from 'react-dom/server';
 import type { RemixIpcContract } from '../electron/sceneforge/remix/remix-ipc-types';
 import { AssetCard } from '../src/sceneforge/remix/components/AssetCard';
+import { SourceAssetThumbnail } from '../src/sceneforge/remix/components/SourceAssetThumbnail';
+import { SourceOverviewPanel } from '../src/sceneforge/remix/components/SourceOverviewPanel';
 import { filterAssetLibraryAssets, getAssetLibraryAvailableTags } from '../src/sceneforge/remix/lib/asset-library-state';
 import { MOCK_SOURCE_ASSETS } from '../src/sceneforge/remix/mock/mock-data';
 import { RemixAssetLibrary } from '../src/sceneforge/remix/pages/RemixAssetLibrary';
@@ -118,7 +120,29 @@ describe('SceneForge Remix asset library', () => {
     );
 
     expect(container.textContent).toContain('先选已入库资产，再发起二创');
-    expect(container.textContent).toContain('基于当前资产创建二创版本（Variant）');
+    expect(container.textContent).toContain('基于当前素材创建二创版本');
     expect(container.textContent).toContain('补充导入新原片');
+  });
+
+  it('在缺少关键帧时回退到真实视频缩略图', () => {
+    const assetWithoutKeyframes = {
+      ...MOCK_SOURCE_ASSETS[0],
+      segments: MOCK_SOURCE_ASSETS[0].segments.map((segment) => ({
+        ...segment,
+        keyframes: [],
+      })),
+    };
+
+    const html = renderToStaticMarkup(<SourceAssetThumbnail asset={assetWithoutKeyframes} />);
+    expect(html).toContain('<video');
+    expect(html).toContain('source-processing-001/source.mp4');
+  });
+
+  it('把原片理解区渲染成结构化摘要与分段分析卡片', () => {
+    const html = renderToStaticMarkup(<SourceOverviewPanel asset={MOCK_SOURCE_ASSETS[1]} />);
+    expect(html).toContain('原片判断');
+    expect(html).toContain('镜头分段');
+    expect(html).toContain('01 ·');
+    expect(html).toContain('边界：');
   });
 });

@@ -1,29 +1,17 @@
 import { Badge, Button } from '../../../ui';
+import {
+  formatAssetLibraryDate,
+  formatAssetLibraryDuration,
+  getSourceAssetFilename,
+  getSourceAssetKeyframeCount,
+  getSourceAssetNextStep,
+  getSourceAssetPrimaryAction,
+  REMIX_SOURCE_STATUS_BADGE_VARIANTS,
+  REMIX_SOURCE_STATUS_LABELS,
+} from '../lib/asset-library-view-model';
 import type { SourceAsset } from '../types';
+import { SourceAssetThumbnail } from './SourceAssetThumbnail';
 import styles from './AssetLibrary.module.css';
-
-const STATUS_BADGE_VARIANTS = {
-  draft: 'outline',
-  processing: 'warning',
-  ready_for_review: 'info',
-  published_to_library: 'success',
-  failed: 'destructive',
-} as const;
-
-const STATUS_LABELS = {
-  draft: '未处理',
-  processing: '处理中',
-  ready_for_review: '待确认',
-  published_to_library: '已入库',
-  failed: '解析失败',
-} as const;
-
-function formatDuration(durationMs: number): string {
-  const totalSeconds = Math.max(1, Math.round(durationMs / 1000));
-  const minutes = Math.floor(totalSeconds / 60);
-  const seconds = totalSeconds % 60;
-  return `${minutes}:${seconds.toString().padStart(2, '0')}`;
-}
 
 interface AssetCardProps {
   asset: SourceAsset;
@@ -40,7 +28,9 @@ export function AssetCard({
   onOpenProcessing,
   onCreateVariant,
 }: AssetCardProps) {
-  const keyframeCount = asset.segments.reduce((sum, segment) => sum + segment.keyframes.length, 0);
+  const keyframeCount = getSourceAssetKeyframeCount(asset);
+  const primaryAction = getSourceAssetPrimaryAction(asset);
+  const visibleTags = asset.tags.slice(0, 3);
 
   return (
     <article
@@ -48,68 +38,80 @@ export function AssetCard({
       data-testid={`remix-asset-card-${asset.id}`}
     >
       <button type="button" className={styles.cover} onClick={() => onSelect(asset.id)} data-testid={`remix-asset-select-${asset.id}`}>
+        <SourceAssetThumbnail asset={asset} />
         <div className={styles.coverMeta}>
           <div>
             <div className={styles.coverTitle}>{asset.title}</div>
-            <div className={styles.coverSubtitle}>{formatDuration(asset.videoMetadata.durationMs)}</div>
+            <div className={styles.coverSubtitle}>
+              {formatAssetLibraryDuration(asset.videoMetadata.durationMs)} · {getSourceAssetFilename(asset)}
+            </div>
           </div>
-          <Badge variant={STATUS_BADGE_VARIANTS[asset.status]}>{STATUS_LABELS[asset.status]}</Badge>
+          <Badge variant={REMIX_SOURCE_STATUS_BADGE_VARIANTS[asset.status]}>
+            {REMIX_SOURCE_STATUS_LABELS[asset.status]}
+          </Badge>
         </div>
       </button>
 
       <div className={styles.cardTopline}>
-        <div className={styles.cardText}>
-          最近更新于 {asset.updatedAt.slice(0, 10)}，已沉淀原片切片、关键帧与分析结果，可继续加工或直接发起二创。
+        <div className={styles.cardSummary}>
+          <div className={styles.cardMetaLine}>
+            <span>最近更新 {formatAssetLibraryDate(asset.updatedAt)}</span>
+            <span>{asset.videoMetadata.width} × {asset.videoMetadata.height}</span>
+          </div>
+          <div className={styles.cardText}>{getSourceAssetNextStep(asset)}</div>
         </div>
       </div>
 
       <div className={styles.metricGrid}>
-        <div className={styles.metric}>
-          <div className={styles.metricValue}>{asset.segments.length}</div>
-          <div className={styles.metricLabel}>Segments</div>
+          <div className={styles.metric}>
+            <div className={styles.metricValue}>{asset.segments.length}</div>
+            <div className={styles.metricLabel}>切片</div>
+          </div>
+          <div className={styles.metric}>
+            <div className={styles.metricValue}>{keyframeCount}</div>
+            <div className={styles.metricLabel}>关键帧</div>
+          </div>
+          <div className={styles.metric}>
+            <div className={styles.metricValue}>{asset.variantCount}</div>
+            <div className={styles.metricLabel}>二创版本</div>
+          </div>
+          <div className={styles.metric}>
+            <div className={styles.metricValue}>{asset.videoMetadata.fps ?? 25}</div>
+            <div className={styles.metricLabel}>帧率</div>
+          </div>
         </div>
-        <div className={styles.metric}>
-          <div className={styles.metricValue}>{keyframeCount}</div>
-          <div className={styles.metricLabel}>Keyframes</div>
-        </div>
-        <div className={styles.metric}>
-          <div className={styles.metricValue}>{asset.variantCount}</div>
-          <div className={styles.metricLabel}>Variants</div>
-        </div>
-        <div className={styles.metric}>
-          <div className={styles.metricValue}>{asset.videoMetadata.width}p</div>
-          <div className={styles.metricLabel}>Format</div>
-        </div>
-      </div>
 
       <div className={styles.tagRow}>
-        {asset.tags.map((tag) => (
+        {visibleTags.map((tag) => (
           <span key={tag} className={styles.tag}>
             {tag}
           </span>
         ))}
+        {asset.tags.length > visibleTags.length ? (
+          <span className={styles.tag}>+{asset.tags.length - visibleTags.length}</span>
+        ) : null}
       </div>
 
       <div className={styles.actionRow}>
         <Button variant="ghost" onClick={() => onSelect(asset.id)} data-testid={`remix-open-details-${asset.id}`}>
-          查看资产详情
+          查看详情
         </Button>
-        {asset.status === 'processing' ? (
+        {primaryAction?.emphasis === 'outline' ? (
           <Button
             variant="outline"
             onClick={() => onOpenProcessing?.(asset.id)}
             data-testid={`remix-open-processing-${asset.id}`}
           >
-            继续处理
+            {primaryAction.label}
           </Button>
         ) : null}
-        {asset.status === 'published_to_library' ? (
+        {primaryAction?.emphasis === 'accent' ? (
           <Button
             variant="accent"
             onClick={() => onCreateVariant?.(asset.id)}
             data-testid={`remix-open-creation-${asset.id}`}
           >
-            创建二创
+            {primaryAction.label}
           </Button>
         ) : null}
       </div>

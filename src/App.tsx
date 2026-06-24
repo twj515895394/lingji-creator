@@ -33,7 +33,6 @@ import { RemixAssetProcessing } from './sceneforge/remix/pages/RemixAssetProcess
 import { RemixCreationWorkspace } from './sceneforge/remix/pages/RemixCreationWorkspace';
 import type { RemixEntryIntent } from './sceneforge/remix/components/RemixModeEntryDialog';
 import {
-  buildRemixPath,
   getAppPageForRemixRoute,
   isRemixAppPage,
   parseRemixPath,
@@ -42,6 +41,14 @@ import {
 } from './sceneforge/remix/lib/remix-routing';
 import { canBootstrapRemixAssetIngestionProject } from './sceneforge/remix/lib/remix-entry-project';
 import { getRemixProjectRootCandidate } from './sceneforge/remix/lib/remix-project-dir';
+import {
+  applyRemixRouteToHistory,
+  clearRemixHashIfPresent,
+  readRemixRouteFromLocationHash,
+  REMIX_DEFAULT_ROUTE,
+  resolveRemixRecentProjectIdentity,
+} from './lib/remix-app-session';
+
 import type { SceneEntryPath } from './types/sceneforge';
 import { AutoRunController } from './components/AutoRunController';
 import { ImportProjectDialog } from './components/ImportProjectDialog';
@@ -434,6 +441,9 @@ export default function App() {
     setSrtEntries([]);
     clearAIAnalysis();
     useScriptStore.getState().clearProjectSession();
+    setRemixRoute(REMIX_DEFAULT_ROUTE);
+    setRemixEntryIntent('asset-ingestion');
+    clearRemixHashIfPresent();
     setPage('welcome', reason);
   }, [clearAIAnalysis, setSrtEntries, setTimeline]);
 
@@ -444,13 +454,7 @@ export default function App() {
       if (typeof window === 'undefined' || historyMode === 'none') {
         return;
       }
-      const path = buildRemixPath(route);
-      const state = { appPage: getAppPageForRemixRoute(route), remixPath: path };
-      if (historyMode === 'replace') {
-        window.history.replaceState(state, '', `#${path}`);
-      } else {
-        window.history.pushState(state, '', `#${path}`);
-      }
+      applyRemixRouteToHistory(route, historyMode);
     },
     [setPage],
   );
@@ -459,13 +463,10 @@ export default function App() {
     if (typeof window === 'undefined') {
       return;
     }
-    const initialPath = readRemixPathFromHash(window.location.hash);
-    if (initialPath) {
-      const route = parseRemixPath(initialPath);
-      if (route) {
-        setRemixRoute(route);
-        setPage(getAppPageForRemixRoute(route));
-      }
+    const route = readRemixRouteFromLocationHash();
+    if (route) {
+      setRemixRoute(route);
+      setPage(getAppPageForRemixRoute(route));
     }
 
     const onPopState = () => {
@@ -766,23 +767,17 @@ export default function App() {
       return;
     }
 
-    let identity: RecentProjectIdentity | null = null;
-    if (isRemixAppPage(page)) {
-      identity = {
-        projectKind: 'remix',
-        remixEntryIntent: page === 'sceneforge-remix-creation' ? 'creation' : remixEntryIntent,
-      };
-    } else if (page === 'sceneforge-studio') {
-      identity = { projectKind: 'sceneforge', remixEntryIntent: null };
-    } else if (page === 'script-workbench' || page === 'editor' || page === 'auto-run' || page === 'publish') {
-      identity = { projectKind: 'script', remixEntryIntent: null };
-    }
+      const identity = resolveRemixRecentProjectIdentity({
+        page,
+        remixEntryIntent,
+        remixRoute,
+      });
 
     if (!identity) {
       return;
     }
 
-    const signature = `${currentProjectDir}:${identity.projectKind}:${identity.remixEntryIntent ?? ''}`;
+    const signature = `${currentProjectDir}:${identity.projectKind}:${identity.remixEntryIntent ?? ''}:${identity.remixRoutePath ?? ''}`;
     if (lastRecentProjectIdentityRef.current === signature) {
       return;
     }
@@ -796,7 +791,7 @@ export default function App() {
       .catch(() => {
         lastRecentProjectIdentityRef.current = null;
       });
-  }, [currentProjectDir, page, remixEntryIntent]);
+  }, [currentProjectDir, page, remixEntryIntent, remixRoute]);
 
   const handleNewProject = useCallback(async () => {
     const projectDir = await window.electronAPI.selectProjectDirectory();
@@ -1155,7 +1150,7 @@ export default function App() {
           handleOpenSettings();
           return;
         case 'close-project':
-          if (currentProjectDir) {
+          if (currentProjectDir || isRemixAppPage(page)) {
             handleCloseProject();
           }
           return;
