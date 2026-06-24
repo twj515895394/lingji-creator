@@ -100,6 +100,10 @@ export function RemixCreationWorkspace({
   const [lastExportPath, setLastExportPath] = useState<string | null>(null);
 
   async function exportBundle(mode: 'zip' | 'directory') {
+    if (!projectDir) {
+      setErrorMessage('请先打开项目后再导出提示词包。');
+      return;
+    }
     const defaultPath =
       mode === 'zip' ? `${variantName || variantId}-prompt-bundle.zip` : `${variantName || variantId}-prompt-bundle`;
     const electronApi =
