@@ -39,8 +39,6 @@ import {
   readRemixPathFromHash,
   type RemixRoute,
 } from './sceneforge/remix/lib/remix-routing';
-import { canBootstrapRemixAssetIngestionProject } from './sceneforge/remix/lib/remix-entry-project';
-import { getRemixProjectRootCandidate } from './sceneforge/remix/lib/remix-project-dir';
 import {
   applyRemixRouteToHistory,
   clearRemixHashIfPresent,
@@ -844,54 +842,27 @@ export default function App() {
   const handleOpenRemixMode = useCallback(async (intent: RemixEntryIntent) => {
     setRemixEntryIntent(intent);
 
-    const routeToRemixProject = async (candidateDir: string) => {
-      let remixProjectDir = candidateDir;
-      const parentCandidate = getRemixProjectRootCandidate(candidateDir);
-      if (parentCandidate) {
-        try {
-          const raw = await window.electronAPI.loadProject(parentCandidate);
-          const projectData = JSON.parse(raw) as ProjectData;
-          if (projectData.type === 'sceneforge') {
-            remixProjectDir = parentCandidate;
-          }
-        } catch {
-          // 父目录不是合法工程时保持原选择，让后续检查按用户实际选中的目录继续。
-        }
-      }
+    const remixApi = {
+      loadProject: (dir: string) => window.electronAPI.loadProject(dir),
+      readDirectory: (dir: string) => window.electronAPI.readDirectory(dir),
+      createSceneForgeProject: (dir: string, entryPath: 'source_intake') =>
+        window.electronAPI.createSceneForgeProject(dir, entryPath),
+    };
 
-      const raw = await window.electronAPI.loadProject(remixProjectDir);
-      const projectData = JSON.parse(raw) as ProjectData;
-      if (projectData.type === 'sceneforge') {
-        await openProject(remixProjectDir, {
-          remixRoute: { kind: 'asset-library' },
-          remixEntryIntent: intent,
-        });
-        return;
-      }
-
-      if (intent === 'asset-ingestion') {
-        const topLevelEntries = await window.electronAPI.readDirectory(remixProjectDir);
-        // 只对默认空壳工程做提升，避免误把已有普通项目改造成 SceneForge。
-        if (canBootstrapRemixAssetIngestionProject(projectData, topLevelEntries)) {
-          await window.electronAPI.createSceneForgeProject(remixProjectDir, 'source_intake');
-          await openProject(remixProjectDir, {
-            remixRoute: { kind: 'asset-library' },
-            remixEntryIntent: intent,
-          });
-          return;
-        }
-
-        setSetupError('资产入库需要 SceneForge 工程目录，或选择一个空白目录用于初始化 Remix 工程。');
-        resetToSetup();
-        return;
-      }
-
-      setSetupError('二次创作仅支持已有的 SceneForge 工程，请先选择已入库资产所在项目。');
-      resetToSetup();
+    const runEntry = async (candidateDir: string) => {
+      await enterRemixModeFromDirectory(candidateDir, intent, remixApi, {
+        openProject: async (projectDir, options) => {
+          await openProject(projectDir, options);
+        },
+        onFailure: (message) => {
+          setSetupError(message);
+          resetToSetup();
+        },
+      });
     };
 
     if (currentProjectDir) {
-      await routeToRemixProject(currentProjectDir);
+      await runEntry(currentProjectDir);
       return;
     }
 
@@ -900,8 +871,8 @@ export default function App() {
       return;
     }
 
-    await routeToRemixProject(projectDir);
-  }, [currentProjectDir, openProject]);
+    await runEntry(projectDir);
+  }, [currentProjectDir, openProject, resetToSetup]);
 
   const handleConfirmSceneForgeCreate = useCallback(
     async (entryPath: SceneEntryPath) => {
