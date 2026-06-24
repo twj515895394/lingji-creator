@@ -15,6 +15,7 @@ export type {
   RemixSourceAssetStatus,
   RemixStageId,
   RemixStageStatus,
+  RemixVariantSummary,
   RemixVideoMetadata,
   RetentionMatrix,
   SeedancePrompt,

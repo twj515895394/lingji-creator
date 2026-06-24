@@ -59,7 +59,7 @@ describe('sceneforge remix artifact paths', () => {
       'sceneforge/remix/variants/variant-001/seedance_prompts/segment-001.md',
     );
     expect(getRemixVariantPromptBundlePath('variant-001')).toBe(
-      'sceneforge/remix/variants/variant-001/prompt_bundle.md',
+      'sceneforge/remix/variants/variant-001/prompt_bundle.zip',
     );
   });
 

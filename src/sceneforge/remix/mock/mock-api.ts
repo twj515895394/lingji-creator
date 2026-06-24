@@ -1,14 +1,20 @@
 import type {
   CreateSourceAssetFromImportInput,
   CreateVariantFromSourceAssetInput,
+  DeleteVariantInput,
+  DuplicateVariantInput,
+  ExportPromptBundleInput,
   ExportPromptBundleResult,
+  ListVariantsForSourceAssetInput,
   RegisterEditedKeyframeInput,
   RemixIpcContract,
   RemixSourceAssetRefInput,
   RemixVariantRefInput,
   RunSourceAssetStageInput,
+  UpdateSourceAssetMetadataInput,
   UpdateEditedKeyframeStatusInput,
   UpdateVariantConfigInput,
+  RenameVariantInput,
 } from '../../../../electron/sceneforge/remix/remix-ipc-types';
 import type {
   EditedKeyframe,
@@ -16,6 +22,7 @@ import type {
   RemixAssetProcessingStageId,
   RemixAssetProcessingSnapshot,
   RemixCreationWorkspaceSnapshot,
+  RemixVariantSummary,
   RemixVariant,
   SeedancePrompt,
   SourceAsset,
@@ -49,6 +56,16 @@ function findProcessingSnapshot(sourceAssetId: string): RemixAssetProcessingSnap
   return clone(
     MOCK_ASSET_PROCESSING_SNAPSHOTS[sourceAssetId] ?? MOCK_ASSET_PROCESSING_SNAPSHOTS['source-library-001'],
   );
+}
+
+function buildVariantSummary(variantId: string, sourceAssetId: string, name: string): RemixVariantSummary {
+  return {
+    id: variantId,
+    sourceAssetId,
+    name,
+    currentStage: 'edited_keyframes_review',
+    updatedAt: NOW,
+  };
 }
 
 function buildVariant(variantId: string, overrides: Partial<RemixVariant> = {}): RemixVariant {
@@ -114,7 +131,21 @@ export const remixMockApi: RemixIpcContract = {
   },
 
   async getSourceAsset(input: RemixSourceAssetRefInput) {
-    return findProcessingSnapshot(input.sourceAssetId);
+    const snapshot = findProcessingSnapshot(input.sourceAssetId);
+    snapshot.variants = input.sourceAssetId === 'source-library-001'
+      ? [buildVariantSummary('variant-hero-001', input.sourceAssetId, '狸猫黑帮版')]
+      : [];
+    return snapshot;
+  },
+
+  async updateSourceAssetMetadata(input: UpdateSourceAssetMetadataInput) {
+    const snapshot = findProcessingSnapshot(input.sourceAssetId);
+    snapshot.sourceAsset.tags = clone(input.tags ?? snapshot.sourceAsset.tags);
+    snapshot.sourceAsset.annotationNote = input.annotationNote ?? snapshot.sourceAsset.annotationNote ?? null;
+    snapshot.sourceAsset.lastAnnotatedAt = NOW;
+    snapshot.sourceAsset.annotatedBy = input.annotatedBy ?? 'Remix Editor';
+    snapshot.sourceAsset.annotationSource = input.annotationSource ?? 'workspace_manual';
+    return snapshot;
   },
 
   async createSourceAssetFromImport(input: CreateSourceAssetFromImportInput) {
@@ -183,6 +214,27 @@ export const remixMockApi: RemixIpcContract = {
         },
       },
     });
+  },
+
+  async listVariantsForSourceAsset(input: ListVariantsForSourceAssetInput) {
+    return input.sourceAssetId === 'source-library-001'
+      ? [buildVariantSummary('variant-hero-001', input.sourceAssetId, '狸猫黑帮版')]
+      : [];
+  },
+
+  async renameVariant(input: RenameVariantInput) {
+    return [buildVariantSummary(input.variantId, 'source-library-001', input.name)];
+  },
+
+  async duplicateVariant(input: DuplicateVariantInput) {
+    return [
+      buildVariantSummary(input.variantId, 'source-library-001', '狸猫黑帮版'),
+      buildVariantSummary('variant-copy-001', 'source-library-001', input.name ?? '狸猫黑帮版 Copy'),
+    ];
+  },
+
+  async deleteVariant(_input: DeleteVariantInput) {
+    return [];
   },
 
   async getCreationWorkspace(input: RemixVariantRefInput) {
@@ -346,9 +398,9 @@ export const remixMockApi: RemixIpcContract = {
     });
   },
 
-  async exportPromptBundle(input: RemixVariantRefInput): Promise<ExportPromptBundleResult> {
+  async exportPromptBundle(input: ExportPromptBundleInput): Promise<ExportPromptBundleResult> {
     return {
-      bundlePath: `/mock/remix/variants/${input.variantId}/prompt-bundle.zip`,
+      bundlePath: input.outputPath ?? `/mock/remix/variants/${input.variantId}/prompt-bundle.zip`,
       workspace: await this.runSeedancePrompts(input),
     };
   },

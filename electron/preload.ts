@@ -13,16 +13,22 @@ import type { ExportConfig } from '../src/lib/export-settings';
 import type { SrtEntry } from '../src/types';
 import type { AICard, AISegment, AISettings, PromptBindingMap } from '../src/types/ai';
 import type { ConversationAPI } from '../src/types/conversation';
+import type { ListSourceAssetsInput } from './sceneforge/remix/remix-ipc-types';
 import type { VideoImportRequest } from '../src/lib/video-import-types';
 import type { VideoImportTaskSnapshot } from './video-import/types';
 import type { PipelineTask } from './pipeline/types';
 import type {
   CreateSourceAssetFromImportInput,
   CreateVariantFromSourceAssetInput,
+  DeleteVariantInput,
+  DuplicateVariantInput,
+  ListVariantsForSourceAssetInput,
   RegisterEditedKeyframeInput,
+  RenameVariantInput,
   RemixSourceAssetRefInput,
   RemixVariantRefInput,
   RunSourceAssetStageInput,
+  UpdateSourceAssetMetadataInput,
   UpdateEditedKeyframeStatusInput,
   UpdateVariantConfigInput,
 } from './sceneforge/remix/remix-ipc-types';
@@ -202,10 +208,12 @@ contextBridge.exposeInMainWorld('electronAPI', {
     return () => ipcRenderer.removeListener('sceneforge:stage-run-progress', handler);
   },
   sceneForgeRemix: {
-    listSourceAssets: () =>
-      ipcRenderer.invoke('sceneForgeRemix:listSourceAssets'),
+    listSourceAssets: (input: ListSourceAssetsInput) =>
+      ipcRenderer.invoke('sceneForgeRemix:listSourceAssets', input),
     getSourceAsset: (input: RemixSourceAssetRefInput) =>
       ipcRenderer.invoke('sceneForgeRemix:getSourceAsset', input),
+    updateSourceAssetMetadata: (input: UpdateSourceAssetMetadataInput) =>
+      ipcRenderer.invoke('sceneForgeRemix:updateSourceAssetMetadata', input),
     createSourceAssetFromImport: (input: CreateSourceAssetFromImportInput) =>
       ipcRenderer.invoke('sceneForgeRemix:createSourceAssetFromImport', input),
     runSourceSegmentation: (input: RunSourceAssetStageInput) =>
@@ -218,6 +226,14 @@ contextBridge.exposeInMainWorld('electronAPI', {
       ipcRenderer.invoke('sceneForgeRemix:publishSourceAssetToLibrary', input),
     createVariantFromSourceAsset: (input: CreateVariantFromSourceAssetInput) =>
       ipcRenderer.invoke('sceneForgeRemix:createVariantFromSourceAsset', input),
+    listVariantsForSourceAsset: (input: ListVariantsForSourceAssetInput) =>
+      ipcRenderer.invoke('sceneForgeRemix:listVariantsForSourceAsset', input),
+    renameVariant: (input: RenameVariantInput) =>
+      ipcRenderer.invoke('sceneForgeRemix:renameVariant', input),
+    duplicateVariant: (input: DuplicateVariantInput) =>
+      ipcRenderer.invoke('sceneForgeRemix:duplicateVariant', input),
+    deleteVariant: (input: DeleteVariantInput) =>
+      ipcRenderer.invoke('sceneForgeRemix:deleteVariant', input),
     getCreationWorkspace: (input: RemixVariantRefInput) =>
       ipcRenderer.invoke('sceneForgeRemix:getCreationWorkspace', input),
     updateVariantConfig: (input: UpdateVariantConfigInput) =>
@@ -276,6 +292,10 @@ contextBridge.exposeInMainWorld('electronAPI', {
   selectProjectDirectory: () => ipcRenderer.invoke('select-project-directory'),
   selectSetupFile: (kind: 'audio' | 'srt') => ipcRenderer.invoke('select-setup-file', kind),
   selectMediaFile: (kind: 'audio' | 'video' | 'srt' | 'image') => ipcRenderer.invoke('select-media-file', kind),
+  selectRemixBundlePath: (defaultPath?: string) =>
+    ipcRenderer.invoke('select-remix-bundle-path', defaultPath),
+  selectRemixBundleDirectory: (defaultPath?: string) =>
+    ipcRenderer.invoke('select-remix-bundle-directory', defaultPath),
   findLatestExport: (projectDir: string) => ipcRenderer.invoke('find-latest-export', projectDir),
   scanCoverImages: (projectDir: string) => ipcRenderer.invoke('scan-cover-images', projectDir),
   getPathForFile: (file: File) => webUtils.getPathForFile(file),

@@ -1,6 +1,20 @@
-import { describe, expect, it } from 'vitest';
+import fs from 'node:fs/promises';
+import os from 'node:os';
+import path from 'node:path';
+import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { RemixService } from '../electron/sceneforge/remix/remix-service';
+
+let projectDir: string;
+
+beforeEach(async () => {
+  projectDir = await fs.mkdtemp(path.join(os.tmpdir(), 'sceneforge-remix-ipc-'));
+  await fs.writeFile(path.join(projectDir, 'demo.mp4'), 'demo-video', 'utf8');
+});
+
+afterEach(async () => {
+  await fs.rm(projectDir, { recursive: true, force: true });
+});
 
 describe('SceneForge Remix IPC contract', () => {
   it('wires main, preload, electron-api and remix ipc together', () => {
@@ -12,129 +26,184 @@ describe('SceneForge Remix IPC contract', () => {
     expect(main).toContain('registerSceneForgeRemixIpc');
     expect(preload).toContain('sceneForgeRemix: {');
     expect(preload).toContain('sceneForgeRemix:listSourceAssets');
+    expect(preload).toContain('sceneForgeRemix:updateSourceAssetMetadata');
+    expect(preload).toContain('sceneForgeRemix:listVariantsForSourceAsset');
     expect(preload).toContain('sceneForgeRemix:exportPromptBundle');
     expect(api).toContain('sceneForgeRemix: {');
     expect(api).toContain('createVariantFromSourceAsset');
     expect(api).toContain('updateEditedKeyframeStatus');
     expect(api).toContain('ExportPromptBundleResult');
     expect(ipc).toContain('sceneForgeRemix:listSourceAssets');
+    expect(ipc).toContain('sceneForgeRemix:renameVariant');
     expect(ipc).toContain('sceneForgeRemix:runRemixStrategy');
     expect(ipc).toContain('sceneForgeRemix:exportPromptBundle');
   });
 
   it('returns type-safe stub payloads for the full Remix ipc surface', async () => {
-    const service = new RemixService();
-
-    const assetList = await service.listSourceAssets();
-    expect(assetList.sourceAssets.length).toBeGreaterThan(0);
-
-    const sourceAsset = await service.getSourceAsset({
-      projectDir: '/tmp/remix-project',
-      sourceAssetId: 'source-001',
+    const service = new RemixService({
+      readDurationMs: async () => 12800,
+      now: () => new Date('2026-06-23T12:00:00.000Z'),
     });
-    expect(sourceAsset.sourceAsset.id).toBe('source-001');
 
     const imported = await service.createSourceAssetFromImport({
-      projectDir: '/tmp/remix-project',
-      importId: 'import-001',
+      projectDir,
+      sourceVideoPath: path.join(projectDir, 'demo.mp4'),
       title: '买瓜原片',
     });
+    const sourceAssetId = imported.sourceAsset.id;
+
+    const assetList = await service.listSourceAssets({ projectDir });
+    expect(assetList.sourceAssets[0]?.title).toBe('买瓜原片');
+
+    const sourceAsset = await service.getSourceAsset({
+      projectDir,
+      sourceAssetId,
+    });
     expect(imported.sourceAsset.title).toBe('买瓜原片');
+    expect(sourceAsset.sourceAsset.id).toBe(sourceAssetId);
+    expect(sourceAsset.variants).toEqual([]);
 
     const segmented = await service.runSourceSegmentation({
-      projectDir: '/tmp/remix-project',
-      sourceAssetId: 'source-001',
+      projectDir,
+      sourceAssetId,
     });
     expect(segmented.processingStageStates.remix_segmentation).toBe('approved');
 
     const keyframed = await service.runSourceKeyframes({
-      projectDir: '/tmp/remix-project',
-      sourceAssetId: 'source-001',
+      projectDir,
+      sourceAssetId,
     });
     expect(keyframed.processingStageStates.remix_keyframes).toBe('approved');
 
     const understood = await service.runSourceUnderstanding({
-      projectDir: '/tmp/remix-project',
-      sourceAssetId: 'source-001',
+      projectDir,
+      sourceAssetId,
     });
-    expect(understood.processingStageStates.remix_understanding).toBe('ready_for_review');
+    expect(understood.processingStageStates.remix_understanding).toBe('approved');
+
+    const annotated = await service.updateSourceAssetMetadata({
+      projectDir,
+      sourceAssetId,
+      tags: ['slow-burn', 'market'],
+      annotationNote: '保留试探停顿和压迫感。',
+    });
+    expect(annotated.sourceAsset.annotationNote).toContain('压迫感');
 
     const published = await service.publishSourceAssetToLibrary({
-      projectDir: '/tmp/remix-project',
-      sourceAssetId: 'source-001',
+      projectDir,
+      sourceAssetId,
     });
     expect(published.sourceAsset.status).toBe('published_to_library');
 
     const createdVariant = await service.createVariantFromSourceAsset({
-      projectDir: '/tmp/remix-project',
-      sourceAssetId: 'source-001',
+      projectDir,
+      sourceAssetId,
       name: '动物拟人版',
       concept: '保留冲突结构',
     });
     expect(createdVariant.variant.name).toBe('动物拟人版');
 
-    const workspace = await service.getCreationWorkspace({
-      projectDir: '/tmp/remix-project',
-      variantId: 'variant-001',
+    const listedVariants = await service.listVariantsForSourceAsset({ projectDir, sourceAssetId });
+    expect(listedVariants).toHaveLength(1);
+
+    const renamedVariants = await service.renameVariant({
+      projectDir,
+      variantId: createdVariant.variant.id,
+      name: '动物谈判版',
     });
-    expect(workspace.variant.id).toBe('variant-001');
+    expect(renamedVariants[0]?.name).toBe('动物谈判版');
+
+    const workspace = await service.getCreationWorkspace({
+      projectDir,
+      variantId: createdVariant.variant.id,
+    });
+    expect(workspace.variant.id).toBe(createdVariant.variant.id);
 
     const updatedVariant = await service.updateVariantConfig({
-      projectDir: '/tmp/remix-project',
-      variantId: 'variant-001',
+      projectDir,
+      variantId: createdVariant.variant.id,
       referenceStrength: 'medium',
     });
     expect(updatedVariant.variant.referenceStrength).toBe('medium');
 
     const strategy = await service.runRemixStrategy({
-      projectDir: '/tmp/remix-project',
-      variantId: 'variant-001',
+      projectDir,
+      variantId: createdVariant.variant.id,
     });
     expect(strategy.variant.currentStage).toBe('remix_strategy');
 
     const design = await service.runRemixDesign({
-      projectDir: '/tmp/remix-project',
-      variantId: 'variant-001',
+      projectDir,
+      variantId: createdVariant.variant.id,
     });
     expect(design.variant.currentStage).toBe('remix_design');
 
     const promptWorkspace = await service.runKeyframeEditPrompts({
-      projectDir: '/tmp/remix-project',
-      variantId: 'variant-001',
+      projectDir,
+      variantId: createdVariant.variant.id,
     });
     expect(promptWorkspace.keyframeEditPrompts.length).toBeGreaterThan(0);
 
+    const prompt = promptWorkspace.keyframeEditPrompts[0];
+    const editedUploadPath = path.join(projectDir, 'edited.png');
+    await fs.writeFile(editedUploadPath, 'edited-image', 'utf8');
+
     const registeredEditedKeyframe = await service.registerEditedKeyframe({
-      projectDir: '/tmp/remix-project',
-      variantId: 'variant-001',
-      segmentId: 'segment-001',
-      frameRole: 'first',
+      projectDir,
+      variantId: createdVariant.variant.id,
+      segmentId: prompt.segmentId,
+      frameRole: prompt.frameRole,
       sourceFramePath: 'source.png',
       promptPath: 'prompt.md',
-      editedFramePath: 'edited.png',
+      editedFramePath: editedUploadPath,
     });
     expect(registeredEditedKeyframe.editedKeyframes[0].status).toBe('generated');
 
     const updatedEditedKeyframe = await service.updateEditedKeyframeStatus({
-      projectDir: '/tmp/remix-project',
-      variantId: 'variant-001',
-      editedKeyframeId: 'edited-001',
+      projectDir,
+      variantId: createdVariant.variant.id,
+      editedKeyframeId: registeredEditedKeyframe.editedKeyframes[0].id,
       status: 'approved',
       qualityChecks: [{ code: 'continuity', label: '连续性', passed: true }],
     });
     expect(updatedEditedKeyframe.editedKeyframes[0].status).toBe('approved');
 
-    const seedance = await service.runSeedancePrompts({
-      projectDir: '/tmp/remix-project',
-      variantId: 'variant-001',
-    });
-    expect(seedance.seedancePrompts[0].targetPlatform).toBe('seedance_2_0');
+    await expect(
+      service.runSeedancePrompts({
+        projectDir,
+        variantId: createdVariant.variant.id,
+      }),
+    ).rejects.toThrow('仍有关键帧未通过验收');
+
+    for (const extraPrompt of promptWorkspace.keyframeEditPrompts.slice(1)) {
+      const nextUploadPath = path.join(projectDir, `${extraPrompt.segmentId}-${extraPrompt.frameRole}.png`);
+      await fs.writeFile(nextUploadPath, 'edited-image', 'utf8');
+      const nextRegistered = await service.registerEditedKeyframe({
+        projectDir,
+        variantId: createdVariant.variant.id,
+        segmentId: extraPrompt.segmentId,
+        frameRole: extraPrompt.frameRole,
+        sourceFramePath: 'source.png',
+        promptPath: 'prompt.md',
+        editedFramePath: nextUploadPath,
+      });
+      const matchedFrame = nextRegistered.editedKeyframes.find(
+        (frame) => frame.segmentId === extraPrompt.segmentId && frame.frameRole === extraPrompt.frameRole,
+      );
+      await service.updateEditedKeyframeStatus({
+        projectDir,
+        variantId: createdVariant.variant.id,
+        editedKeyframeId: matchedFrame!.id,
+        status: 'approved',
+      });
+    }
 
     const bundle = await service.exportPromptBundle({
-      projectDir: '/tmp/remix-project',
-      variantId: 'variant-001',
+      projectDir,
+      variantId: createdVariant.variant.id,
+      outputPath: path.join(projectDir, 'bundle-dir'),
     });
-    expect(bundle.bundlePath).toContain('prompt_bundle.md');
+    expect(bundle.bundlePath).toContain('bundle-dir');
     expect(bundle.workspace.seedancePrompts.length).toBeGreaterThan(0);
   });
 });

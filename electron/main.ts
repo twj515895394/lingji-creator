@@ -2265,6 +2265,32 @@ ipcMain.handle('select-output-path', async (_event, defaultPath?: string) => {
   return result.canceled ? null : result.filePath;
 });
 
+ipcMain.handle('select-remix-bundle-path', async (_event, defaultPath?: string) => {
+  if (!mainWindow) return null;
+  const result = await dialog.showSaveDialog(mainWindow, {
+    defaultPath:
+      typeof defaultPath === 'string' && defaultPath.trim().length > 0
+        ? defaultPath
+        : 'remix-prompt-bundle.zip',
+    filters: [{ name: 'ZIP Archive', extensions: ['zip'] }],
+  });
+
+  return result.canceled ? null : result.filePath;
+});
+
+ipcMain.handle('select-remix-bundle-directory', async (_event, defaultPath?: string) => {
+  if (!mainWindow) return null;
+  const result = await dialog.showOpenDialog(mainWindow, {
+    defaultPath:
+      typeof defaultPath === 'string' && defaultPath.trim().length > 0
+        ? defaultPath
+        : undefined,
+    properties: ['openDirectory', 'createDirectory'],
+  });
+
+  return result.canceled ? null : result.filePaths[0] ?? null;
+});
+
 ipcMain.handle('check-file-exists', async (_event, targetPath?: string) => {
   if (typeof targetPath !== 'string' || targetPath.trim().length === 0) {
     return false;

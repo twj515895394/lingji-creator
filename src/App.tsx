@@ -1345,6 +1345,7 @@ export default function App() {
                 <SceneForgeStudio projectDir={currentProjectDir} />
               ) : page === 'sceneforge-remix-assets' || page === 'sceneforge-remix-asset-details' ? (
                 <RemixAssetLibrary
+                  projectDir={currentProjectDir}
                   selectedSourceAssetId={remixRoute.kind === 'asset-details' ? remixRoute.sourceAssetId : null}
                   onOpenProcessing={(sourceAssetId) =>
                     applyRemixRoute({ kind: 'asset-processing', sourceAssetId })
@@ -1358,11 +1359,13 @@ export default function App() {
                 />
               ) : page === 'sceneforge-remix-asset-processing' ? (
                 <RemixAssetProcessing
+                  projectDir={currentProjectDir}
                   sourceAssetId={remixRoute.kind === 'asset-processing' ? remixRoute.sourceAssetId : 'source-001'}
                   onBackToLibrary={() => applyRemixRoute({ kind: 'asset-library' })}
                 />
               ) : page === 'sceneforge-remix-creation' ? (
                 <RemixCreationWorkspace
+                  projectDir={currentProjectDir}
                   variantId={remixRoute.kind === 'creation' ? remixRoute.variantId : 'variant-001'}
                   onBackToLibrary={() => applyRemixRoute({ kind: 'asset-library' })}
                 />

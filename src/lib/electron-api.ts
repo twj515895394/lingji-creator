@@ -54,11 +54,18 @@ import type { PublishAccount, PublishPlatform } from '../../electron/publish/typ
 import type {
   CreateSourceAssetFromImportInput,
   CreateVariantFromSourceAssetInput,
+  DeleteVariantInput,
+  DuplicateVariantInput,
+  ExportPromptBundleInput,
   ExportPromptBundleResult,
+  ListSourceAssetsInput,
+  ListVariantsForSourceAssetInput,
   RegisterEditedKeyframeInput,
+  RenameVariantInput,
   RemixSourceAssetRefInput,
   RemixVariantRefInput,
   RunSourceAssetStageInput,
+  UpdateSourceAssetMetadataInput,
   UpdateEditedKeyframeStatusInput,
   UpdateVariantConfigInput,
 } from '../../electron/sceneforge/remix/remix-ipc-types';
@@ -66,6 +73,7 @@ import type {
   RemixAssetLibrarySnapshot,
   RemixAssetProcessingSnapshot,
   RemixCreationWorkspaceSnapshot,
+  RemixVariantSummary,
 } from '../sceneforge/remix/types';
 
 export type SceneRunStageInput = SceneRunStageIpcInput;
@@ -78,6 +86,7 @@ export type { PublishAccount, PublishPlatform };
 export type {
   CreateSourceAssetFromImportInput,
   CreateVariantFromSourceAssetInput,
+  ExportPromptBundleInput,
   ExportPromptBundleResult,
   RegisterEditedKeyframeInput,
   RemixSourceAssetRefInput,
@@ -435,9 +444,12 @@ export interface ElectronAPI {
     callback: (payload: SceneStageRunProgressPayload) => void,
   ) => () => void;
   sceneForgeRemix: {
-    listSourceAssets: () => Promise<RemixAssetLibrarySnapshot>;
+    listSourceAssets: (input: ListSourceAssetsInput) => Promise<RemixAssetLibrarySnapshot>;
     getSourceAsset: (
       input: RemixSourceAssetRefInput,
+    ) => Promise<RemixAssetProcessingSnapshot>;
+    updateSourceAssetMetadata: (
+      input: UpdateSourceAssetMetadataInput,
     ) => Promise<RemixAssetProcessingSnapshot>;
     createSourceAssetFromImport: (
       input: CreateSourceAssetFromImportInput,
@@ -457,6 +469,18 @@ export interface ElectronAPI {
     createVariantFromSourceAsset: (
       input: CreateVariantFromSourceAssetInput,
     ) => Promise<RemixCreationWorkspaceSnapshot>;
+    listVariantsForSourceAsset: (
+      input: ListVariantsForSourceAssetInput,
+    ) => Promise<RemixVariantSummary[]>;
+    renameVariant: (
+      input: RenameVariantInput,
+    ) => Promise<RemixVariantSummary[]>;
+    duplicateVariant: (
+      input: DuplicateVariantInput,
+    ) => Promise<RemixVariantSummary[]>;
+    deleteVariant: (
+      input: DeleteVariantInput,
+    ) => Promise<RemixVariantSummary[]>;
     getCreationWorkspace: (
       input: RemixVariantRefInput,
     ) => Promise<RemixCreationWorkspaceSnapshot>;
@@ -482,7 +506,7 @@ export interface ElectronAPI {
       input: RemixVariantRefInput,
     ) => Promise<RemixCreationWorkspaceSnapshot>;
     exportPromptBundle: (
-      input: RemixVariantRefInput,
+      input: ExportPromptBundleInput,
     ) => Promise<ExportPromptBundleResult>;
   };
   saveProjectSection: (projectDir: string, section: string, data: string) => Promise<void>;
@@ -508,6 +532,8 @@ export interface ElectronAPI {
   selectProjectDirectory: () => Promise<string | null>;
   selectSetupFile: (kind: ImportKind) => Promise<string | null>;
   selectMediaFile: (kind: 'audio' | 'video' | 'srt' | 'image') => Promise<string | null>;
+  selectRemixBundlePath: (defaultPath?: string) => Promise<string | null>;
+  selectRemixBundleDirectory: (defaultPath?: string) => Promise<string | null>;
   /** 扫描项目目录顶层最新的 .mp4 成片；无则返回 null（发布选项卡联动兜底）。 */
   findLatestExport: (projectDir: string) => Promise<string | null>;
   /** 扫描项目 covers/ 下的图片并读取真实像素尺寸（发布选项卡按比例分桶）。 */

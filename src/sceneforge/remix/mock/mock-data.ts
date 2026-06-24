@@ -161,6 +161,10 @@ export const MOCK_SOURCE_ASSETS: SourceAsset[] = [
     ],
     variantCount: 0,
     tags: ['city-night', 'dialogue', 'pending'],
+    annotationNote: '保留摊位前的停顿和压迫式逼近，避免把节奏剪得过快。',
+    lastAnnotatedAt: '2026-06-23T10:30:00.000Z',
+    annotatedBy: 'Remix Editor',
+    annotationSource: 'workspace_manual',
   },
   {
     id: 'source-library-001',
@@ -283,6 +287,10 @@ export const MOCK_SOURCE_ASSETS: SourceAsset[] = [
     ],
     variantCount: 1,
     tags: ['library', 'rooftop', 'hero-asset'],
+    annotationNote: '保留风声留白和反打沉默，不要把冲突改成直接爆发。',
+    lastAnnotatedAt: '2026-06-23T11:30:00.000Z',
+    annotatedBy: 'Remix Editor',
+    annotationSource: 'workspace_manual',
   },
   {
     id: 'source-failed-001',
@@ -331,6 +339,10 @@ export const MOCK_SOURCE_ASSETS: SourceAsset[] = [
     ],
     variantCount: 0,
     tags: ['failed', 'rain', 'needs-retry'],
+    annotationNote: null,
+    lastAnnotatedAt: null,
+    annotatedBy: null,
+    annotationSource: null,
   },
 ];
 
@@ -479,6 +491,7 @@ export const MOCK_ASSET_PROCESSING_SNAPSHOTS: Record<string, RemixAssetProcessin
 
 export const MOCK_CREATION_WORKSPACE_SNAPSHOT: RemixCreationWorkspaceSnapshot = {
   sourceAsset: buildSourceAssetSummary(MOCK_SOURCE_ASSETS[1]),
+  sourceAssetDetails: MOCK_SOURCE_ASSETS[1],
   variant: MOCK_REMIX_VARIANT,
   keyframeEditPrompts: MOCK_KEYFRAME_EDIT_PROMPTS,
   editedKeyframes: MOCK_EDITED_KEYFRAMES,

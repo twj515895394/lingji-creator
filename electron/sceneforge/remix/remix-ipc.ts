@@ -2,10 +2,16 @@ import { ipcMain } from 'electron';
 import type {
   CreateSourceAssetFromImportInput,
   CreateVariantFromSourceAssetInput,
+  DeleteVariantInput,
+  DuplicateVariantInput,
+  ListSourceAssetsInput,
+  ListVariantsForSourceAssetInput,
   RegisterEditedKeyframeInput,
+  RenameVariantInput,
   RemixSourceAssetRefInput,
   RemixVariantRefInput,
   RunSourceAssetStageInput,
+  UpdateSourceAssetMetadataInput,
   UpdateEditedKeyframeStatusInput,
   UpdateVariantConfigInput,
 } from './remix-ipc-types';
@@ -14,14 +20,21 @@ import { RemixService } from './remix-service';
 const service = new RemixService();
 
 export function registerSceneForgeRemixIpc(): void {
-  ipcMain.handle('sceneForgeRemix:listSourceAssets', async () => {
-    return service.listSourceAssets();
+  ipcMain.handle('sceneForgeRemix:listSourceAssets', async (_event, input: ListSourceAssetsInput) => {
+    return service.listSourceAssets(input);
   });
 
   ipcMain.handle(
     'sceneForgeRemix:getSourceAsset',
     async (_event, input: RemixSourceAssetRefInput) => {
       return service.getSourceAsset(input);
+    },
+  );
+
+  ipcMain.handle(
+    'sceneForgeRemix:updateSourceAssetMetadata',
+    async (_event, input: UpdateSourceAssetMetadataInput) => {
+      return service.updateSourceAssetMetadata(input);
     },
   );
 
@@ -64,6 +77,34 @@ export function registerSceneForgeRemixIpc(): void {
     'sceneForgeRemix:createVariantFromSourceAsset',
     async (_event, input: CreateVariantFromSourceAssetInput) => {
       return service.createVariantFromSourceAsset(input);
+    },
+  );
+
+  ipcMain.handle(
+    'sceneForgeRemix:listVariantsForSourceAsset',
+    async (_event, input: ListVariantsForSourceAssetInput) => {
+      return service.listVariantsForSourceAsset(input);
+    },
+  );
+
+  ipcMain.handle(
+    'sceneForgeRemix:renameVariant',
+    async (_event, input: RenameVariantInput) => {
+      return service.renameVariant(input);
+    },
+  );
+
+  ipcMain.handle(
+    'sceneForgeRemix:duplicateVariant',
+    async (_event, input: DuplicateVariantInput) => {
+      return service.duplicateVariant(input);
+    },
+  );
+
+  ipcMain.handle(
+    'sceneForgeRemix:deleteVariant',
+    async (_event, input: DeleteVariantInput) => {
+      return service.deleteVariant(input);
     },
   );
 

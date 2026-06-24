@@ -1,5 +1,6 @@
-import { Badge, Button } from '../../../ui';
-import type { SourceAsset } from '../types';
+import { useEffect, useState } from 'react';
+import { Badge, Button, Input } from '../../../ui';
+import type { RemixVariantSummary, SourceAsset } from '../types';
 import styles from './AssetLibrary.module.css';
 
 const STATUS_LABELS = {
@@ -20,15 +21,39 @@ const STATUS_BADGE_VARIANTS = {
 
 interface AssetDetailSidebarProps {
   asset: SourceAsset | null;
+  variants?: RemixVariantSummary[];
+  isLoadingVariants?: boolean;
   onOpenProcessing?: (sourceAssetId: string) => void;
   onCreateVariant?: (sourceAssetId: string) => void;
+  onOpenVariant?: (variantId: string, sourceAssetId: string) => void;
+  onRenameVariant?: (variantId: string, name: string) => void;
+  onDuplicateVariant?: (variantId: string) => void;
+  onDeleteVariant?: (variantId: string) => void;
 }
 
 export function AssetDetailSidebar({
   asset,
+  variants = [],
+  isLoadingVariants = false,
   onOpenProcessing,
   onCreateVariant,
+  onOpenVariant,
+  onRenameVariant,
+  onDuplicateVariant,
+  onDeleteVariant,
 }: AssetDetailSidebarProps) {
+  const [editingVariantId, setEditingVariantId] = useState<string | null>(null);
+  const [renameDraft, setRenameDraft] = useState('');
+
+  useEffect(() => {
+    if (!editingVariantId) {
+      setRenameDraft('');
+      return;
+    }
+    const variant = variants.find((item) => item.id === editingVariantId);
+    setRenameDraft(variant?.name ?? '');
+  }, [editingVariantId, variants]);
+
   if (!asset) {
     return (
       <div className={styles.emptyState} data-testid="remix-asset-library-inspector">
@@ -82,6 +107,84 @@ export function AssetDetailSidebar({
           </span>
         ))}
       </div>
+
+      {asset.annotationNote ? (
+        <div className={styles.detailHero}>
+          <div className={styles.inspectorTitle}>人工备注</div>
+          <div className={styles.detailNote}>{asset.annotationNote}</div>
+        </div>
+      ) : null}
+
+      {asset.status === 'published_to_library' ? (
+        <div className={styles.detailHero}>
+          <div className={styles.inspectorTitle}>已有 Variant</div>
+          <div className={styles.detailNote}>
+            同一份 Source Asset 可以沉淀多个二创版本；继续已有 Variant 和创建新 Variant 的入口在这里分开。
+          </div>
+          {isLoadingVariants ? <div className={styles.detailNote}>正在同步 Variant 列表…</div> : null}
+          {variants.length === 0 && !isLoadingVariants ? (
+            <div className={styles.detailNote}>当前还没有已保存的 Variant。</div>
+          ) : null}
+          {variants.map((variant) => (
+            <div key={variant.id} className={styles.detailMeta}>
+              <div className={styles.detailRow}>
+                <span>{variant.currentStage ?? 'draft'}</span>
+                <strong>{variant.updatedAt.slice(0, 10)}</strong>
+              </div>
+              {editingVariantId === variant.id ? (
+                <div className={styles.actionRow}>
+                  <Input
+                    value={renameDraft}
+                    onChange={(event) => setRenameDraft(event.target.value)}
+                    size="sm"
+                  />
+                  <Button
+                    variant="accent"
+                    size="sm"
+                    onClick={() => {
+                      if (!renameDraft.trim()) {
+                        return;
+                      }
+                      onRenameVariant?.(variant.id, renameDraft.trim());
+                      setEditingVariantId(null);
+                    }}
+                  >
+                    保存改名
+                  </Button>
+                  <Button variant="ghost" size="sm" onClick={() => setEditingVariantId(null)}>
+                    取消
+                  </Button>
+                </div>
+              ) : (
+                <>
+                  <div className={styles.detailRow}>
+                    <span>Variant</span>
+                    <strong>{variant.name}</strong>
+                  </div>
+                  <div className={styles.actionRow}>
+                    <Button
+                      variant="accent"
+                      size="sm"
+                      onClick={() => onOpenVariant?.(variant.id, asset.id)}
+                    >
+                      继续创作
+                    </Button>
+                    <Button variant="outline" size="sm" onClick={() => setEditingVariantId(variant.id)}>
+                      重命名
+                    </Button>
+                    <Button variant="outline" size="sm" onClick={() => onDuplicateVariant?.(variant.id)}>
+                      复制
+                    </Button>
+                    <Button variant="ghost" size="sm" onClick={() => onDeleteVariant?.(variant.id)}>
+                      删除
+                    </Button>
+                  </div>
+                </>
+              )}
+            </div>
+          ))}
+        </div>
+      ) : null}
 
       <div className={styles.actionRow}>
         {asset.status === 'processing' ? (

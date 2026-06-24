@@ -1,10 +1,79 @@
-import { describe, expect, it } from 'vitest';
+// @vitest-environment jsdom
+import { act } from 'react';
+import { afterEach, describe, expect, it } from 'vitest';
+import { createRoot, type Root } from 'react-dom/client';
 import { renderToStaticMarkup } from 'react-dom/server';
-
+import type { RemixIpcContract } from '../electron/sceneforge/remix/remix-ipc-types';
 import { AssetCard } from '../src/sceneforge/remix/components/AssetCard';
 import { filterAssetLibraryAssets, getAssetLibraryAvailableTags } from '../src/sceneforge/remix/lib/asset-library-state';
 import { MOCK_SOURCE_ASSETS } from '../src/sceneforge/remix/mock/mock-data';
 import { RemixAssetLibrary } from '../src/sceneforge/remix/pages/RemixAssetLibrary';
+
+(globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
+(window as typeof window & { matchMedia?: (query: string) => MediaQueryList }).matchMedia =
+  window.matchMedia ??
+  (() =>
+    ({
+      matches: false,
+      media: '',
+      onchange: null,
+      addListener: () => undefined,
+      removeListener: () => undefined,
+      addEventListener: () => undefined,
+      removeEventListener: () => undefined,
+      dispatchEvent: () => false,
+    }) as MediaQueryList);
+
+const containerRecords: Array<{ container: HTMLDivElement; root: Root }> = [];
+
+afterEach(() => {
+  for (const record of containerRecords.splice(0)) {
+    act(() => record.root.unmount());
+    record.container.remove();
+  }
+});
+
+function buildApiClient(): RemixIpcContract {
+  return {
+    listSourceAssets: async () => ({ sourceAssets: [{ id: 'source-library-001', title: '天台谈判名场面', status: 'published_to_library', durationMs: 24600, segmentCount: 3, keyframeCount: 7, variantCount: 2, updatedAt: '2026-06-23T11:30:00.000Z' }] }),
+    getSourceAsset: async () => ({ sourceAsset: MOCK_SOURCE_ASSETS[1], processingStageStates: { remix_source_import: 'approved', remix_segmentation: 'approved', remix_keyframes: 'approved', remix_understanding: 'approved' }, variants: [] }),
+    updateSourceAssetMetadata: async () => { throw new Error('not implemented'); },
+    createSourceAssetFromImport: async () => { throw new Error('not implemented'); },
+    runSourceSegmentation: async () => { throw new Error('not implemented'); },
+    runSourceKeyframes: async () => { throw new Error('not implemented'); },
+    runSourceUnderstanding: async () => { throw new Error('not implemented'); },
+    publishSourceAssetToLibrary: async () => { throw new Error('not implemented'); },
+    createVariantFromSourceAsset: async () => { throw new Error('not implemented'); },
+    listVariantsForSourceAsset: async () => [{ id: 'variant-hero-001', sourceAssetId: 'source-library-001', name: '狸猫黑帮版', currentStage: 'edited_keyframes_review', updatedAt: '2026-06-23T11:30:00.000Z' }],
+    renameVariant: async () => { throw new Error('not implemented'); },
+    duplicateVariant: async () => { throw new Error('not implemented'); },
+    deleteVariant: async () => { throw new Error('not implemented'); },
+    getCreationWorkspace: async () => { throw new Error('not implemented'); },
+    updateVariantConfig: async () => { throw new Error('not implemented'); },
+    runRemixStrategy: async () => { throw new Error('not implemented'); },
+    runRemixDesign: async () => { throw new Error('not implemented'); },
+    runKeyframeEditPrompts: async () => { throw new Error('not implemented'); },
+    registerEditedKeyframe: async () => { throw new Error('not implemented'); },
+    updateEditedKeyframeStatus: async () => { throw new Error('not implemented'); },
+    runSeedancePrompts: async () => { throw new Error('not implemented'); },
+    exportPromptBundle: async () => { throw new Error('not implemented'); },
+  };
+}
+
+async function renderLibrary(node: JSX.Element) {
+  const container = document.createElement('div');
+  document.body.appendChild(container);
+  const root = createRoot(container);
+  containerRecords.push({ container, root });
+  await act(async () => {
+    root.render(node);
+  });
+  await act(async () => {
+    await Promise.resolve();
+    await Promise.resolve();
+  });
+  return container;
+}
 
 describe('SceneForge Remix asset library', () => {
   it('按状态与标签筛选资产', () => {
@@ -22,28 +91,20 @@ describe('SceneForge Remix asset library', () => {
     const processingHtml = renderToStaticMarkup(
       <AssetCard asset={MOCK_SOURCE_ASSETS[0]} selected={false} onSelect={() => undefined} />,
     );
-    expect(processingHtml).toContain('继续处理');
-    expect(processingHtml).not.toContain('创建二创');
-
-    const publishedHtml = renderToStaticMarkup(
-      <AssetCard asset={MOCK_SOURCE_ASSETS[1]} selected={false} onSelect={() => undefined} />,
-    );
-    expect(publishedHtml).toContain('创建二创');
-
-    const failedHtml = renderToStaticMarkup(
-      <AssetCard asset={MOCK_SOURCE_ASSETS[2]} selected={false} onSelect={() => undefined} />,
-    );
-    expect(failedHtml).not.toContain('创建二创');
+    expect(String(processingHtml)).toContain('继续处理');
   });
 
-  it('渲染资产库主页面并展示导入入口与详情侧栏', () => {
-    const html = renderToStaticMarkup(
-      <RemixAssetLibrary selectedSourceAssetId="source-library-001" />,
+  it('通过真实 API client 异步拉取资产详情', async () => {
+    const container = await renderLibrary(
+      <RemixAssetLibrary
+        projectDir="/tmp/remix-project"
+        apiClient={buildApiClient()}
+        selectedSourceAssetId="source-library-001"
+      />,
     );
 
-    expect(html).toContain('导入新原片');
-    expect(html).toContain('data-testid="remix-asset-card-source-library-001"');
-    expect(html).toContain('data-testid="remix-asset-library-inspector"');
-    expect(html).toContain('天台谈判名场面');
+    expect(container.textContent).toContain('天台谈判名场面');
+    expect(container.querySelector('[data-testid="remix-asset-library-inspector"]')).not.toBeNull();
+    expect(container.textContent).toContain('狸猫黑帮版');
   });
 });

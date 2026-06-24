@@ -11,6 +11,7 @@ const SEGMENT_ADAPTATIONS_DIR = 'segment_adaptations';
 const SEGMENT_DESIGN_OVERRIDES_DIR = 'segment_design_overrides';
 const KEYFRAME_PROMPTS_DIR = 'keyframe_prompts';
 const SEEDANCE_PROMPTS_DIR = 'seedance_prompts';
+const PROMPT_BUNDLE_DIR = 'prompt_bundle';
 
 function assertSafeId(kind: string, value: string): void {
   if (!/^[A-Za-z0-9][A-Za-z0-9._-]*$/.test(value)) {
@@ -202,6 +203,30 @@ export function getRemixVariantSeedancePromptPath(
   );
 }
 
+export function getRemixVariantSeedancePromptJsonPath(
+  variantId: string,
+  segmentId: string,
+): string {
+  assertSafeId('segmentId', segmentId);
+  return joinRemixPath(
+    getRemixVariantDir(variantId),
+    SEEDANCE_PROMPTS_DIR,
+    `${segmentId}.json`,
+  );
+}
+
+export function getRemixVariantAudioPlanPath(variantId: string): string {
+  return joinRemixPath(getRemixVariantDir(variantId), SEEDANCE_PROMPTS_DIR, 'audio_plan.json');
+}
+
+export function getRemixVariantPromptBundleDir(variantId: string): string {
+  return joinRemixPath(getRemixVariantDir(variantId), PROMPT_BUNDLE_DIR);
+}
+
+export function getRemixVariantPromptBundleManifestPath(variantId: string): string {
+  return joinRemixPath(getRemixVariantPromptBundleDir(variantId), 'bundle_manifest.json');
+}
+
 export function getRemixVariantPromptBundlePath(variantId: string): string {
-  return joinRemixPath(getRemixVariantDir(variantId), 'prompt_bundle.md');
+  return joinRemixPath(getRemixVariantDir(variantId), 'prompt_bundle.zip');
 }

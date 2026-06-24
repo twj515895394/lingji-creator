@@ -4,9 +4,16 @@ import styles from './RemixStageNav.module.css';
 interface RemixStageNavProps {
   scope: RemixNavScope;
   activeItemId?: string | null;
+  stageStatuses?: Partial<Record<string, string>>;
+  onSelectItem?: (itemId: string) => void;
 }
 
-export function RemixStageNav({ scope, activeItemId = null }: RemixStageNavProps) {
+export function RemixStageNav({
+  scope,
+  activeItemId = null,
+  stageStatuses = {},
+  onSelectItem,
+}: RemixStageNavProps) {
   const items = getRemixStageNavItems(scope);
   const isProcessing = scope === 'asset-processing';
 
@@ -33,6 +40,7 @@ export function RemixStageNav({ scope, activeItemId = null }: RemixStageNavProps
       <ol className={styles.list}>
         {items.map((item) => {
           const active = activeItemId === item.id;
+          const status = stageStatuses[item.id] ?? null;
           return (
             <li
               key={item.id}
@@ -40,11 +48,20 @@ export function RemixStageNav({ scope, activeItemId = null }: RemixStageNavProps
               data-remix-stage-id={item.id}
               data-remix-active={active ? 'true' : 'false'}
             >
-              <span className={styles.index}>{String(item.index).padStart(2, '0')}</span>
-              <div className={styles.content}>
-                <div className={styles.itemTitle}>{item.title}</div>
-                <div className={styles.itemCaption}>{item.caption}</div>
-              </div>
+              <button
+                type="button"
+                className={styles.itemButton}
+                onClick={() => onSelectItem?.(item.id)}
+              >
+                <span className={styles.index}>{String(item.index).padStart(2, '0')}</span>
+                <div className={styles.content}>
+                  <div className={styles.itemTopline}>
+                    <div className={styles.itemTitle}>{item.title}</div>
+                    {status ? <span className={styles.statusChip}>{status}</span> : null}
+                  </div>
+                  <div className={styles.itemCaption}>{item.caption}</div>
+                </div>
+              </button>
             </li>
           );
         })}

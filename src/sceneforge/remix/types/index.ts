@@ -166,6 +166,10 @@ export interface SourceAsset {
   segments: SourceSegment[];
   variantCount: number;
   tags: string[];
+  annotationNote?: string | null;
+  lastAnnotatedAt?: string | null;
+  annotatedBy?: string | null;
+  annotationSource?: string | null;
 }
 
 export interface RetentionMatrix {
@@ -237,6 +241,23 @@ export interface SeedancePromptStructuredFields {
   negative: string;
 }
 
+export interface SeedanceAudioPlanSegment {
+  segmentId: string;
+  dialogue: string;
+  voice: string;
+  soundEffects: string;
+  ambientAudio: string;
+}
+
+export interface SeedanceAudioPlan {
+  globalAudioRules: string[];
+  voiceProfiles: Array<{
+    id: string;
+    description: string;
+  }>;
+  segmentAudioPlan: SeedanceAudioPlanSegment[];
+}
+
 export interface SeedancePrompt {
   id: string;
   variantId: string;
@@ -246,6 +267,7 @@ export interface SeedancePrompt {
   structuredFields: SeedancePromptStructuredFields;
   copyablePrompt: string;
   audioPlanPath?: string | null;
+  audioPlan?: SeedanceAudioPlan | null;
 }
 
 export interface SourceAssetSummary {
@@ -259,6 +281,14 @@ export interface SourceAssetSummary {
   updatedAt: string;
 }
 
+export interface RemixVariantSummary {
+  id: string;
+  sourceAssetId: string;
+  name: string;
+  currentStage: RemixCreationStageId | null;
+  updatedAt: string;
+}
+
 export interface RemixAssetLibrarySnapshot {
   sourceAssets: SourceAssetSummary[];
 }
@@ -266,10 +296,12 @@ export interface RemixAssetLibrarySnapshot {
 export interface RemixAssetProcessingSnapshot {
   sourceAsset: SourceAsset;
   processingStageStates: Partial<Record<RemixAssetProcessingStageId, RemixStageStatus>>;
+  variants?: RemixVariantSummary[];
 }
 
 export interface RemixCreationWorkspaceSnapshot {
   sourceAsset: SourceAssetSummary;
+  sourceAssetDetails?: SourceAsset | null;
   variant: RemixVariant;
   keyframeEditPrompts: KeyframeEditPrompt[];
   editedKeyframes: EditedKeyframe[];

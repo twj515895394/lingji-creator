@@ -31,7 +31,9 @@ describe('sceneforge remix mock data', () => {
   it('mock API 签名与契约一致，并能返回预期快照', async () => {
     const api = createMockRemixApi();
 
-    const library = await api.listSourceAssets();
+    const library = await api.listSourceAssets({
+      projectDir: '/mock/projects/sceneforge-remix',
+    });
     expect(library.sourceAssets).toHaveLength(3);
 
     const processing = await api.getSourceAsset({

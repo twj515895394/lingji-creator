@@ -8,6 +8,7 @@ import type {
   RemixKeyframeRole,
   RemixQualityCheck,
   RemixReferenceStrength,
+  RemixVariantSummary,
   RetentionMatrix,
 } from '../../../src/sceneforge/remix/types';
 
@@ -16,10 +17,16 @@ export interface RemixSourceAssetRefInput {
   sourceAssetId: string;
 }
 
+export interface ListSourceAssetsInput {
+  projectDir: string;
+}
+
 export interface RemixVariantRefInput {
   projectDir: string;
   variantId: string;
 }
+
+export interface ListVariantsForSourceAssetInput extends RemixSourceAssetRefInput {}
 
 export interface CreateSourceAssetFromImportInput {
   projectDir: string;
@@ -47,6 +54,23 @@ export interface UpdateVariantConfigInput extends RemixVariantRefInput {
   segmentGenerationModeOverrides?: Record<string, RemixGenerationMode>;
 }
 
+export interface RenameVariantInput extends RemixVariantRefInput {
+  name: string;
+}
+
+export interface DuplicateVariantInput extends RemixVariantRefInput {
+  name?: string | null;
+}
+
+export interface DeleteVariantInput extends RemixVariantRefInput {}
+
+export interface UpdateSourceAssetMetadataInput extends RemixSourceAssetRefInput {
+  tags?: string[];
+  annotationNote?: string | null;
+  annotatedBy?: string | null;
+  annotationSource?: string | null;
+}
+
 export interface RegisterEditedKeyframeInput extends RemixVariantRefInput {
   segmentId: string;
   frameRole: RemixKeyframeRole;
@@ -66,9 +90,16 @@ export interface ExportPromptBundleResult {
   workspace: RemixCreationWorkspaceSnapshot;
 }
 
+export interface ExportPromptBundleInput extends RemixVariantRefInput {
+  outputPath?: string | null;
+}
+
 export interface RemixIpcContract {
-  listSourceAssets(): Promise<RemixAssetLibrarySnapshot>;
+  listSourceAssets(input: ListSourceAssetsInput): Promise<RemixAssetLibrarySnapshot>;
   getSourceAsset(input: RemixSourceAssetRefInput): Promise<RemixAssetProcessingSnapshot>;
+  updateSourceAssetMetadata(
+    input: UpdateSourceAssetMetadataInput,
+  ): Promise<RemixAssetProcessingSnapshot>;
   createSourceAssetFromImport(
     input: CreateSourceAssetFromImportInput,
   ): Promise<RemixAssetProcessingSnapshot>;
@@ -85,6 +116,10 @@ export interface RemixIpcContract {
   createVariantFromSourceAsset(
     input: CreateVariantFromSourceAssetInput,
   ): Promise<RemixCreationWorkspaceSnapshot>;
+  listVariantsForSourceAsset(input: ListVariantsForSourceAssetInput): Promise<RemixVariantSummary[]>;
+  renameVariant(input: RenameVariantInput): Promise<RemixVariantSummary[]>;
+  duplicateVariant(input: DuplicateVariantInput): Promise<RemixVariantSummary[]>;
+  deleteVariant(input: DeleteVariantInput): Promise<RemixVariantSummary[]>;
   getCreationWorkspace(
     input: RemixVariantRefInput,
   ): Promise<RemixCreationWorkspaceSnapshot>;
@@ -99,7 +134,7 @@ export interface RemixIpcContract {
     input: UpdateEditedKeyframeStatusInput,
   ): Promise<RemixCreationWorkspaceSnapshot>;
   runSeedancePrompts(input: RemixVariantRefInput): Promise<RemixCreationWorkspaceSnapshot>;
-  exportPromptBundle(input: RemixVariantRefInput): Promise<ExportPromptBundleResult>;
+  exportPromptBundle(input: ExportPromptBundleInput): Promise<ExportPromptBundleResult>;
 }
 
 export type RemixSourceAssetListResult = RemixAssetLibrarySnapshot;
