@@ -57,9 +57,9 @@ export function AssetDetailSidebar({
   if (!asset) {
     return (
       <div className={styles.emptyState} data-testid="remix-asset-library-inspector">
-        <div className={styles.emptyTitle}>选择一份 Source Asset</div>
+        <div className={styles.emptyTitle}>选择一份源资产（Source Asset）</div>
         <div className={styles.emptyText}>
-          右侧会展示原片状态、素材规模和下一步动作。Asset Library 只负责资产治理，不在这里直接展开二创配置。
+          右侧会展示原片状态、素材规模和下一步动作。资产库只负责资产治理，不在这里直接展开二创配置。
         </div>
       </div>
     );
@@ -73,13 +73,13 @@ export function AssetDetailSidebar({
         <Badge variant={STATUS_BADGE_VARIANTS[asset.status]}>{STATUS_LABELS[asset.status]}</Badge>
         <div className={styles.inspectorTitle}>{asset.title}</div>
         <div className={styles.detailNote}>
-          这份原片已经沉淀为可管理资产。下一步要么继续补完处理链路，要么在入库后发起新的 Remix Variant。
+          这份原片已经沉淀为可管理资产。下一步要么继续补完处理链路，要么在入库后发起新的二创版本（Variant）。
         </div>
       </div>
 
       <div className={styles.detailMeta}>
         <div className={styles.detailRow}>
-          <span>Source Asset</span>
+          <span>源资产（Source Asset）</span>
           <strong>{asset.id}</strong>
         </div>
         <div className={styles.detailRow}>
@@ -95,7 +95,7 @@ export function AssetDetailSidebar({
           <strong>{keyframeCount}</strong>
         </div>
         <div className={styles.detailRow}>
-          <span>已派生 Variant</span>
+          <span>已派生二创版本（Variant）</span>
           <strong>{asset.variantCount}</strong>
         </div>
       </div>
@@ -117,13 +117,13 @@ export function AssetDetailSidebar({
 
       {asset.status === 'published_to_library' ? (
         <div className={styles.detailHero}>
-          <div className={styles.inspectorTitle}>已有 Variant</div>
+          <div className={styles.inspectorTitle}>已有二创版本（Variant）</div>
           <div className={styles.detailNote}>
-            同一份 Source Asset 可以沉淀多个二创版本；继续已有 Variant 和创建新 Variant 的入口在这里分开。
+            同一份源资产（Source Asset）可以沉淀多个二创版本；继续已有二创版本（Variant）和创建新二创版本的入口在这里分开。
           </div>
-          {isLoadingVariants ? <div className={styles.detailNote}>正在同步 Variant 列表…</div> : null}
+          {isLoadingVariants ? <div className={styles.detailNote}>正在同步二创版本（Variant）列表…</div> : null}
           {variants.length === 0 && !isLoadingVariants ? (
-            <div className={styles.detailNote}>当前还没有已保存的 Variant。</div>
+            <div className={styles.detailNote}>当前还没有已保存的二创版本（Variant）。</div>
           ) : null}
           {variants.map((variant) => (
             <div key={variant.id} className={styles.detailMeta}>
@@ -158,7 +158,7 @@ export function AssetDetailSidebar({
               ) : (
                 <>
                   <div className={styles.detailRow}>
-                    <span>Variant</span>
+                    <span>二创版本（Variant）</span>
                     <strong>{variant.name}</strong>
                   </div>
                   <div className={styles.actionRow}>

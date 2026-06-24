@@ -563,8 +563,11 @@ contextBridge.exposeInMainWorld('electronAPI', {
     } | null>,
   getAutoRunLogDir: () => ipcRenderer.invoke('auto-run-telemetry/get-log-dir') as Promise<string>,
   loadRecentProjects: () => ipcRenderer.invoke('load-recent-projects'),
-  addRecentProject: (projectDir: string, projectName?: string) =>
-    ipcRenderer.invoke('add-recent-project', projectDir, projectName),
+  addRecentProject: (
+    projectDir: string,
+    projectName?: string,
+    identity?: import('../src/lib/electron-api').RecentProjectIdentity,
+  ) => ipcRenderer.invoke('add-recent-project', projectDir, projectName, identity),
   removeRecentProject: (projectDir: string) =>
     ipcRenderer.invoke('remove-recent-project', projectDir),
   refreshRecentProjects: () => ipcRenderer.invoke('refresh-recent-projects'),

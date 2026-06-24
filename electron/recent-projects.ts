@@ -2,16 +2,9 @@ import fs from 'node:fs/promises';
 import path from 'node:path';
 import { existsSync } from 'node:fs';
 import type { ProjectData } from '../src/lib/project-persistence';
+import type { RecentProjectIdentity, RecentProjectEntry } from '../src/lib/electron-api';
 import { loadProjectFile } from './project-file';
-
-export interface RecentProjectEntry {
-  path: string;
-  name: string;
-  lastOpenedAt: number;
-  createdAt?: string;
-  updatedAt?: string;
-  coverImageUrl?: string;
-}
+import { normalizeRecentProjectIdentity } from '../src/lib/recent-project-identity';
 
 const RECENT_PROJECTS_FILE = 'recent-projects.json';
 const MAX_RECENT_PROJECTS = 20;
@@ -48,6 +41,7 @@ export async function addRecentProject(
   userDataPath: string,
   projectDir: string,
   projectName?: string,
+  identity?: RecentProjectIdentity,
 ): Promise<RecentProjectEntry[]> {
   const existing = await loadRecentProjects(userDataPath);
   const now = Date.now();
@@ -69,6 +63,13 @@ export async function addRecentProject(
     coverImageUrl = selectedCover?.imageUrl;
   }
 
+  const normalizedIdentity = normalizeRecentProjectIdentity(
+    identity ??
+      (projectData?.type === 'sceneforge'
+        ? { projectKind: 'sceneforge' }
+        : { projectKind: 'script' }),
+  );
+
   const entry: RecentProjectEntry = {
     path: projectDir,
     name: projectName || path.basename(projectDir),
@@ -76,6 +77,8 @@ export async function addRecentProject(
     createdAt: projectData?.createdAt,
     updatedAt: projectData?.updatedAt,
     coverImageUrl,
+    projectKind: normalizedIdentity.projectKind,
+    remixEntryIntent: normalizedIdentity.remixEntryIntent ?? null,
   };
 
   // 移除已存在的同路径项目，添加到开头
@@ -128,6 +131,13 @@ export async function refreshRecentProjects(
       createdAt: projectData?.createdAt ?? entry.createdAt,
       updatedAt: projectData?.updatedAt ?? entry.updatedAt,
       coverImageUrl,
+      projectKind:
+        entry.projectKind ??
+        (projectData?.type === 'sceneforge' ? 'sceneforge' : 'script'),
+      remixEntryIntent:
+        entry.projectKind === 'remix'
+          ? (entry.remixEntryIntent === 'creation' ? 'creation' : 'asset-ingestion')
+          : null,
     });
   }
 

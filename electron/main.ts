@@ -153,8 +153,8 @@ import {
   addRecentProject,
   removeRecentProject as removeRecentProjectFromStore,
   refreshRecentProjects,
-  type RecentProjectEntry,
 } from './recent-projects';
+import type { RecentProjectEntry } from '../src/lib/electron-api';
 import { getVideoImportService } from './video-import/import-service';
 import { resolveDouyinVideoSource } from './video-import/douyin-downloader';
 import type { VideoImportRequest } from '../src/lib/video-import-types';
@@ -448,6 +448,7 @@ function createWindow() {
     const action = resolveWindowCloseAction({
       hasProject: menuContext.hasProject,
       isAppQuitting,
+      shouldCloseWorkspaceShell: menuContext.activePage.startsWith('sceneforge-remix-'),
     });
 
     if (action !== 'close-project') {
@@ -2592,9 +2593,16 @@ ipcMain.handle('load-recent-projects', async () => {
   return await loadRecentProjects(userDataPath);
 });
 
-ipcMain.handle('add-recent-project', async (_event, projectDir: string, projectName?: string) => {
+ipcMain.handle(
+  'add-recent-project',
+  async (
+    _event,
+    projectDir: string,
+    projectName?: string,
+    identity?: import('../src/lib/electron-api').RecentProjectIdentity,
+  ) => {
   const userDataPath = app.getPath('userData');
-  const projects = await addRecentProject(userDataPath, projectDir, projectName);
+  const projects = await addRecentProject(userDataPath, projectDir, projectName, identity);
   // 更新菜单上下文
   menuContext.recentProjects = projects.map((p) => ({
     path: p.path,

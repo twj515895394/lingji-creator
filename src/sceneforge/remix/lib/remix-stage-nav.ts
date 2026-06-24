@@ -8,17 +8,17 @@ export interface RemixStageNavItem {
 }
 
 export const REMIX_ASSET_PROCESSING_NAV_ITEMS: RemixStageNavItem[] = [
-  { id: 'source-import', index: 1, title: '导入原片', caption: '登记 Source Asset' },
+  { id: 'source-import', index: 1, title: '导入原片', caption: '登记源资产（Source Asset）' },
   { id: 'segmentation', index: 2, title: '真实镜头切片', caption: '保护镜头与表演完整性' },
   { id: 'keyframes', index: 3, title: '关键帧提取', caption: '首帧 / 尾帧 / 中间帧' },
   { id: 'understanding', index: 4, title: '原片理解', caption: '剧情、动作、镜头与梗点' },
   { id: 'annotate', index: 5, title: '人工标注', caption: '保留点、替换点与备注' },
-  { id: 'publish-source', index: 6, title: '保存入库', caption: '资产可被 Variant 引用' },
+  { id: 'publish-source', index: 6, title: '保存入库', caption: '资产可被二创版本（Variant）引用' },
 ] as const;
 
 export const REMIX_CREATION_NAV_ITEMS: RemixStageNavItem[] = [
-  { id: 'select-asset', index: 1, title: '选择资产', caption: '引用已入库 Source Asset' },
-  { id: 'create-variant', index: 2, title: '创建 Variant', caption: '概念、强度与保留矩阵' },
+  { id: 'select-asset', index: 1, title: '选择资产', caption: '引用已入库源资产（Source Asset）' },
+  { id: 'create-variant', index: 2, title: '创建二创版本（Variant）', caption: '概念、强度与保留矩阵' },
   { id: 'strategy', index: 3, title: '改编策略', caption: 'keep / change / risk notes' },
   { id: 'design', index: 4, title: 'Remix Design', caption: '角色、场景、风格与连续性' },
   { id: 'keyframe-prompts', index: 5, title: '关键帧改图提示词', caption: '逐帧提示词与全局规则' },

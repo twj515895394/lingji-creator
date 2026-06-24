@@ -107,4 +107,18 @@ describe('SceneForge Remix asset library', () => {
     expect(container.querySelector('[data-testid="remix-asset-library-inspector"]')).not.toBeNull();
     expect(container.textContent).toContain('狸猫黑帮版');
   });
+
+  it('在二创入口模式下优先展示已入库资产和二创动作', async () => {
+    const container = await renderLibrary(
+      <RemixAssetLibrary
+        projectDir="/tmp/remix-project"
+        apiClient={buildApiClient()}
+        entryIntent="creation"
+      />,
+    );
+
+    expect(container.textContent).toContain('先选已入库资产，再发起二创');
+    expect(container.textContent).toContain('基于当前资产创建二创版本（Variant）');
+    expect(container.textContent).toContain('补充导入新原片');
+  });
 });

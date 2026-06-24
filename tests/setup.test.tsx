@@ -1,6 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { Setup } from '../src/pages/Setup';
+import type { RecentProjectEntry } from '../src/lib/electron-api';
+
+const noopRecentProject = async (_project: RecentProjectEntry) => undefined;
 
 describe('Setup', () => {
   it('renders hero banner and quick actions on welcome page', () => {
@@ -11,13 +14,13 @@ describe('Setup', () => {
         projectName=""
         recentProjects={[]}
         onComplete={async () => undefined}
-        onOpenRecentProject={async () => undefined}
+        onOpenRecentProject={noopRecentProject}
         onImportScript={async () => undefined}
         onOpenSettings={() => undefined}
         onMediaImport={async () => undefined}
         onImportProject={() => undefined}
         onCreateSceneForgeProject={() => undefined}
-        onOpenRemixMode={() => undefined}
+        onOpenRemixMode={async () => undefined}
       />,
     );
 
@@ -38,13 +41,13 @@ describe('Setup', () => {
         projectName="my-project"
         recentProjects={[]}
         onComplete={async () => undefined}
-        onOpenRecentProject={async () => undefined}
+        onOpenRecentProject={noopRecentProject}
         onImportScript={async () => undefined}
         onOpenSettings={() => undefined}
         onMediaImport={async () => undefined}
         onImportProject={() => undefined}
         onCreateSceneForgeProject={() => undefined}
-        onOpenRemixMode={() => undefined}
+        onOpenRemixMode={async () => undefined}
       />,
     );
 
@@ -63,20 +66,23 @@ describe('Setup', () => {
             path: '/tmp/demo-project',
             name: 'demo-project',
             lastOpenedAt: new Date('2026-04-06T20:30:00+08:00').getTime(),
+            projectKind: 'remix',
+            remixEntryIntent: 'asset-ingestion',
           },
         ]}
         onComplete={async () => undefined}
-        onOpenRecentProject={async () => undefined}
+        onOpenRecentProject={noopRecentProject}
         onImportScript={async () => undefined}
         onOpenSettings={() => undefined}
         onMediaImport={async () => undefined}
         onImportProject={() => undefined}
         onCreateSceneForgeProject={() => undefined}
-        onOpenRemixMode={() => undefined}
+        onOpenRemixMode={async () => undefined}
       />,
     );
 
     expect(html).toContain('本地草稿');
     expect(html).toContain('demo-project');
+    expect(html).toContain('Remix·资产入库');
   });
 });

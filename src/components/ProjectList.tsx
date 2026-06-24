@@ -2,12 +2,13 @@ import { useCallback, useMemo, useState } from 'react';
 import { LayoutGrid, List, X } from 'lucide-react';
 import { getFileNameFromPath, toFileSrc } from '../lib/utils';
 import type { RecentProjectEntry } from '../lib/electron-api';
+import { getRecentProjectDisplayLabel } from '../lib/recent-project-identity';
 import { Button, ConfirmDialog } from '../ui';
 import styles from './ProjectList.module.css';
 
 interface ProjectListProps {
   projects: RecentProjectEntry[];
-  onOpenProject: (projectDir: string) => void;
+  onOpenProject: (project: RecentProjectEntry) => void;
   onRemoveProject?: (projectDir: string) => void;
 }
 
@@ -118,6 +119,9 @@ function ProjectCard({
         <div className={styles.projectName} title={project.name}>
           {project.name}
         </div>
+        <div className={styles.projectBadgeRow}>
+          <span className={styles.projectBadge}>{getRecentProjectDisplayLabel(project)}</span>
+        </div>
         <div className={styles.projectMeta}>
           <span className={styles.metaItem}>
             创建: {formatDate(project.createdAt)}
@@ -163,6 +167,7 @@ function ProjectListItem({
           )}
         </span>
         {project.name}
+        <span className={styles.listBadge}>{getRecentProjectDisplayLabel(project)}</span>
       </span>
       <span className={styles.colDate}>
         {formatDate(project.updatedAt ?? project.lastOpenedAt)}
@@ -234,7 +239,7 @@ export function ProjectList({ projects, onOpenProject, onRemoveProject }: Projec
               <ProjectCard
                 key={project.path}
                 project={project}
-                onClick={() => onOpenProject(project.path)}
+                onClick={() => onOpenProject(project)}
                 onRemove={(e) => handleRemove(e, project)}
               />
             ))}
@@ -252,7 +257,7 @@ export function ProjectList({ projects, onOpenProject, onRemoveProject }: Projec
                 <ProjectListItem
                   key={project.path}
                   project={project}
-                  onClick={() => onOpenProject(project.path)}
+                  onClick={() => onOpenProject(project)}
                   onRemove={(e) => handleRemove(e, project)}
                 />
               ))}

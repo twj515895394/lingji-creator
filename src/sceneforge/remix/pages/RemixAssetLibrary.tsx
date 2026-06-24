@@ -5,6 +5,7 @@ import type { RemixIpcContract } from '../../../../electron/sceneforge/remix/rem
 import { AssetDetailSidebar } from '../components/AssetDetailSidebar';
 import { AssetFilterBar, type AssetLibraryStatusFilter } from '../components/AssetFilterBar';
 import { AssetGrid } from '../components/AssetGrid';
+import type { RemixEntryIntent } from '../components/RemixModeEntryDialog';
 import { filterAssetLibraryAssets, getAssetLibraryAvailableTags } from '../lib/asset-library-state';
 import { DEFAULT_REMIX_PROJECT_DIR, MOCK_SOURCE_ASSETS } from '../mock/mock-data';
 import { remixApiClient, resolveRemixApiClientMode } from '../services/remix-api-client';
@@ -15,6 +16,7 @@ import styles from './RemixWorkspaceShell.module.css';
 interface RemixAssetLibraryProps {
   projectDir?: string | null;
   apiClient?: RemixIpcContract;
+  entryIntent?: RemixEntryIntent;
   selectedSourceAssetId?: string | null;
   onOpenProcessing?: (sourceAssetId: string) => void;
   onOpenDetails?: (sourceAssetId: string) => void;
@@ -24,6 +26,7 @@ interface RemixAssetLibraryProps {
 export function RemixAssetLibrary({
   projectDir = null,
   apiClient,
+  entryIntent = 'asset-ingestion',
   selectedSourceAssetId = null,
   onOpenProcessing,
   onOpenDetails,
@@ -53,6 +56,11 @@ export function RemixAssetLibrary({
   }, [activeStatus, activeTag, assets]);
 
   const activeAsset = filteredAssets.find((asset) => asset.id === activeAssetId) ?? null;
+  const isCreationEntry = entryIntent === 'creation';
+  const preferredCreationAsset =
+    (activeAsset?.status === 'published_to_library' ? activeAsset : null) ??
+    assets.find((asset) => asset.status === 'published_to_library') ??
+    null;
 
   useEffect(() => {
     async function loadAssets() {
@@ -105,8 +113,20 @@ export function RemixAssetLibrary({
   }, [client, projectDir, useMockSnapshot]);
 
   useEffect(() => {
+    if (entryIntent === 'creation') {
+      setActiveStatus('published_to_library');
+      setActiveTag(null);
+    }
+  }, [entryIntent]);
+
+  useEffect(() => {
     if (selectedSourceAssetId) {
       setActiveAssetId(selectedSourceAssetId);
+      return;
+    }
+
+    if (isCreationEntry && preferredCreationAsset && activeAsset?.status !== 'published_to_library') {
+      setActiveAssetId(preferredCreationAsset.id);
       return;
     }
 
@@ -118,7 +138,7 @@ export function RemixAssetLibrary({
     if (activeAssetId && !filteredAssets.some((asset) => asset.id === activeAssetId)) {
       setActiveAssetId(filteredAssets[0]?.id ?? null);
     }
-  }, [activeAssetId, filteredAssets, selectedSourceAssetId]);
+  }, [activeAsset, activeAssetId, filteredAssets, isCreationEntry, preferredCreationAsset, selectedSourceAssetId]);
 
   async function handleCreateVariant(sourceAssetId: string) {
     const sourceAsset = assets.find((asset) => asset.id === sourceAssetId);
@@ -149,7 +169,7 @@ export function RemixAssetLibrary({
       setVariantMap((current) => ({ ...current, [sourceAssetId]: variants }));
       onOpenCreation?.(workspace.variant.id, sourceAssetId);
     } catch (error) {
-      setErrorMessage(error instanceof Error ? error.message : '创建 Variant 失败。');
+      setErrorMessage(error instanceof Error ? error.message : '创建二创版本（Variant）失败。');
     } finally {
       setCreatingVariantFor(null);
     }
@@ -229,7 +249,7 @@ export function RemixAssetLibrary({
   }
 
   async function handleDeleteVariant(variantId: string) {
-    if (!activeAsset || !window.confirm('删除这个 Variant 只会移除二创产物，不会影响原始 Source Asset。确认继续吗？')) {
+    if (!activeAsset || !window.confirm('删除这个二创版本（Variant）只会移除二创产物，不会影响原始源资产（Source Asset）。确认继续吗？')) {
       return;
     }
     const variants = await client.deleteVariant({ projectDir: effectiveProjectDir, variantId });
@@ -260,8 +280,12 @@ export function RemixAssetLibrary({
         <div className={styles.panelContent}>
           <PanelHeader
             eyebrow="Remix Asset Library"
-            title="原片资产库"
-            description="先把可复用原片做成稳定 Source Asset，再从这里发起 Variant 创作。"
+            title={isCreationEntry ? '已入库资产' : '原片资产库'}
+            description={
+              isCreationEntry
+                ? '选择已入库的源资产（Source Asset），继续已有二创版本（Variant）或创建新的二创版本。'
+                : '先把可复用原片做成稳定的源资产（Source Asset），再从这里发起二创版本（Variant）创作。'
+            }
           />
           <AssetFilterBar
             activeStatus={activeStatus}
@@ -277,10 +301,11 @@ export function RemixAssetLibrary({
         <div className={styles.panelContent}>
           <div className={styles.heroBlock}>
             <div className={styles.eyebrow}>Asset First, Remix Later</div>
-            <div className={styles.title}>资产先入库，创作再引用</div>
+            <div className={styles.title}>{isCreationEntry ? '先选已入库资产，再发起二创' : '资产先入库，创作再引用'}</div>
             <div className={styles.description}>
-              这里先管理原片的切片、关键帧和分析状态。只有完成入库确认的 Source Asset，
-              才允许进入 Remix Creation Workspace。
+              {isCreationEntry
+                ? '这里优先展示已经完成入库确认的源资产（Source Asset）。你可以继续已有二创版本（Variant），或基于当前资产新建一个二创版本。'
+                : '这里先管理原片的切片、关键帧和分析状态。只有完成入库确认的源资产（Source Asset），才允许进入二创工作区。'}
             </div>
             {errorMessage ? (
               <div className={styles.description} data-testid="remix-asset-library-error">
@@ -288,18 +313,49 @@ export function RemixAssetLibrary({
               </div>
             ) : null}
             <div className={styles.actionRow}>
+              {isCreationEntry ? (
+                <Button
+                  variant="primary"
+                  data-testid="remix-entry-create-variant-button"
+                  disabled={!preferredCreationAsset || creatingVariantFor !== null}
+                  onClick={() => {
+                    if (preferredCreationAsset) {
+                      void handleCreateVariant(preferredCreationAsset.id);
+                    }
+                  }}
+                >
+                  {creatingVariantFor ? '创建中…' : '基于当前资产创建二创版本（Variant）'}
+                </Button>
+              ) : (
+                <Button
+                  variant="primary"
+                  data-testid="remix-import-source-button"
+                  disabled={isImporting || (!useMockSnapshot && !projectDir)}
+                  onClick={() => {
+                    void handleImportSource();
+                  }}
+                >
+                  {isImporting ? '导入中…' : '导入新原片'}
+                </Button>
+              )}
               <Button
-                variant="primary"
-                data-testid="remix-import-source-button"
-                disabled={isImporting || (!useMockSnapshot && !projectDir)}
+                variant="outline"
+                data-testid="remix-secondary-action-button"
+                disabled={isImporting || creatingVariantFor !== null || (!useMockSnapshot && !projectDir)}
                 onClick={() => {
-                  void handleImportSource();
+                  if (isCreationEntry) {
+                    void handleImportSource();
+                    return;
+                  }
+                  if (preferredCreationAsset) {
+                    void handleCreateVariant(preferredCreationAsset.id);
+                  }
                 }}
               >
-                {isImporting ? '导入中…' : '导入新原片'}
+                {isCreationEntry ? '补充导入新原片' : '基于已入库资产创建二创版本（Variant）'}
               </Button>
               {isLoading ? <span className={styles.description}>正在同步资产库…</span> : null}
-              {creatingVariantFor ? <span className={styles.description}>正在创建 Variant…</span> : null}
+              {creatingVariantFor ? <span className={styles.description}>正在创建二创版本（Variant）…</span> : null}
             </div>
           </div>
 

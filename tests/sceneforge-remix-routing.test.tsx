@@ -47,14 +47,14 @@ describe('SceneForge Remix routing', () => {
     );
     expect(processingHtml).toContain('data-testid="remix-asset-processing-page"');
     expect(processingHtml).toContain('原片理解');
-    expect(processingHtml).not.toContain('创建 Variant');
+    expect(processingHtml).not.toContain('创建二创版本（Variant）');
     expect(processingHtml).not.toContain('Seedance 2.0 视频提示词');
 
     const creationHtml = renderToStaticMarkup(
       <RemixCreationWorkspace variantId="variant-001" />,
     );
     expect(creationHtml).toContain('data-testid="remix-creation-workspace-page"');
-    expect(creationHtml).toContain('创建 Variant');
+    expect(creationHtml).toContain('创建二创版本（Variant）');
     expect(creationHtml).toContain('Seedance 2.0 视频提示词');
     expect(creationHtml).not.toContain('导入原片');
     expect(creationHtml).not.toContain('真实镜头切片');

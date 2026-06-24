@@ -153,7 +153,7 @@ export function RemixCreationWorkspace({
         );
       } catch (error) {
         setBaseSnapshot(null);
-        setErrorMessage(error instanceof Error ? error.message : '加载 Variant 工作区失败。');
+        setErrorMessage(error instanceof Error ? error.message : '加载二创工作区失败。');
       } finally {
         setIsLoading(false);
       }
@@ -397,7 +397,7 @@ export function RemixCreationWorkspace({
           <div className={shellStyles.panelContent}>
             <section className={panelStyles.heroPanel}>
               <div className={panelStyles.heroCopy}>
-                <h1 className={panelStyles.heroTitle}>{isLoading ? '正在加载 Variant…' : '暂时无法打开当前工作区'}</h1>
+                <h1 className={panelStyles.heroTitle}>{isLoading ? '正在加载二创版本（Variant）…' : '暂时无法打开当前工作区'}</h1>
                 <p className={panelStyles.heroDescription}>{errorMessage ?? '请稍后重试。'}</p>
               </div>
             </section>
@@ -414,7 +414,7 @@ export function RemixCreationWorkspace({
           <div className={panelStyles.panelTitleBlock}>
             <h2 className={panelStyles.panelTitle}>选择资产</h2>
             <p className={panelStyles.panelDescription}>
-              当前 Variant 绑定的是已经入库的 Source Asset，不再回到处理工作台改原片本体。
+              当前二创版本（Variant）绑定的是已经入库的源资产（Source Asset），不再回到处理工作台改原片本体。
             </p>
           </div>
           <div className={panelStyles.chip}>{getStageStatusLabel(stepStatuses['select-asset'])}</div>
@@ -426,7 +426,7 @@ export function RemixCreationWorkspace({
             {snapshot.sourceAsset.segmentCount} 段 / {snapshot.sourceAsset.keyframeCount} 张关键帧
           </div>
           <div className={panelStyles.inlineStats}>
-            <span className={panelStyles.inlineStat}>已有 {snapshot.sourceAsset.variantCount} 个 Variant</span>
+            <span className={panelStyles.inlineStat}>已有 {snapshot.sourceAsset.variantCount} 个二创版本（Variant）</span>
             <span className={panelStyles.inlineStat}>最近更新 {snapshot.sourceAsset.updatedAt.slice(0, 10)}</span>
           </div>
         </div>
@@ -436,7 +436,7 @@ export function RemixCreationWorkspace({
       <section className={panelStyles.panelCard} data-testid="remix-creation-step-create-variant">
         <div className={panelStyles.panelHeaderRow}>
           <div className={panelStyles.panelTitleBlock}>
-            <h2 className={panelStyles.panelTitle}>创建 Variant 与保留矩阵</h2>
+            <h2 className={panelStyles.panelTitle}>创建二创版本（Variant）与保留矩阵</h2>
             <p className={panelStyles.panelDescription}>
               Step 02 直接完成名称、概念、引用强度和九维 retentionMatrix，不拆成多个零散页面。
             </p>
@@ -472,7 +472,7 @@ export function RemixCreationWorkspace({
               );
             }}
           >
-            {activeAction === 'save-config' ? '保存中…' : '保存 Variant 配置'}
+            {activeAction === 'save-config' ? '保存中…' : '保存二创版本配置'}
           </Button>
         </div>
         <RetentionMatrixEditor
@@ -689,7 +689,7 @@ export function RemixCreationWorkspace({
               <div className={panelStyles.heroEyebrow}>Remix Creation Workspace</div>
               <h1 className={panelStyles.heroTitle}>围绕已入库资产做二创，而不是把原片再处理一遍</h1>
               <p className={panelStyles.heroDescription}>
-                当前 Variant 是 <strong>{variantName}</strong>。这里专注于策略、设计、改图提示词、改后关键帧验收与 Seedance 输出，不再出现导入、切片或原片理解步骤。
+                当前二创版本（Variant）是 <strong>{variantName}</strong>。这里专注于策略、设计、改图提示词、改后关键帧验收与 Seedance 输出，不再出现导入、切片或原片理解步骤。
               </p>
               {errorMessage ? (
                 <p className={panelStyles.heroDescription} data-testid="remix-creation-error">
@@ -731,7 +731,7 @@ export function RemixCreationWorkspace({
             <article className={panelStyles.previewSurface}>
               <div className={panelStyles.previewTopline}>
                 <div>
-                  <div className={panelStyles.previewTitle}>Variant Preview</div>
+                  <div className={panelStyles.previewTitle}>二创版本预览（Variant Preview）</div>
                   <div className={panelStyles.previewSubtitle}>
                     {snapshot.sourceAsset.title} · {formatRemixDuration(snapshot.sourceAsset.durationMs)}
                   </div>

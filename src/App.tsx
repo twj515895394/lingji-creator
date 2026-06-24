@@ -1,10 +1,17 @@
 import { AnimatePresence, LayoutGroup, m } from 'framer-motion';
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { useToast } from './ui';
 import { AgentSidebar } from './components/agent/AgentSidebar';
 import { AppStatusBar } from './components/AppStatusBar';
 import { Toolbar } from './components/Toolbar';
-import type { AppPage, MenuAction, MenuEvent, RecentProjectEntry } from './lib/electron-api';
+import type {
+  AppPage,
+  MenuAction,
+  MenuEvent,
+  RecentProjectEntry,
+  RecentProjectIdentity,
+  RemixProjectIntent,
+} from './lib/electron-api';
 import { getAISettingsIssue } from './lib/ai-settings';
 import { useAgentStore } from './store/agent';
 import { createPersistedAIState } from './lib/ai-persistence';
@@ -13,6 +20,7 @@ import { useViewportSize } from './hooks/useViewportSize';
 import { getAppShortcutCommand, isTextEditingTarget } from './lib/native-shortcuts';
 import { resolvePageTransition, type PageTransitionReason } from './lib/page-transition';
 import { resolveProjectLandingPage } from './lib/project-navigation';
+import { resolveRecentProjectOpenOptions } from './lib/recent-project-identity';
 import { createBlankScriptProjectState } from './lib/script-project';
 import { Editor } from './pages/Editor';
 import { ScriptWorkbench } from './pages/ScriptWorkbench';
@@ -23,6 +31,7 @@ import { SceneForgeCreateDialog } from './sceneforge/components/SceneForgeCreate
 import { RemixAssetLibrary } from './sceneforge/remix/pages/RemixAssetLibrary';
 import { RemixAssetProcessing } from './sceneforge/remix/pages/RemixAssetProcessing';
 import { RemixCreationWorkspace } from './sceneforge/remix/pages/RemixCreationWorkspace';
+import type { RemixEntryIntent } from './sceneforge/remix/components/RemixModeEntryDialog';
 import {
   buildRemixPath,
   getAppPageForRemixRoute,
@@ -31,6 +40,8 @@ import {
   readRemixPathFromHash,
   type RemixRoute,
 } from './sceneforge/remix/lib/remix-routing';
+import { canBootstrapRemixAssetIngestionProject } from './sceneforge/remix/lib/remix-entry-project';
+import { getRemixProjectRootCandidate } from './sceneforge/remix/lib/remix-project-dir';
 import type { SceneEntryPath } from './types/sceneforge';
 import { AutoRunController } from './components/AutoRunController';
 import { ImportProjectDialog } from './components/ImportProjectDialog';
@@ -98,6 +109,8 @@ export default function App() {
   const [setupError, setSetupError] = useState<string | null>(null);
   const [currentProjectDir, setCurrentProjectDir] = useState(() => getCurrentProjectDir());
   const [remixRoute, setRemixRoute] = useState<RemixRoute>({ kind: 'asset-library' });
+  const [remixEntryIntent, setRemixEntryIntent] = useState<RemixEntryIntent>('asset-ingestion');
+  const lastRecentProjectIdentityRef = useRef<string | null>(null);
   const [recentProjects, setRecentProjects] = useState<RecentProjectEntry[]>([]);
   const [saveStatus, setSaveStatus] = useState(() => getCurrentSaveStatus());
   const [aiSaveStatus, setAISaveStatus] = useState(() => getCurrentAISaveStatus());
@@ -473,7 +486,14 @@ export default function App() {
   }, [setPage]);
 
   const openProject = useCallback(
-    async (projectDir: string) => {
+    async (
+      projectDir: string,
+      options: {
+        remixRoute?: RemixRoute | null;
+        remixEntryIntent?: RemixProjectIntent;
+        recentProjectIdentity?: RecentProjectIdentity | null;
+      } = {},
+    ) => {
       try {
         const raw = await window.electronAPI.loadProject(projectDir);
         const projectData = JSON.parse(raw) as ProjectData;
@@ -483,16 +503,40 @@ export default function App() {
         // 而不是之前打开过的旧项目目录（会造成旧项目被空数据覆盖）。
         setProjectDir(projectDir);
 
+        const recentProjectIdentity =
+          options.recentProjectIdentity ??
+          (options.remixRoute
+            ? {
+                projectKind: 'remix',
+                remixEntryIntent: options.remixEntryIntent === 'creation' ? 'creation' : 'asset-ingestion',
+              }
+            : projectData.type === 'sceneforge'
+              ? { projectKind: 'sceneforge', remixEntryIntent: null }
+              : { projectKind: 'script', remixEntryIntent: null });
+
         if (projectData.type === 'sceneforge') {
           clearAIAnalysis();
           setCoverCandidates([]);
           useAIStore
             .getState()
             .loadProjectStylePresetId(projectData.stylePresetId ?? undefined);
-          await window.electronAPI.addRecentProject(projectDir);
+          await window.electronAPI.addRecentProject(projectDir, undefined, recentProjectIdentity);
           void syncWorkspaceState();
           setSetupError(null);
+          if (options.remixRoute) {
+            if (options.remixEntryIntent) {
+              setRemixEntryIntent(options.remixEntryIntent);
+            }
+            applyRemixRoute(options.remixRoute, 'replace');
+            return;
+          }
           setPage(resolveProjectLandingPage(projectData));
+          return;
+        }
+
+        if (options.remixRoute) {
+          setSetupError('Remix Mode 仅支持 SceneForge 项目，请选择 SceneForge 工程目录。');
+          resetToSetup();
           return;
         }
 
@@ -554,7 +598,7 @@ export default function App() {
           .loadProjectStylePresetId(projectData.stylePresetId ?? undefined);
 
         // 添加到最近项目列表（projectDir 已在前面设置过，不需要重复设置）
-        await window.electronAPI.addRecentProject(projectDir);
+        await window.electronAPI.addRecentProject(projectDir, undefined, recentProjectIdentity);
         void syncWorkspaceState();
         setSetupError(null);
         setPage(resolveProjectLandingPage(projectData));
@@ -578,6 +622,7 @@ export default function App() {
       setTimeline,
       showToast,
       syncWorkspaceState,
+      applyRemixRoute,
     ],
   );
 
@@ -715,6 +760,44 @@ export default function App() {
     });
   }, [currentProjectDir, page, recentProjects]);
 
+  useEffect(() => {
+    if (!currentProjectDir) {
+      lastRecentProjectIdentityRef.current = null;
+      return;
+    }
+
+    let identity: RecentProjectIdentity | null = null;
+    if (isRemixAppPage(page)) {
+      identity = {
+        projectKind: 'remix',
+        remixEntryIntent: page === 'sceneforge-remix-creation' ? 'creation' : remixEntryIntent,
+      };
+    } else if (page === 'sceneforge-studio') {
+      identity = { projectKind: 'sceneforge', remixEntryIntent: null };
+    } else if (page === 'script-workbench' || page === 'editor' || page === 'auto-run' || page === 'publish') {
+      identity = { projectKind: 'script', remixEntryIntent: null };
+    }
+
+    if (!identity) {
+      return;
+    }
+
+    const signature = `${currentProjectDir}:${identity.projectKind}:${identity.remixEntryIntent ?? ''}`;
+    if (lastRecentProjectIdentityRef.current === signature) {
+      return;
+    }
+    lastRecentProjectIdentityRef.current = signature;
+
+    void window.electronAPI
+      .addRecentProject(currentProjectDir, undefined, identity)
+      .then((projects) => {
+        setRecentProjects(projects);
+      })
+      .catch(() => {
+        lastRecentProjectIdentityRef.current = null;
+      });
+  }, [currentProjectDir, page, remixEntryIntent]);
+
   const handleNewProject = useCallback(async () => {
     const projectDir = await window.electronAPI.selectProjectDirectory();
     if (!projectDir) {
@@ -743,6 +826,13 @@ export default function App() {
     await openProject(projectDir);
   }, [openProject]);
 
+  const handleOpenRecentProject = useCallback(async (project: RecentProjectEntry) => {
+    if (project.projectKind === 'remix' && project.remixEntryIntent) {
+      setRemixEntryIntent(project.remixEntryIntent);
+    }
+    await openProject(project.path, resolveRecentProjectOpenOptions(project));
+  }, [openProject]);
+
   // ── 导入项目（跨机器项目目录识别与路径修复）──
   const [importProjectDialogOpen, setImportProjectDialogOpen] = useState(false);
   const [sceneForgeCreateOpen, setSceneForgeCreateOpen] = useState(false);
@@ -755,6 +845,68 @@ export default function App() {
   const handleCreateSceneForgeProject = useCallback(() => {
     setSceneForgeCreateOpen(true);
   }, []);
+
+  const handleOpenRemixMode = useCallback(async (intent: RemixEntryIntent) => {
+    setRemixEntryIntent(intent);
+
+    const routeToRemixProject = async (candidateDir: string) => {
+      let remixProjectDir = candidateDir;
+      const parentCandidate = getRemixProjectRootCandidate(candidateDir);
+      if (parentCandidate) {
+        try {
+          const raw = await window.electronAPI.loadProject(parentCandidate);
+          const projectData = JSON.parse(raw) as ProjectData;
+          if (projectData.type === 'sceneforge') {
+            remixProjectDir = parentCandidate;
+          }
+        } catch {
+          // 父目录不是合法工程时保持原选择，让后续检查按用户实际选中的目录继续。
+        }
+      }
+
+      const raw = await window.electronAPI.loadProject(remixProjectDir);
+      const projectData = JSON.parse(raw) as ProjectData;
+      if (projectData.type === 'sceneforge') {
+        await openProject(remixProjectDir, {
+          remixRoute: { kind: 'asset-library' },
+          remixEntryIntent: intent,
+        });
+        return;
+      }
+
+      if (intent === 'asset-ingestion') {
+        const topLevelEntries = await window.electronAPI.readDirectory(remixProjectDir);
+        // 只对默认空壳工程做提升，避免误把已有普通项目改造成 SceneForge。
+        if (canBootstrapRemixAssetIngestionProject(projectData, topLevelEntries)) {
+          await window.electronAPI.createSceneForgeProject(remixProjectDir, 'source_intake');
+          await openProject(remixProjectDir, {
+            remixRoute: { kind: 'asset-library' },
+            remixEntryIntent: intent,
+          });
+          return;
+        }
+
+        setSetupError('资产入库需要 SceneForge 工程目录，或选择一个空白目录用于初始化 Remix 工程。');
+        resetToSetup();
+        return;
+      }
+
+      setSetupError('二次创作仅支持已有的 SceneForge 工程，请先选择已入库资产所在项目。');
+      resetToSetup();
+    };
+
+    if (currentProjectDir) {
+      await routeToRemixProject(currentProjectDir);
+      return;
+    }
+
+    const projectDir = await window.electronAPI.selectProjectDirectory();
+    if (!projectDir) {
+      return;
+    }
+
+    await routeToRemixProject(projectDir);
+  }, [currentProjectDir, openProject]);
 
   const handleConfirmSceneForgeCreate = useCallback(
     async (entryPath: SceneEntryPath) => {
@@ -1086,13 +1238,18 @@ export default function App() {
   const handleMenuEvent = useCallback(
     async (event: MenuEvent) => {
       if (event.type === 'open-recent-project') {
+        const recentProject = recentProjects.find((project) => project.path === event.projectDir);
+        if (recentProject) {
+          await handleOpenRecentProject(recentProject);
+          return;
+        }
         await openProject(event.projectDir);
         return;
       }
 
       await handleCommand(event.action);
     },
-    [handleCommand, openProject],
+    [handleCommand, handleOpenRecentProject, openProject, recentProjects],
   );
 
   useEffect(() => {
@@ -1326,16 +1483,14 @@ export default function App() {
                   projectName={projectName}
                   recentProjects={recentProjects}
                   onComplete={handleSetupComplete}
-                  onOpenRecentProject={openProject}
+                  onOpenRecentProject={handleOpenRecentProject}
                   onRemoveRecentProject={handleRemoveRecentProject}
                   onImportScript={handleImportScript}
                   onOpenSettings={() => setPage('settings')}
                   onMediaImport={handleMediaImport}
                   onImportProject={handleOpenImportProject}
                   onCreateSceneForgeProject={handleCreateSceneForgeProject}
-                  onOpenRemixMode={() =>
-                    applyRemixRoute({ kind: 'asset-library' })
-                  }
+                  onOpenRemixMode={handleOpenRemixMode}
                 />
               ) : page === 'settings' ? (
                 <Settings onBack={() => setPage(previousPage)} initialTab={settingsInitialTab} />
@@ -1346,6 +1501,7 @@ export default function App() {
               ) : page === 'sceneforge-remix-assets' || page === 'sceneforge-remix-asset-details' ? (
                 <RemixAssetLibrary
                   projectDir={currentProjectDir}
+                  entryIntent={remixEntryIntent}
                   selectedSourceAssetId={remixRoute.kind === 'asset-details' ? remixRoute.sourceAssetId : null}
                   onOpenProcessing={(sourceAssetId) =>
                     applyRemixRoute({ kind: 'asset-processing', sourceAssetId })

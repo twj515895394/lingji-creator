@@ -38,6 +38,10 @@ import { useScriptStore } from '../store/script';
 import { loadAISettings, type AutoWorkflowParams } from '../store/ai';
 import { getAllRoles } from '../lib/script-templates';
 import heroBg from '../assets/hero-bg.png';
+import {
+  RemixModeEntryDialog,
+  type RemixEntryIntent,
+} from '../sceneforge/remix/components/RemixModeEntryDialog';
 import styles from './Setup.module.css';
 
 interface SetupProps {
@@ -46,7 +50,7 @@ interface SetupProps {
   projectName: string;
   recentProjects: RecentProjectEntry[];
   onComplete: (audioPath: string, srtPath: string) => Promise<void>;
-  onOpenRecentProject: (projectDir: string) => Promise<void>;
+  onOpenRecentProject: (project: RecentProjectEntry) => Promise<void>;
   onRemoveRecentProject?: (projectDir: string) => Promise<void> | void;
   /** 文稿导入完成回调：传入父目录、项目名、原稿内容、是否一键成稿、自动模式参数、写稿模型绑定 */
   onImportScript: (
@@ -72,7 +76,7 @@ interface SetupProps {
   /** 创建视频内容创作工坊（SceneForge）项目 */
   onCreateSceneForgeProject: () => Promise<void> | void;
   /** 进入 Remix Mode 资产库 */
-  onOpenRemixMode?: () => Promise<void> | void;
+  onOpenRemixMode?: (intent: RemixEntryIntent) => Promise<void> | void;
 }
 
 interface ScanResult {
@@ -126,6 +130,7 @@ export function Setup({
   const [localVideoParentDir, setLocalVideoParentDir] = useState<string | null>(null);
   const [localVideoError, setLocalVideoError] = useState<string | null>(null);
   const [localVideoCreating, setLocalVideoCreating] = useState(false);
+  const [remixEntryOpen, setRemixEntryOpen] = useState(false);
 
   // ── 一键成稿 (AutoModeSection) 下拉选项与默认值 ──
   // selectedTemplate / selectedRole 来自 script store；voice 默认值需异步从磁盘读取 AISettings
@@ -242,6 +247,15 @@ export function Setup({
     setImportScriptCreating(false);
     setImportScriptOpen(true);
   }, []);
+
+  const handleOpenRemixEntry = useCallback(() => {
+    setRemixEntryOpen(true);
+  }, []);
+
+  const handleConfirmRemixEntry = useCallback(async (intent: RemixEntryIntent) => {
+    setRemixEntryOpen(false);
+    await onOpenRemixMode?.(intent);
+  }, [onOpenRemixMode]);
 
   const handleConfirmImportScript = useCallback(
     async (
@@ -516,7 +530,7 @@ export function Setup({
           <button
             type="button"
             className={styles.quickItem}
-            onClick={() => onOpenRemixMode?.()}
+            onClick={handleOpenRemixEntry}
             data-testid="setup-remix-mode-entry"
           >
             <div className={styles.quickItemIcon}>
@@ -686,6 +700,12 @@ export function Setup({
         initialProjectName={inboxDraftItem ? deriveProjectName(inboxDraftItem) : undefined}
         initialAutoMode={inboxDraftItem ? true : undefined}
         templateIdOverride={inboxDraftItem ? 'rewrite-remix' : undefined}
+      />
+
+      <RemixModeEntryDialog
+        open={remixEntryOpen}
+        onOpenChange={setRemixEntryOpen}
+        onConfirm={handleConfirmRemixEntry}
       />
 
       {/* ── 抖音导入弹窗：解析链接 → 选择目录 → 创建项目 ── */}

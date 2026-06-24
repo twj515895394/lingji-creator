@@ -448,11 +448,11 @@ export function buildCreationPublishChecklist(
       id: 'source-bound',
       label: '资产引用已锁定',
       passed: Boolean(snapshot.sourceAsset.id),
-      note: `${snapshot.sourceAsset.title} 已绑定到当前 Variant。`,
+      note: `${snapshot.sourceAsset.title} 已绑定到当前二创版本（Variant）。`,
     },
     {
       id: 'variant-defined',
-      label: 'Variant 配置完整',
+      label: '二创版本配置完整',
       passed: Boolean(snapshot.variant.name && snapshot.variant.concept),
       note: `${snapshot.variant.name} · ${getReferenceStrengthLabel(snapshot.variant.referenceStrength)}`,
     },
@@ -649,8 +649,8 @@ export function buildCreationInspectorSummary(
   }
 
   return [
-    { label: 'Source Asset', value: snapshot.sourceAsset.title },
-    { label: 'Variant', value: snapshot.variant.name },
+    { label: '源资产（Source Asset）', value: snapshot.sourceAsset.title },
+    { label: '二创版本（Variant）', value: snapshot.variant.name },
     { label: '当前阶段', value: stepId },
   ];
 }

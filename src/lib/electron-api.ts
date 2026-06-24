@@ -285,6 +285,14 @@ export interface ProjectMetadata {
   createdAtMs: number;
 }
 
+export type RecentProjectKind = 'script' | 'sceneforge' | 'remix';
+export type RemixProjectIntent = 'asset-ingestion' | 'creation';
+
+export interface RecentProjectIdentity {
+  projectKind: RecentProjectKind;
+  remixEntryIntent?: RemixProjectIntent | null;
+}
+
 export interface RecentProjectEntry {
   path: string;
   name: string;
@@ -292,6 +300,8 @@ export interface RecentProjectEntry {
   createdAt?: string;
   updatedAt?: string;
   coverImageUrl?: string;
+  projectKind?: RecentProjectKind;
+  remixEntryIntent?: RemixProjectIntent | null;
 }
 
 export interface ElectronAPI {
@@ -679,7 +689,11 @@ export interface ElectronAPI {
   getAutoRunLogDir: () => Promise<string>;
   // 最近项目管理
   loadRecentProjects: () => Promise<RecentProjectEntry[]>;
-  addRecentProject: (projectDir: string, projectName?: string) => Promise<RecentProjectEntry[]>;
+  addRecentProject: (
+    projectDir: string,
+    projectName?: string,
+    identity?: RecentProjectIdentity,
+  ) => Promise<RecentProjectEntry[]>;
   removeRecentProject: (projectDir: string) => Promise<RecentProjectEntry[]>;
   refreshRecentProjects: () => Promise<RecentProjectEntry[]>;
   exportConfigBackup: () => Promise<

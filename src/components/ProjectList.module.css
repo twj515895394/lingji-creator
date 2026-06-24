@@ -90,6 +90,24 @@
   gap: 2px;
 }
 
+.projectBadgeRow {
+  display: flex;
+  align-items: center;
+}
+
+.projectBadge,
+.listBadge {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--color-system-blue) 12%, transparent);
+  color: var(--color-system-blue);
+  font-size: var(--font-size-xs);
+  font-weight: 600;
+  white-space: nowrap;
+}
+
 .metaItem {
   font-size: var(--font-size-sm);
   color: var(--color-text-secondary-strong);
@@ -171,6 +189,7 @@
   min-width: 0;
   display: flex;
   align-items: center;
+  flex-wrap: wrap;
   gap: var(--space-4);
   font-size: var(--font-size-lg);
   font-weight: 400;
@@ -179,6 +198,10 @@
   overflow: hidden;
   text-overflow: ellipsis;
   padding-right: var(--space-8);
+}
+
+.listBadge {
+  margin-left: var(--space-4);
 }
 
 .rowThumb {

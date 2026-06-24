@@ -50,13 +50,13 @@ export function VariantConfigPanel({
         </div>
         <div className={styles.inlineStats}>
           <span className={styles.inlineStat}>状态 {sourceAsset.status}</span>
-          <span className={styles.inlineStat}>已有 {sourceAsset.variantCount} 个 Variant</span>
+          <span className={styles.inlineStat}>已有 {sourceAsset.variantCount} 个二创版本（Variant）</span>
         </div>
       </section>
 
       <section className={styles.fieldStack}>
         <label className={styles.fieldLabel}>
-          <span className={styles.fieldName}>Variant 名称</span>
+          <span className={styles.fieldName}>二创版本名称（Variant）</span>
           <Input value={name} onChange={(event) => onNameChange(event.target.value)} size="sm" />
         </label>
         <label className={styles.fieldLabel}>
@@ -69,7 +69,7 @@ export function VariantConfigPanel({
           />
         </label>
         <div className={styles.fieldLabel}>
-          <span className={styles.fieldName}>Reference Strength</span>
+          <span className={styles.fieldName}>引用强度（Reference Strength）</span>
           <div className={styles.optionRow}>
             {referenceStrengthOptions.map((option) => (
               <button

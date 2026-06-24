@@ -12,7 +12,7 @@ describe('RemixStageNav', () => {
     expect(html).toContain('真实镜头切片');
     expect(html).toContain('原片理解');
     expect(html).toContain('保存入库');
-    expect(html).not.toContain('创建 Variant');
+    expect(html).not.toContain('创建二创版本（Variant）');
     expect(html).not.toContain('Seedance 2.0 视频提示词');
   });
 
@@ -22,7 +22,7 @@ describe('RemixStageNav', () => {
     );
 
     expect(html).toContain('选择资产');
-    expect(html).toContain('创建 Variant');
+    expect(html).toContain('创建二创版本（Variant）');
     expect(html).toContain('Remix Design');
     expect(html).toContain('发布清单');
     expect(html).not.toContain('导入原片');
