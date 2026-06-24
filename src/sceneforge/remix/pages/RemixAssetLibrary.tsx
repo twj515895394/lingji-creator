@@ -7,8 +7,7 @@ import { AssetFilterBar, type AssetLibraryStatusFilter } from '../components/Ass
 import { AssetGrid } from '../components/AssetGrid';
 import type { RemixEntryIntent } from '../components/RemixModeEntryDialog';
 import { filterAssetLibraryAssets, getAssetLibraryAvailableTags } from '../lib/asset-library-state';
-import { DEFAULT_REMIX_PROJECT_DIR, MOCK_SOURCE_ASSETS } from '../mock/mock-data';
-import { remixApiClient, resolveRemixApiClientMode } from '../services/remix-api-client';
+import { getRemixApiClient } from '../services/remix-api-client';
 import { REMIX_ROUTE_PATTERNS } from '../types';
 import type { RemixVariantSummary, SourceAsset } from '../types';
 import styles from './RemixWorkspaceShell.module.css';
@@ -32,14 +31,12 @@ export function RemixAssetLibrary({
   onOpenDetails,
   onOpenCreation,
 }: RemixAssetLibraryProps) {
-  const client = apiClient ?? remixApiClient;
-  const useMockSnapshot = !apiClient && resolveRemixApiClientMode() === 'mock';
-  const effectiveProjectDir = projectDir ?? DEFAULT_REMIX_PROJECT_DIR;
-  const [assets, setAssets] = useState<SourceAsset[]>(useMockSnapshot ? MOCK_SOURCE_ASSETS : []);
+  const resolveClient = () => apiClient ?? getRemixApiClient();
+  const [assets, setAssets] = useState<SourceAsset[]>([]);
   const [activeStatus, setActiveStatus] = useState<AssetLibraryStatusFilter>('all');
   const [activeTag, setActiveTag] = useState<string | null>(null);
   const [activeAssetId, setActiveAssetId] = useState<string | null>(selectedSourceAssetId);
-  const [isLoading, setIsLoading] = useState(!useMockSnapshot);
+  const [isLoading, setIsLoading] = useState(true);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [isImporting, setIsImporting] = useState(false);
   const [creatingVariantFor, setCreatingVariantFor] = useState<string | null>(null);
@@ -64,10 +61,6 @@ export function RemixAssetLibrary({
 
   useEffect(() => {
     async function loadAssets() {
-      if (useMockSnapshot) {
-        return;
-      }
-
       if (!projectDir) {
         setAssets([]);
         setErrorMessage('请先打开项目后再进入 Remix 资产库。');
@@ -78,10 +71,10 @@ export function RemixAssetLibrary({
       setIsLoading(true);
       setErrorMessage(null);
       try {
-        const snapshot = await client.listSourceAssets({ projectDir });
+        const snapshot = await resolveClient().listSourceAssets({ projectDir });
         const details = await Promise.all(
           snapshot.sourceAssets.map(async (sourceAsset) => {
-            const response = await client.getSourceAsset({
+            const response = await resolveClient().getSourceAsset({
               projectDir,
               sourceAssetId: sourceAsset.id,
             });
@@ -93,7 +86,7 @@ export function RemixAssetLibrary({
           Object.fromEntries(
             await Promise.all(
               snapshot.sourceAssets.map(async (sourceAsset) => {
-                const variants = await client.listVariantsForSourceAsset({
+                const variants = await resolveClient().listVariantsForSourceAsset({
                   projectDir,
                   sourceAssetId: sourceAsset.id,
                 });
@@ -110,7 +103,7 @@ export function RemixAssetLibrary({
     }
 
     void loadAssets();
-  }, [client, projectDir, useMockSnapshot]);
+  }, [apiClient, projectDir]);
 
   useEffect(() => {
     if (entryIntent === 'creation') {
@@ -141,6 +134,11 @@ export function RemixAssetLibrary({
   }, [activeAsset, activeAssetId, filteredAssets, isCreationEntry, preferredCreationAsset, selectedSourceAssetId]);
 
   async function handleCreateVariant(sourceAssetId: string) {
+    if (!projectDir) {
+      setErrorMessage('请先打开项目后再创建二创版本。');
+      return;
+    }
+
     const sourceAsset = assets.find((asset) => asset.id === sourceAssetId);
     if (!sourceAsset) {
       return;
@@ -149,8 +147,8 @@ export function RemixAssetLibrary({
     setCreatingVariantFor(sourceAssetId);
     setErrorMessage(null);
     try {
-      const workspace = await client.createVariantFromSourceAsset({
-        projectDir: effectiveProjectDir,
+      const workspace = await resolveClient().createVariantFromSourceAsset({
+        projectDir,
         sourceAssetId,
         name: `${sourceAsset.title} Remix`,
         concept: `基于「${sourceAsset.title}」延展一条新的拟人化二创版本。`,
@@ -162,8 +160,8 @@ export function RemixAssetLibrary({
             : asset,
         ),
       );
-      const variants = await client.listVariantsForSourceAsset({
-        projectDir: effectiveProjectDir,
+      const variants = await resolveClient().listVariantsForSourceAsset({
+        projectDir,
         sourceAssetId,
       });
       setVariantMap((current) => ({ ...current, [sourceAssetId]: variants }));
@@ -176,10 +174,6 @@ export function RemixAssetLibrary({
   }
 
   async function handleImportSource() {
-    if (useMockSnapshot) {
-      return;
-    }
-
     if (!projectDir) {
       setErrorMessage('请先打开项目后再导入原片。');
       return;
@@ -193,7 +187,7 @@ export function RemixAssetLibrary({
     setIsImporting(true);
     setErrorMessage(null);
     try {
-      const snapshot = await client.createSourceAssetFromImport({
+      const snapshot = await resolveClient().createSourceAssetFromImport({
         projectDir,
         sourceVideoPath,
       });
@@ -213,10 +207,13 @@ export function RemixAssetLibrary({
   }
 
   async function refreshVariants(sourceAssetId: string) {
+    if (!projectDir) {
+      return;
+    }
     setLoadingVariantAssetId(sourceAssetId);
     try {
-      const variants = await client.listVariantsForSourceAsset({
-        projectDir: effectiveProjectDir,
+      const variants = await resolveClient().listVariantsForSourceAsset({
+        projectDir: projectDir,
         sourceAssetId,
       });
       setVariantMap((current) => ({ ...current, [sourceAssetId]: variants }));
@@ -226,18 +223,18 @@ export function RemixAssetLibrary({
   }
 
   async function handleRenameVariant(variantId: string, name: string) {
-    if (!activeAsset) {
+    if (!projectDir || !activeAsset) {
       return;
     }
-    const variants = await client.renameVariant({ projectDir: effectiveProjectDir, variantId, name });
+    const variants = await resolveClient().renameVariant({ projectDir: projectDir, variantId, name });
     setVariantMap((current) => ({ ...current, [activeAsset.id]: variants }));
   }
 
   async function handleDuplicateVariant(variantId: string) {
-    if (!activeAsset) {
+    if (!projectDir || !activeAsset) {
       return;
     }
-    const variants = await client.duplicateVariant({ projectDir: effectiveProjectDir, variantId });
+    const variants = await resolveClient().duplicateVariant({ projectDir: projectDir, variantId });
     setVariantMap((current) => ({ ...current, [activeAsset.id]: variants }));
     setAssets((current) =>
       current.map((asset) =>
@@ -249,10 +246,10 @@ export function RemixAssetLibrary({
   }
 
   async function handleDeleteVariant(variantId: string) {
-    if (!activeAsset || !window.confirm('删除这个二创版本只会移除二创产物，不会影响原始素材。确认继续吗？')) {
+    if (!projectDir || !activeAsset || !window.confirm('删除这个二创版本只会移除二创产物，不会影响原始素材。确认继续吗？')) {
       return;
     }
-    const variants = await client.deleteVariant({ projectDir: effectiveProjectDir, variantId });
+    const variants = await resolveClient().deleteVariant({ projectDir: projectDir, variantId });
     setVariantMap((current) => ({ ...current, [activeAsset.id]: variants }));
     setAssets((current) =>
       current.map((asset) =>
@@ -330,7 +327,7 @@ export function RemixAssetLibrary({
                 <Button
                   variant="primary"
                   data-testid="remix-import-source-button"
-                  disabled={isImporting || (!useMockSnapshot && !projectDir)}
+                  disabled={isImporting || !projectDir}
                   onClick={() => {
                     void handleImportSource();
                   }}
@@ -341,7 +338,7 @@ export function RemixAssetLibrary({
               <Button
                 variant="outline"
                 data-testid="remix-secondary-action-button"
-                disabled={isImporting || creatingVariantFor !== null || (!useMockSnapshot && !projectDir)}
+                disabled={isImporting || creatingVariantFor !== null || !projectDir}
                 onClick={() => {
                   if (isCreationEntry) {
                     void handleImportSource();

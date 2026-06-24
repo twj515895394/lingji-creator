@@ -23,7 +23,6 @@ import {
   buildSegmentStrategies,
   formatRemixDuration,
   getCreationStepStatuses,
-  getCreationWorkspaceSnapshot,
   getKeyframeRoleLabel,
   getSelectedEditedKeyframe,
   getSelectedPromptDisplay,
@@ -34,8 +33,7 @@ import {
   isPromptBundleReady,
   type CreationStepId,
 } from '../lib/remix-workspace-view-model';
-import { DEFAULT_REMIX_PROJECT_DIR } from '../mock/mock-data';
-import { remixApiClient, resolveRemixApiClientMode } from '../services/remix-api-client';
+import { getRemixApiClient } from '../services/remix-api-client';
 import {
   REMIX_ROUTE_PATTERNS,
   type RemixCreationWorkspaceSnapshot,
@@ -75,12 +73,8 @@ export function RemixCreationWorkspace({
   initialSelectedPromptId = null,
   initialSelectedEditedKeyframeId = null,
 }: RemixCreationWorkspaceProps) {
-  const client = apiClient ?? remixApiClient;
-  const useMockSnapshot = !apiClient && resolveRemixApiClientMode() === 'mock';
-  const effectiveProjectDir = projectDir ?? DEFAULT_REMIX_PROJECT_DIR;
-  const [baseSnapshot, setBaseSnapshot] = useState<RemixCreationWorkspaceSnapshot | null>(() =>
-    useMockSnapshot ? getCreationWorkspaceSnapshot(variantId) : null,
-  );
+  const resolveClient = () => apiClient ?? getRemixApiClient();
+  const [baseSnapshot, setBaseSnapshot] = useState<RemixCreationWorkspaceSnapshot | null>(null);
   const [activeStepId, setActiveStepId] = useState<CreationStepId>(initialStepId);
   const [variantName, setVariantName] = useState('');
   const [variantConcept, setVariantConcept] = useState('');
@@ -100,7 +94,7 @@ export function RemixCreationWorkspace({
   const [selectedPromptId, setSelectedPromptId] = useState<string | null>(initialSelectedPromptId);
   const [selectedEditedKeyframeId, setSelectedEditedKeyframeId] = useState<string | null>(initialSelectedEditedKeyframeId);
   const [copiedItemId, setCopiedItemId] = useState<string | null>(null);
-  const [isLoading, setIsLoading] = useState(!useMockSnapshot);
+  const [isLoading, setIsLoading] = useState(true);
   const [activeAction, setActiveAction] = useState<string | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [lastExportPath, setLastExportPath] = useState<string | null>(null);
@@ -118,8 +112,8 @@ export function RemixCreationWorkspace({
       return;
     }
     await runAction('export-bundle', async () => {
-      const result = await client.exportPromptBundle({
-        projectDir: effectiveProjectDir,
+      const result = await resolveClient().exportPromptBundle({
+        projectDir: projectDir,
         variantId,
         outputPath: outputPath ?? null,
       });
@@ -130,14 +124,6 @@ export function RemixCreationWorkspace({
 
   useEffect(() => {
     async function loadWorkspace() {
-      if (useMockSnapshot) {
-        const snapshot = getCreationWorkspaceSnapshot(variantId);
-        setBaseSnapshot(snapshot);
-        setIsLoading(false);
-        setErrorMessage(null);
-        return;
-      }
-
       if (!projectDir) {
         setBaseSnapshot(null);
         setIsLoading(false);
@@ -149,7 +135,7 @@ export function RemixCreationWorkspace({
       setErrorMessage(null);
       try {
         setBaseSnapshot(
-          await client.getCreationWorkspace({
+          await resolveClient().getCreationWorkspace({
             projectDir,
             variantId,
           }),
@@ -163,7 +149,7 @@ export function RemixCreationWorkspace({
     }
 
     void loadWorkspace();
-  }, [client, projectDir, useMockSnapshot, variantId]);
+  }, [apiClient, projectDir, variantId]);
 
   useEffect(() => {
     if (!baseSnapshot) {
@@ -357,8 +343,8 @@ export function RemixCreationWorkspace({
     }
 
     await runAction('upload-edited-keyframe', async () => {
-      const nextSnapshot = await client.registerEditedKeyframe({
-        projectDir: effectiveProjectDir,
+      const nextSnapshot = await resolveClient().registerEditedKeyframe({
+        projectDir: projectDir,
         variantId,
         segmentId: selectedTargetPrompt.segmentId,
         frameRole: selectedTargetPrompt.frameRole,
@@ -381,8 +367,8 @@ export function RemixCreationWorkspace({
       return;
     }
     void runAction(`${status}-edited-keyframe`, () =>
-      client.updateEditedKeyframeStatus({
-        projectDir: effectiveProjectDir,
+      resolveClient().updateEditedKeyframeStatus({
+        projectDir: projectDir,
         variantId,
         editedKeyframeId: selectedEditedKeyframe.id,
         status,
@@ -390,7 +376,7 @@ export function RemixCreationWorkspace({
     );
   }
 
-  if (!snapshot) {
+  if (!snapshot || !projectDir) {
     return (
       <div
         className={shellStyles.shell}
@@ -464,8 +450,8 @@ export function RemixCreationWorkspace({
             disabled={Boolean(activeAction)}
             onClick={() => {
               void runAction('save-config', () =>
-                client.updateVariantConfig({
-                  projectDir: effectiveProjectDir,
+                resolveClient().updateVariantConfig({
+                  projectDir: projectDir,
                   variantId,
                   name: variantName,
                   concept: variantConcept,
@@ -502,8 +488,8 @@ export function RemixCreationWorkspace({
             disabled={Boolean(activeAction)}
             onClick={() => {
               void runAction('strategy', () =>
-                client.runRemixStrategy({
-                  projectDir: effectiveProjectDir,
+                resolveClient().runRemixStrategy({
+                  projectDir: projectDir,
                   variantId,
                 }),
               );
@@ -532,8 +518,8 @@ export function RemixCreationWorkspace({
             disabled={Boolean(activeAction)}
             onClick={() => {
               void runAction('design', () =>
-                client.runRemixDesign({
-                  projectDir: effectiveProjectDir,
+                resolveClient().runRemixDesign({
+                  projectDir: projectDir,
                   variantId,
                 }),
               );
@@ -562,8 +548,8 @@ export function RemixCreationWorkspace({
             disabled={Boolean(activeAction)}
             onClick={() => {
               void runAction('keyframe-prompts', () =>
-                client.runKeyframeEditPrompts({
-                  projectDir: effectiveProjectDir,
+                resolveClient().runKeyframeEditPrompts({
+                  projectDir: projectDir,
                   variantId,
                 }),
               );
@@ -619,8 +605,8 @@ export function RemixCreationWorkspace({
         copiedPromptId={copiedItemId}
         onGenerate={() => {
           void runAction('seedance-prompts', () =>
-            client.runSeedancePrompts({
-              projectDir: effectiveProjectDir,
+            resolveClient().runSeedancePrompts({
+              projectDir: projectDir,
               variantId,
             }),
           );

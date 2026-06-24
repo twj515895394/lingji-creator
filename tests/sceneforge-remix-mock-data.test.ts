@@ -75,7 +75,7 @@ describe('sceneforge remix mock data', () => {
       exportPromptBundle: vi.fn(),
     };
 
-    expect(resolveRemixApiClientMode({})).toBe('mock');
+    expect(resolveRemixApiClientMode({})).toBe('electron');
     expect(resolveRemixApiClientMode({ electronAPI: { sceneForgeRemix: electronApi } })).toBe('electron');
     expect(createRemixApiClient({ mode: 'mock' })).not.toBe(electronApi);
     expect(createRemixApiClient({ mode: 'electron', electronApi })).toBe(electronApi);

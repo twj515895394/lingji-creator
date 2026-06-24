@@ -22,6 +22,7 @@ function readConfiguredMode(): RemixApiClientMode | null {
   return null;
 }
 
+/** 产品默认 electron；仅显式 VITE_SCENEFORGE_REMIX_API_MODE=mock 或 createRemixApiClient({ mode: 'mock' }) 走 mock。 */
 export function resolveRemixApiClientMode(
   globalObject: RemixApiGlobal = globalThis as RemixApiGlobal,
 ): RemixApiClientMode {
@@ -29,10 +30,7 @@ export function resolveRemixApiClientMode(
   if (configuredMode) {
     return configuredMode;
   }
-  if (globalObject.electronAPI?.sceneForgeRemix) {
-    return 'electron';
-  }
-  return 'mock';
+  return 'electron';
 }
 
 export function createRemixApiClient(
@@ -52,5 +50,16 @@ export function createRemixApiClient(
   return electronApi;
 }
 
-export const remixApiClient = createRemixApiClient();
+let cachedRemixApiClient: RemixIpcContract | null = null;
+
+/** 惰性创建，避免在非 Electron 环境（单测 import）时模块加载即抛错。 */
+export function getRemixApiClient(
+  globalObject: RemixApiGlobal = globalThis as RemixApiGlobal,
+): RemixIpcContract {
+  if (!cachedRemixApiClient) {
+    cachedRemixApiClient = createRemixApiClient({}, globalObject);
+  }
+  return cachedRemixApiClient;
+}
+
 export const remixMockApiClient = remixMockApi;

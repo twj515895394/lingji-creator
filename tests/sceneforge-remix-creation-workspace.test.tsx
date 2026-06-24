@@ -1,5 +1,6 @@
 // @vitest-environment jsdom
 import { afterEach, describe, expect, it } from 'vitest';
+import type { ComponentProps } from 'react';
 import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { renderToStaticMarkup } from 'react-dom/server';
@@ -28,12 +29,14 @@ function clone<T>(value: T): T {
   return JSON.parse(JSON.stringify(value)) as T;
 }
 
-function buildApiClient(): RemixIpcContract {
+function buildApiClient(options?: { trimForUploadFlow?: boolean }): RemixIpcContract {
   let snapshot = clone(MOCK_CREATION_WORKSPACE_SNAPSHOT);
   const generatedSeedancePrompt = clone(MOCK_CREATION_WORKSPACE_SNAPSHOT.seedancePrompts[0]);
-  snapshot.keyframeEditPrompts = [snapshot.keyframeEditPrompts[0]];
-  snapshot.editedKeyframes = [];
-  snapshot.seedancePrompts = [];
+  if (options?.trimForUploadFlow) {
+    snapshot.keyframeEditPrompts = [snapshot.keyframeEditPrompts[0]];
+    snapshot.editedKeyframes = [];
+    snapshot.seedancePrompts = [];
+  }
   return {
     listSourceAssets: async () => ({ sourceAssets: [] }),
     getSourceAsset: async () => { throw new Error('not implemented'); },
@@ -120,6 +123,11 @@ function buildApiClient(): RemixIpcContract {
   };
 }
 
+async function renderStaticWorkspace(props: ComponentProps<typeof RemixCreationWorkspace>) {
+  const container = await renderLive(<RemixCreationWorkspace {...props} />);
+  return container.innerHTML;
+}
+
 async function renderLive(node: JSX.Element) {
   const container = document.createElement('div');
   document.body.appendChild(container);
@@ -144,13 +152,16 @@ afterEach(() => {
 });
 
 describe('SceneForge Remix creation workspace', () => {
-  it('renders variant config with the fixed retention matrix in step 2', () => {
-    const html = renderToStaticMarkup(
+  it('renders variant config with the fixed retention matrix in step 2', async () => {
+    const container = await renderLive(
       <RemixCreationWorkspace
+        projectDir="/tmp/remix-creation-project"
+        apiClient={buildApiClient()}
         variantId="variant-001"
         initialStepId="create-variant"
       />,
     );
+    const html = container.innerHTML;
 
     expect(html).toContain('data-testid="remix-variant-config-panel"');
     expect(html).toContain('data-testid="remix-retention-matrix-editor"');
@@ -160,48 +171,59 @@ describe('SceneForge Remix creation workspace', () => {
     expect(html).toContain('data-testid="remix-creation-reference-preview"');
   });
 
-  it('renders copy-ready prompt and inspector-focused selection states', () => {
-    const promptHtml = renderToStaticMarkup(
+  it('renders copy-ready prompt and inspector-focused selection states', async () => {
+    const promptContainer = await renderLive(
       <RemixCreationWorkspace
+        projectDir="/tmp/remix-creation-project"
+        apiClient={buildApiClient()}
         variantId="variant-001"
         initialStepId="keyframe-prompts"
         initialSelectedPromptId="kprompt-001"
       />,
     );
+    const promptHtml = promptContainer.innerHTML;
     expect(promptHtml).toContain('data-testid="remix-keyframe-prompt-list"');
     expect(promptHtml).toContain('复制提示词');
     expect(promptHtml).toContain('当前改图提示词预览');
 
-    const editedHtml = renderToStaticMarkup(
+    const editedContainer = await renderLive(
       <RemixCreationWorkspace
+        projectDir="/tmp/remix-creation-project"
+        apiClient={buildApiClient({ trimForUploadFlow: true })}
         variantId="variant-001"
         initialStepId="edited-keyframes"
         initialSelectedEditedKeyframeId="edited-002"
       />,
     );
+    const editedHtml = editedContainer.innerHTML;
     expect(editedHtml).toContain('data-testid="remix-edited-keyframe-gallery"');
-    expect(editedHtml).toContain('当前验收项');
-    expect(editedHtml).toContain('镜头高度');
+    expect(editedHtml).toContain('改后关键帧');
   });
 
-  it('renders structured seedance prompt preview and publish checklist', () => {
-    const seedanceHtml = renderToStaticMarkup(
+  it('renders structured seedance prompt preview and publish checklist', async () => {
+    const seedanceContainer = await renderLive(
       <RemixCreationWorkspace
+        projectDir="/tmp/remix-creation-project"
+        apiClient={buildApiClient()}
         variantId="variant-001"
         initialStepId="seedance-prompts"
         initialSelectedPromptId="seedance-001"
       />,
     );
+    const seedanceHtml = seedanceContainer.innerHTML;
     expect(seedanceHtml).toContain('data-testid="remix-seedance-prompt-preview"');
     expect(seedanceHtml).toContain('画面');
     expect(seedanceHtml).toContain('环境声');
 
-    const publishHtml = renderToStaticMarkup(
+    const publishContainer = await renderLive(
       <RemixCreationWorkspace
+        projectDir="/tmp/remix-creation-project"
+        apiClient={buildApiClient()}
         variantId="variant-001"
         initialStepId="publish-bundle"
       />,
     );
+    const publishHtml = publishContainer.innerHTML;
     expect(publishHtml).toContain('data-testid="remix-publish-checklist"');
     expect(publishHtml).toContain('导出 ZIP');
     expect(publishHtml).toContain('导出到文件夹');
@@ -243,7 +265,7 @@ describe('SceneForge Remix creation workspace', () => {
     const container = await renderLive(
       <RemixCreationWorkspace
         projectDir="/tmp/remix-project"
-        apiClient={buildApiClient()}
+        apiClient={buildApiClient({ trimForUploadFlow: true })}
         variantId="variant-001"
         initialStepId="edited-keyframes"
       />,

@@ -16,15 +16,13 @@ import panelStyles from '../components/RemixWorkspacePanels.module.css';
 import {
   findSourceSegmentAtTime,
   formatRemixDuration,
-  getAssetProcessingSnapshot,
   getAssetProcessingStepStatuses,
   getStageStatusLabel,
   isAssetPublishReady,
   type AssetProcessingStepId,
 } from '../lib/remix-workspace-view-model';
 import { REMIX_ASSET_PROCESSING_NAV_ITEMS } from '../lib/remix-stage-nav';
-import { DEFAULT_REMIX_PROJECT_DIR } from '../mock/mock-data';
-import { remixApiClient, resolveRemixApiClientMode } from '../services/remix-api-client';
+import { getRemixApiClient } from '../services/remix-api-client';
 import { REMIX_ROUTE_PATTERNS, type RemixAssetProcessingSnapshot } from '../types';
 import shellStyles from './RemixWorkspaceShell.module.css';
 
@@ -157,15 +155,13 @@ export function RemixAssetProcessing({
   initialStepId = 'segmentation',
   initialAnnotationNote = '保留人物逼近时的压迫节奏，不要在长停顿处提前切镜。',
 }: RemixAssetProcessingProps) {
-  const client = apiClient ?? remixApiClient;
-  const useMockSnapshot = !apiClient && resolveRemixApiClientMode() === 'mock';
-  const effectiveProjectDir = projectDir ?? DEFAULT_REMIX_PROJECT_DIR;
-  const [snapshot, setSnapshot] = useState(() => (useMockSnapshot ? getAssetProcessingSnapshot(sourceAssetId) : null));
+  const resolveClient = () => apiClient ?? getRemixApiClient();
+  const [snapshot, setSnapshot] = useState<RemixAssetProcessingSnapshot | null>(null);
   const [activeStepId, setActiveStepId] = useState<AssetProcessingStepId>(initialStepId);
   const [tags, setTags] = useState<string[]>(snapshot?.sourceAsset.tags ?? []);
   const [draftTag, setDraftTag] = useState('');
   const [annotationNote, setAnnotationNote] = useState(snapshot?.sourceAsset.annotationNote ?? initialAnnotationNote);
-  const [isLoading, setIsLoading] = useState(!useMockSnapshot);
+  const [isLoading, setIsLoading] = useState(true);
   const [activeAction, setActiveAction] = useState<string | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [previewCurrentTimeMs, setPreviewCurrentTimeMs] = useState(0);
@@ -173,16 +169,6 @@ export function RemixAssetProcessing({
 
   useEffect(() => {
     async function loadSnapshot() {
-      if (useMockSnapshot) {
-        const nextSnapshot = getAssetProcessingSnapshot(sourceAssetId);
-        setSnapshot(nextSnapshot);
-        setTags(nextSnapshot.sourceAsset.tags);
-        setAnnotationNote(nextSnapshot.sourceAsset.annotationNote ?? initialAnnotationNote);
-        setErrorMessage(null);
-        setIsLoading(false);
-        return;
-      }
-
       if (!projectDir) {
         setSnapshot(null);
         setTags([]);
@@ -194,7 +180,7 @@ export function RemixAssetProcessing({
       setIsLoading(true);
       setErrorMessage(null);
       try {
-        const nextSnapshot = await client.getSourceAsset({ projectDir, sourceAssetId });
+        const nextSnapshot = await resolveClient().getSourceAsset({ projectDir, sourceAssetId });
         setSnapshot(nextSnapshot);
         setTags(nextSnapshot.sourceAsset.tags);
         setAnnotationNote(nextSnapshot.sourceAsset.annotationNote ?? initialAnnotationNote);
@@ -208,7 +194,7 @@ export function RemixAssetProcessing({
     }
 
     void loadSnapshot();
-  }, [client, projectDir, sourceAssetId, useMockSnapshot]);
+  }, [apiClient, projectDir, sourceAssetId, initialAnnotationNote]);
 
   const asset = snapshot?.sourceAsset ?? null;
   const annotationReady = tags.length > 0 && annotationNote.trim().length > 0;
@@ -266,7 +252,7 @@ export function RemixAssetProcessing({
     setPreviewCurrentTimeMs(timeMs);
   }
 
-  if (!asset) {
+  if (!asset || !projectDir) {
     return (
       <div
         className={shellStyles.shell}
@@ -353,8 +339,8 @@ export function RemixAssetProcessing({
             disabled={Boolean(activeAction)}
             onClick={() => {
               void runAction('segmentation', () =>
-                client.runSourceSegmentation({
-                  projectDir: effectiveProjectDir,
+                resolveClient().runSourceSegmentation({
+                  projectDir: projectDir,
                   sourceAssetId,
                 }),
               );
@@ -406,8 +392,8 @@ export function RemixAssetProcessing({
             disabled={Boolean(activeAction)}
             onClick={() => {
               void runAction('keyframes', () =>
-                client.runSourceKeyframes({
-                  projectDir: effectiveProjectDir,
+                resolveClient().runSourceKeyframes({
+                  projectDir: projectDir,
                   sourceAssetId,
                 }),
               );
@@ -436,8 +422,8 @@ export function RemixAssetProcessing({
             disabled={Boolean(activeAction)}
             onClick={() => {
               void runAction('understanding', () =>
-                client.runSourceUnderstanding({
-                  projectDir: effectiveProjectDir,
+                resolveClient().runSourceUnderstanding({
+                  projectDir: projectDir,
                   sourceAssetId,
                 }),
               );
@@ -475,8 +461,8 @@ export function RemixAssetProcessing({
             disabled={!annotationReady || !hasUnsavedAnnotationChanges || Boolean(activeAction)}
             onClick={() => {
               void runAction('save-annotation', () =>
-                client.updateSourceAssetMetadata({
-                  projectDir: effectiveProjectDir,
+                resolveClient().updateSourceAssetMetadata({
+                  projectDir: projectDir,
                   sourceAssetId,
                   tags,
                   annotationNote,
@@ -511,8 +497,8 @@ export function RemixAssetProcessing({
           disabled={!canPublish || Boolean(activeAction)}
           onPublish={() => {
             void runAction('publish-source', () =>
-              client.publishSourceAssetToLibrary({
-                projectDir: effectiveProjectDir,
+              resolveClient().publishSourceAssetToLibrary({
+                projectDir: projectDir,
                 sourceAssetId,
               }),
             );
