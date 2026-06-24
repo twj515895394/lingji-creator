@@ -21,7 +21,7 @@ export function SegmentTable({
     <table className={styles.dataTable} data-testid="remix-segment-table">
       <thead>
         <tr>
-          <th>Segment</th>
+          <th>镜头段</th>
           <th>范围</th>
           <th>时长</th>
           <th>边界</th>

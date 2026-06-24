@@ -41,3 +41,28 @@ describe('remix app session helpers', () => {
     ).toBeNull();
   });
 });
+
+import {
+  buildRecentProjectIdentityForOpen,
+  shouldRejectRemixOpenOnProject,
+} from '../src/lib/remix-app-session';
+
+describe('remix open project helpers', () => {
+  it('builds remix identity when opening with remix route', () => {
+    expect(
+      buildRecentProjectIdentityForOpen(
+        { remixRoute: { kind: 'asset-library' }, remixEntryIntent: 'asset-ingestion' },
+        { type: 'sceneforge' } as import('../src/lib/project-persistence').ProjectData,
+      ),
+    ).toEqual({
+      projectKind: 'remix',
+      remixEntryIntent: 'asset-ingestion',
+      remixRoutePath: null,
+    });
+  });
+
+  it('rejects remix open on script projects', () => {
+    expect(shouldRejectRemixOpenOnProject({} as import('../src/lib/project-persistence').ProjectData)).toBe(true);
+    expect(shouldRejectRemixOpenOnProject({ type: 'sceneforge' } as import('../src/lib/project-persistence').ProjectData)).toBe(false);
+  });
+});

@@ -11,6 +11,7 @@ import { SegmentTimeline } from '../components/SegmentTimeline';
 import { SourceVideoPreview } from '../components/SourceVideoPreview';
 import { SourceOverviewPanel } from '../components/SourceOverviewPanel';
 import { formatAssetLibraryDate, getSourceAssetFilename } from '../lib/asset-library-view-model';
+import { formatCompactPath } from '../lib/remix-display-text';
 import panelStyles from '../components/RemixWorkspacePanels.module.css';
 import {
   findSourceSegmentAtTime,
@@ -274,7 +275,7 @@ export function RemixAssetProcessing({
       >
         <main className={shellStyles.panel}>
           <div className={shellStyles.panelContent}>
-            <section className={panelStyles.heroPanel}>
+            <section className={[panelStyles.heroPanel, panelStyles.heroPanelCompact].join(" ")}>
               <div className={panelStyles.heroCopy}>
                 <h1 className={panelStyles.heroTitle}>{isLoading ? '正在加载资产…' : '暂时无法打开这份资产'}</h1>
                 <p className={panelStyles.heroDescription}>{errorMessage ?? '请稍后重试。'}</p>
@@ -324,7 +325,7 @@ export function RemixAssetProcessing({
         <div className={panelStyles.fieldStack}>
           <div className={panelStyles.configCard}>
             <div className={panelStyles.configTitle}>源文件</div>
-            <div className={panelStyles.configBody}>{asset.sourceVideoPath}</div>
+            <div className={panelStyles.configBody} title={asset.sourceVideoPath}>{formatCompactPath(asset.sourceVideoPath, 48)}</div>
           </div>
           <div className={panelStyles.configCard}>
             <div className={panelStyles.configTitle}>转写与字幕</div>
@@ -541,12 +542,12 @@ export function RemixAssetProcessing({
 
       <main className={shellStyles.panel}>
         <div className={shellStyles.panelContent}>
-          <section className={panelStyles.heroPanel}>
+          <section className={[panelStyles.heroPanel, panelStyles.heroPanelCompact].join(" ")}>
             <div className={panelStyles.heroCopy}>
               <div className={panelStyles.heroEyebrow}>素材处理工作台</div>
               <h1 className={panelStyles.heroTitle}>{asset.title}</h1>
               <p className={panelStyles.heroDescription}>
-                当前处于 <strong>{getStageStatusLabel(stepStatuses[activeStepId])}</strong> 阶段。这里专门处理源素材，不进入二创版本、策略或 Seedance 工作区。
+                当前步骤：<strong>{REMIX_ASSET_PROCESSING_NAV_ITEMS.find((item) => item.id === activeStepId)?.title ?? "处理"}</strong> · {getStageStatusLabel(stepStatuses[activeStepId])}
               </p>
               {errorMessage ? <p className={panelStyles.heroDescription} data-testid="remix-processing-error">{errorMessage}</p> : null}
               <div className={panelStyles.copyRow}>
@@ -563,7 +564,7 @@ export function RemixAssetProcessing({
             <div className={panelStyles.heroMetaGrid}>
               <div className={panelStyles.heroMetaCard}>
                 <div className={panelStyles.heroMetaLabel}>源文件</div>
-                <div className={panelStyles.heroMetaValue}>{sourceFilename}</div>
+                <div className={panelStyles.heroMetaValue} title={asset.sourceVideoPath}>{formatCompactPath(asset.sourceVideoPath)}</div>
               </div>
               <div className={panelStyles.heroMetaCard}>
                 <div className={panelStyles.heroMetaLabel}>画面规格</div>

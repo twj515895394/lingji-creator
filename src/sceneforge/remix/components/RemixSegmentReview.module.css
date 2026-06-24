@@ -164,8 +164,7 @@
   border-bottom: 1px solid rgba(255, 255, 255, 0.08);
   font-size: var(--font-size-sm);
   line-height: 1.2;
-  text-transform: uppercase;
-  letter-spacing: 0.08em;
+  letter-spacing: 0.02em;
   font-weight: var(--font-weight-bold);
   color: rgba(214, 221, 232, 0.54);
 }

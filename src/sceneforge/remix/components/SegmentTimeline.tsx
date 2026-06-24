@@ -74,7 +74,7 @@ export function SegmentTimeline({
       <div className={styles.timelineLegend}>
         <span>总时长 {formatRemixDuration(asset.videoMetadata.durationMs)}</span>
         <span>当前播放点 {formatRemixTimestamp(currentTimeMs)}</span>
-        <span>{asset.segments.length} 个 Segment</span>
+        <span>{asset.segments.length} 个镜头段</span>
       </div>
     </div>
   );

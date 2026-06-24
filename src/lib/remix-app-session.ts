@@ -1,4 +1,5 @@
-import type { RecentProjectIdentity } from './electron-api';
+import type { AppPage, RecentProjectIdentity, RemixProjectIntent } from './electron-api';
+import type { ProjectData } from './project-persistence';
 import type { RemixEntryIntent } from '../sceneforge/remix/components/RemixModeEntryDialog';
 import {
   buildRemixPath,
@@ -8,7 +9,6 @@ import {
   readRemixPathFromHash,
   type RemixRoute,
 } from '../sceneforge/remix/lib/remix-routing';
-import type { AppPage } from './electron-api';
 
 export const REMIX_DEFAULT_ROUTE: RemixRoute = { kind: 'asset-library' };
 
@@ -50,6 +50,14 @@ export function readRemixRouteFromLocationHash(): RemixRoute | null {
   return parseRemixPath(initialPath);
 }
 
+export function parseRemixRouteFromHash(hash: string): RemixRoute | null {
+  const path = readRemixPathFromHash(hash);
+  if (!path) {
+    return null;
+  }
+  return parseRemixPath(path);
+}
+
 export function resolveRemixRecentProjectIdentity(input: {
   page: AppPage;
   remixEntryIntent: RemixEntryIntent;
@@ -75,3 +83,36 @@ export function resolveRemixRecentProjectIdentity(input: {
   }
   return null;
 }
+
+export interface RemixOpenProjectOptions {
+  remixRoute?: RemixRoute | null;
+  remixEntryIntent?: RemixProjectIntent;
+  recentProjectIdentity?: RecentProjectIdentity | null;
+}
+
+export function buildRecentProjectIdentityForOpen(
+  options: RemixOpenProjectOptions,
+  projectData: ProjectData,
+): RecentProjectIdentity {
+  if (options.recentProjectIdentity) {
+    return options.recentProjectIdentity;
+  }
+  if (options.remixRoute) {
+    return {
+      projectKind: 'remix',
+      remixEntryIntent: options.remixEntryIntent === 'creation' ? 'creation' : 'asset-ingestion',
+      remixRoutePath: null,
+    };
+  }
+  if (projectData.type === 'sceneforge') {
+    return { projectKind: 'sceneforge', remixEntryIntent: null, remixRoutePath: null };
+  }
+  return { projectKind: 'script', remixEntryIntent: null, remixRoutePath: null };
+}
+
+export function shouldRejectRemixOpenOnProject(projectData: ProjectData): boolean {
+  return projectData.type !== 'sceneforge';
+}
+
+export const REMIX_OPEN_ON_NON_SCENEFORGE_MESSAGE =
+  'Remix Mode 仅支持 SceneForge 项目，请选择 SceneForge 工程目录。';

@@ -21,48 +21,51 @@ export function AnnotationEditor({
   onNoteChange,
 }: AnnotationEditorProps) {
   return (
-    <div className={styles.fieldStack} data-testid="remix-annotation-editor">
-      <label className={styles.fieldLabel}>
-        <span className={styles.fieldName}>人工标签</span>
-        <div className={styles.tagEditor}>
-          <Input
-            value={draftTag}
-            onChange={(event) => onDraftTagChange(event.target.value)}
-            placeholder="例如：压迫感、角色反打"
-            size="sm"
-          />
-          <Button variant="outline" size="sm" onClick={onAddTag}>
-            添加
-          </Button>
+    <div className={styles.stack} data-testid="remix-annotation-editor">
+      <p className={styles.copyFeedback}>建议先完成「原片理解」，再填写必须保留或替换的标注。</p>
+      <div className={styles.fieldStack}>
+        <label className={styles.fieldLabel}>
+          <span className={styles.fieldName}>人工标签</span>
+          <div className={styles.tagEditor}>
+            <Input
+              value={draftTag}
+              onChange={(event) => onDraftTagChange(event.target.value)}
+              placeholder="例如：压迫感、角色反打"
+              size="sm"
+            />
+            <Button variant="outline" size="sm" onClick={onAddTag}>
+              添加
+            </Button>
+          </div>
+        </label>
+
+        <div className={styles.tagList}>
+          {tags.map((tag) => (
+            <span key={tag} className={styles.tagBadge}>
+              {tag}
+              <button
+                type="button"
+                className={styles.tagRemove}
+                onClick={() => onRemoveTag(tag)}
+                aria-label={`移除标签 ${tag}`}
+              >
+                ×
+              </button>
+            </span>
+          ))}
         </div>
-      </label>
 
-      <div className={styles.tagList}>
-        {tags.map((tag) => (
-          <span key={tag} className={styles.tagBadge}>
-            {tag}
-            <button
-              type="button"
-              className={styles.tagRemove}
-              onClick={() => onRemoveTag(tag)}
-              aria-label={`移除标签 ${tag}`}
-            >
-              ×
-            </button>
-          </span>
-        ))}
+        <label className={styles.fieldLabel}>
+          <span className={styles.fieldName}>人工备注</span>
+          <Textarea
+            value={note}
+            onChange={(event) => onNoteChange(event.target.value)}
+            placeholder="补充哪些情绪、停顿、动作和镜头关系必须被保留。"
+            size="sm"
+            resize="vertical"
+          />
+        </label>
       </div>
-
-      <label className={styles.fieldLabel}>
-        <span className={styles.fieldName}>人工备注</span>
-        <Textarea
-          value={note}
-          onChange={(event) => onNoteChange(event.target.value)}
-          placeholder="补充哪些情绪、停顿、动作和镜头关系必须被保留。"
-          size="sm"
-          resize="vertical"
-        />
-      </label>
     </div>
   );
 }

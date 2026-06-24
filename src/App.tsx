@@ -45,7 +45,12 @@ import {
   readRemixRouteFromLocationHash,
   REMIX_DEFAULT_ROUTE,
   resolveRemixRecentProjectIdentity,
+  buildRecentProjectIdentityForOpen,
+  parseRemixRouteFromHash,
+  REMIX_OPEN_ON_NON_SCENEFORGE_MESSAGE,
+  shouldRejectRemixOpenOnProject,
 } from './lib/remix-app-session';
+import { enterRemixModeFromDirectory } from './lib/remix-entry';
 
 import type { SceneEntryPath } from './types/sceneforge';
 import { AutoRunController } from './components/AutoRunController';
@@ -468,11 +473,7 @@ export default function App() {
     }
 
     const onPopState = () => {
-      const nextPath = readRemixPathFromHash(window.location.hash);
-      if (!nextPath) {
-        return;
-      }
-      const route = parseRemixPath(nextPath);
+      const route = parseRemixRouteFromHash(window.location.hash);
       if (!route) {
         return;
       }
@@ -502,16 +503,7 @@ export default function App() {
         // 而不是之前打开过的旧项目目录（会造成旧项目被空数据覆盖）。
         setProjectDir(projectDir);
 
-        const recentProjectIdentity =
-          options.recentProjectIdentity ??
-          (options.remixRoute
-            ? {
-                projectKind: 'remix',
-                remixEntryIntent: options.remixEntryIntent === 'creation' ? 'creation' : 'asset-ingestion',
-              }
-            : projectData.type === 'sceneforge'
-              ? { projectKind: 'sceneforge', remixEntryIntent: null }
-              : { projectKind: 'script', remixEntryIntent: null });
+        const recentProjectIdentity = buildRecentProjectIdentityForOpen(options, projectData);
 
         if (projectData.type === 'sceneforge') {
           clearAIAnalysis();
@@ -533,8 +525,8 @@ export default function App() {
           return;
         }
 
-        if (options.remixRoute) {
-          setSetupError('Remix Mode 仅支持 SceneForge 项目，请选择 SceneForge 工程目录。');
+        if (options.remixRoute && shouldRejectRemixOpenOnProject(projectData)) {
+          setSetupError(REMIX_OPEN_ON_NON_SCENEFORGE_MESSAGE);
           resetToSetup();
           return;
         }

@@ -399,7 +399,7 @@ export function RemixCreationWorkspace({
       >
         <main className={shellStyles.panel}>
           <div className={shellStyles.panelContent}>
-            <section className={panelStyles.heroPanel}>
+            <section className={[panelStyles.heroPanel, panelStyles.heroPanelCompact].join(" ")}>
               <div className={panelStyles.heroCopy}>
                 <h1 className={panelStyles.heroTitle}>{isLoading ? '正在加载二创版本（Variant）…' : '暂时无法打开当前工作区'}</h1>
                 <p className={panelStyles.heroDescription}>{errorMessage ?? '请稍后重试。'}</p>
@@ -688,7 +688,7 @@ export function RemixCreationWorkspace({
 
       <main className={shellStyles.panel}>
         <div className={shellStyles.panelContent}>
-          <section className={panelStyles.heroPanel}>
+          <section className={[panelStyles.heroPanel, panelStyles.heroPanelCompact].join(" ")}>
             <div className={panelStyles.heroCopy}>
               <div className={panelStyles.heroEyebrow}>二创创作工作台</div>
               <h1 className={panelStyles.heroTitle}>{variantName}</h1>
