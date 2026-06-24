@@ -36,6 +36,15 @@ afterEach(() => {
 });
 
 function buildApiClient(): RemixIpcContract {
+  let variants = [
+    {
+      id: 'variant-hero-001',
+      sourceAssetId: 'source-library-001',
+      name: '狸猫黑帮版',
+      currentStage: 'edited_keyframes_review',
+      updatedAt: '2026-06-23T11:30:00.000Z',
+    },
+  ];
   return {
     listSourceAssets: async () => ({ sourceAssets: [{ id: 'source-library-001', title: '天台谈判名场面', status: 'published_to_library', durationMs: 24600, segmentCount: 3, keyframeCount: 7, variantCount: 2, updatedAt: '2026-06-23T11:30:00.000Z' }] }),
     getSourceAsset: async () => ({ sourceAsset: MOCK_SOURCE_ASSETS[1], processingStageStates: { remix_source_import: 'approved', remix_segmentation: 'approved', remix_keyframes: 'approved', remix_understanding: 'approved' }, variants: [] }),
@@ -46,10 +55,34 @@ function buildApiClient(): RemixIpcContract {
     runSourceUnderstanding: async () => { throw new Error('not implemented'); },
     publishSourceAssetToLibrary: async () => { throw new Error('not implemented'); },
     createVariantFromSourceAsset: async () => { throw new Error('not implemented'); },
-    listVariantsForSourceAsset: async () => [{ id: 'variant-hero-001', sourceAssetId: 'source-library-001', name: '狸猫黑帮版', currentStage: 'edited_keyframes_review', updatedAt: '2026-06-23T11:30:00.000Z' }],
-    renameVariant: async () => { throw new Error('not implemented'); },
-    duplicateVariant: async () => { throw new Error('not implemented'); },
-    deleteVariant: async () => { throw new Error('not implemented'); },
+    listVariantsForSourceAsset: async () => variants,
+    renameVariant: async (input) => {
+      variants = variants.map((item) =>
+        item.id === input.variantId ? { ...item, name: input.name, updatedAt: '2026-06-24T12:00:00.000Z' } : item,
+      );
+      return variants;
+    },
+    duplicateVariant: async (input) => {
+      const source = variants.find((item) => item.id === input.variantId);
+      if (!source) {
+        return variants;
+      }
+      variants = [
+        ...variants,
+        {
+          id: 'variant-copy-002',
+          sourceAssetId: source.sourceAssetId,
+          name: input.name ?? `${source.name} 副本`,
+          currentStage: source.currentStage,
+          updatedAt: '2026-06-24T12:00:00.000Z',
+        },
+      ];
+      return variants;
+    },
+    deleteVariant: async (input) => {
+      variants = variants.filter((item) => item.id !== input.variantId);
+      return variants;
+    },
     getCreationWorkspace: async () => { throw new Error('not implemented'); },
     updateVariantConfig: async () => { throw new Error('not implemented'); },
     runRemixStrategy: async () => { throw new Error('not implemented'); },
@@ -136,6 +169,56 @@ describe('SceneForge Remix asset library', () => {
     const html = renderToStaticMarkup(<SourceAssetThumbnail asset={assetWithoutKeyframes} />);
     expect(html).toContain('<video');
     expect(html).toContain('source-processing-001/source.mp4');
+  });
+
+
+  it('支持复制二创版本并刷新侧栏列表', async () => {
+    const container = await renderLibrary(
+      <RemixAssetLibrary
+        projectDir="/tmp/remix-project"
+        apiClient={buildApiClient()}
+        selectedSourceAssetId="source-library-001"
+      />,
+    );
+
+    expect(container.textContent).toContain('狸猫黑帮版');
+
+    const duplicateButton = Array.from(container.querySelectorAll('button')).find((el) =>
+      el.textContent?.trim() === '复制',
+    );
+    await act(async () => {
+      duplicateButton?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    });
+    await act(async () => {
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    expect(container.textContent).toContain('狸猫黑帮版 副本');
+    expect(container.textContent).toContain('继续创作');
+  });
+
+  it('继续创作入口可触发 onOpenCreation', async () => {
+    let opened: { variantId: string; sourceAssetId: string } | null = null;
+    const container = await renderLibrary(
+      <RemixAssetLibrary
+        projectDir="/tmp/remix-project"
+        apiClient={buildApiClient()}
+        selectedSourceAssetId="source-library-001"
+        onOpenCreation={(variantId, sourceAssetId) => {
+          opened = { variantId, sourceAssetId };
+        }}
+      />,
+    );
+
+    const continueButton = Array.from(container.querySelectorAll('button')).find((el) =>
+      el.textContent?.includes('继续创作'),
+    );
+    await act(async () => {
+      continueButton?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    });
+
+    expect(opened).toEqual({ variantId: 'variant-hero-001', sourceAssetId: 'source-library-001' });
   });
 
   it('把原片理解区渲染成结构化摘要与分段分析卡片', () => {

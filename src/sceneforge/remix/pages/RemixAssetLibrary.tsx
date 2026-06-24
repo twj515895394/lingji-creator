@@ -226,38 +226,53 @@ export function RemixAssetLibrary({
     if (!projectDir || !activeAsset) {
       return;
     }
-    const variants = await resolveClient().renameVariant({ projectDir: projectDir, variantId, name });
-    setVariantMap((current) => ({ ...current, [activeAsset.id]: variants }));
+    setErrorMessage(null);
+    try {
+      const variants = await resolveClient().renameVariant({ projectDir, variantId, name });
+      setVariantMap((current) => ({ ...current, [activeAsset.id]: variants }));
+    } catch (error) {
+      setErrorMessage(error instanceof Error ? error.message : '重命名二创版本失败。');
+    }
   }
 
   async function handleDuplicateVariant(variantId: string) {
     if (!projectDir || !activeAsset) {
       return;
     }
-    const variants = await resolveClient().duplicateVariant({ projectDir: projectDir, variantId });
-    setVariantMap((current) => ({ ...current, [activeAsset.id]: variants }));
-    setAssets((current) =>
-      current.map((asset) =>
-        asset.id === activeAsset.id
-          ? { ...asset, variantCount: variants.length, updatedAt: new Date().toISOString() }
-          : asset,
-      ),
-    );
+    setErrorMessage(null);
+    try {
+      const variants = await resolveClient().duplicateVariant({ projectDir, variantId });
+      setVariantMap((current) => ({ ...current, [activeAsset.id]: variants }));
+      setAssets((current) =>
+        current.map((asset) =>
+          asset.id === activeAsset.id
+            ? { ...asset, variantCount: variants.length, updatedAt: new Date().toISOString() }
+            : asset,
+        ),
+      );
+    } catch (error) {
+      setErrorMessage(error instanceof Error ? error.message : '复制二创版本失败。');
+    }
   }
 
   async function handleDeleteVariant(variantId: string) {
     if (!projectDir || !activeAsset || !window.confirm('删除这个二创版本只会移除二创产物，不会影响原始素材。确认继续吗？')) {
       return;
     }
-    const variants = await resolveClient().deleteVariant({ projectDir: projectDir, variantId });
-    setVariantMap((current) => ({ ...current, [activeAsset.id]: variants }));
-    setAssets((current) =>
-      current.map((asset) =>
-        asset.id === activeAsset.id
-          ? { ...asset, variantCount: variants.length, updatedAt: new Date().toISOString() }
-          : asset,
-      ),
-    );
+    setErrorMessage(null);
+    try {
+      const variants = await resolveClient().deleteVariant({ projectDir, variantId });
+      setVariantMap((current) => ({ ...current, [activeAsset.id]: variants }));
+      setAssets((current) =>
+        current.map((asset) =>
+          asset.id === activeAsset.id
+            ? { ...asset, variantCount: variants.length, updatedAt: new Date().toISOString() }
+            : asset,
+        ),
+      );
+    } catch (error) {
+      setErrorMessage(error instanceof Error ? error.message : '删除二创版本失败。');
+    }
   }
 
   useEffect(() => {
