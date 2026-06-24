@@ -333,8 +333,8 @@ export function RemixCreationWorkspace({
     ].join('\n');
   }
 
-  async function handleRegisterEditedKeyframe(localEditedFramePath: string) {
-    if (!snapshot || !selectedTargetPrompt) {
+ async function handleRegisterEditedKeyframe(localEditedFramePath: string) {
+    if (!projectDir || !snapshot || !selectedTargetPrompt) {
       return;
     }
 
@@ -366,8 +366,8 @@ export function RemixCreationWorkspace({
     });
   }
 
-  function handleEditedKeyframeStatus(status: 'approved' | 'needs_revision' | 'rejected') {
-    if (!selectedEditedKeyframe) {
+ function handleEditedKeyframeStatus(status: 'approved' | 'needs_revision' | 'rejected') {
+    if (!projectDir || !selectedEditedKeyframe) {
       return;
     }
     void runAction(`${status}-edited-keyframe`, () =>
