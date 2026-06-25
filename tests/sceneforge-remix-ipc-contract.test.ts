@@ -26,6 +26,7 @@ describe('SceneForge Remix IPC contract', () => {
     expect(main).toContain('registerSceneForgeRemixIpc');
     expect(preload).toContain('sceneForgeRemix: {');
     expect(preload).toContain('sceneForgeRemix:listSourceAssets');
+    expect(preload).toContain('sceneForgeRemix:deleteSourceAsset');
     expect(preload).toContain('sceneForgeRemix:updateSourceAssetMetadata');
     expect(preload).toContain('sceneForgeRemix:listVariantsForSourceAsset');
     expect(preload).toContain('sceneForgeRemix:exportPromptBundle');
@@ -34,6 +35,7 @@ describe('SceneForge Remix IPC contract', () => {
     expect(api).toContain('updateEditedKeyframeStatus');
     expect(api).toContain('ExportPromptBundleResult');
     expect(ipc).toContain('sceneForgeRemix:listSourceAssets');
+    expect(ipc).toContain('sceneForgeRemix:deleteSourceAsset');
     expect(ipc).toContain('sceneForgeRemix:renameVariant');
     expect(ipc).toContain('sceneForgeRemix:runRemixStrategy');
     expect(ipc).toContain('sceneForgeRemix:exportPromptBundle');
@@ -63,9 +65,22 @@ describe('SceneForge Remix IPC contract', () => {
     expect(sourceAsset.sourceAsset.id).toBe(sourceAssetId);
     expect(sourceAsset.variants).toEqual([]);
 
-    const segmented = await service.runSourceSegmentation({
+    const deleted = await service.deleteSourceAsset({
       projectDir,
       sourceAssetId,
+    });
+    expect(deleted.deletedSourceAssetId).toBe(sourceAssetId);
+
+    const importedAgain = await service.createSourceAssetFromImport({
+      projectDir,
+      sourceVideoPath: path.join(projectDir, 'demo.mp4'),
+      title: '买瓜原片',
+    });
+    const liveSourceAssetId = importedAgain.sourceAsset.id;
+
+    const segmented = await service.runSourceSegmentation({
+      projectDir,
+      sourceAssetId: liveSourceAssetId,
     });
     expect(segmented.processingStageStates.remix_segmentation).toBe('approved');
     expect(segmented.processingJobs?.[0]?.stepId).toBe('remix_segmentation');
@@ -73,21 +88,21 @@ describe('SceneForge Remix IPC contract', () => {
 
     const keyframed = await service.runSourceKeyframes({
       projectDir,
-      sourceAssetId,
+      sourceAssetId: liveSourceAssetId,
     });
     expect(keyframed.processingStageStates.remix_keyframes).toBe('approved');
     expect(keyframed.processingJobs?.[0]?.stepId).toBe('remix_keyframes');
 
     const understood = await service.runSourceUnderstanding({
       projectDir,
-      sourceAssetId,
+      sourceAssetId: liveSourceAssetId,
     });
     expect(understood.processingStageStates.remix_understanding).toBe('approved');
     expect(understood.processingJobs?.[0]?.stepId).toBe('remix_understanding');
 
     const annotated = await service.updateSourceAssetMetadata({
       projectDir,
-      sourceAssetId,
+      sourceAssetId: liveSourceAssetId,
       tags: ['slow-burn', 'market'],
       annotationNote: '保留试探停顿和压迫感。',
     });
@@ -95,19 +110,19 @@ describe('SceneForge Remix IPC contract', () => {
 
     const published = await service.publishSourceAssetToLibrary({
       projectDir,
-      sourceAssetId,
+      sourceAssetId: liveSourceAssetId,
     });
     expect(published.sourceAsset.status).toBe('published_to_library');
 
     const createdVariant = await service.createVariantFromSourceAsset({
       projectDir,
-      sourceAssetId,
+      sourceAssetId: liveSourceAssetId,
       name: '动物拟人版',
       concept: '保留冲突结构',
     });
     expect(createdVariant.variant.name).toBe('动物拟人版');
 
-    const listedVariants = await service.listVariantsForSourceAsset({ projectDir, sourceAssetId });
+    const listedVariants = await service.listVariantsForSourceAsset({ projectDir, sourceAssetId: liveSourceAssetId });
     expect(listedVariants).toHaveLength(1);
 
     const renamedVariants = await service.renameVariant({

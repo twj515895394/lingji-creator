@@ -460,6 +460,9 @@ export interface ElectronAPI {
     getSourceAsset: (
       input: RemixSourceAssetRefInput,
     ) => Promise<RemixAssetProcessingSnapshot>;
+    deleteSourceAsset: (
+      input: RemixSourceAssetRefInput,
+    ) => Promise<{ deletedSourceAssetId: string }>;
     updateSourceAssetMetadata: (
       input: UpdateSourceAssetMetadataInput,
     ) => Promise<RemixAssetProcessingSnapshot>;

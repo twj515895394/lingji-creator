@@ -24,6 +24,10 @@ import { getAssetProcessingStepStatuses } from '../src/sceneforge/remix/lib/remi
 
 const containerRecords: Array<{ container: HTMLDivElement; root: Root }> = [];
 
+function clone<T>(value: T): T {
+  return JSON.parse(JSON.stringify(value)) as T;
+}
+
 afterEach(() => {
   for (const record of containerRecords.splice(0)) {
     act(() => record.root.unmount());
@@ -34,7 +38,28 @@ afterEach(() => {
 function buildApiClient(mode: 'success' | 'failure'): RemixIpcContract {
   return {
     listSourceAssets: async () => ({ sourceAssets: [] }),
-    getSourceAsset: async () => ({ ...MOCK_ASSET_PROCESSING_SNAPSHOTS['source-library-001'], variants: [] }),
+    getSourceAsset: async (input) => {
+      if (input.sourceAssetId === 'source-failed-001') {
+        return {
+          ...clone(MOCK_ASSET_PROCESSING_SNAPSHOTS['source-failed-001']),
+          processingJobs: [
+            {
+              id: 'job-failed-001',
+              sourceAssetId: 'source-failed-001',
+              stepId: 'remix_segmentation',
+              status: 'failed',
+              message: '切片任务失败',
+              error: '关键帧索引损坏，请重新切片。',
+              startedAt: '2026-06-23T09:00:00.000Z',
+              finishedAt: '2026-06-23T09:15:00.000Z',
+            },
+          ],
+          variants: [],
+        };
+      }
+      return { ...clone(MOCK_ASSET_PROCESSING_SNAPSHOTS['source-library-001']), variants: [] };
+    },
+    deleteSourceAsset: async (input) => ({ deletedSourceAssetId: input.sourceAssetId }),
     updateSourceAssetMetadata: async (input) => ({
       ...MOCK_ASSET_PROCESSING_SNAPSHOTS['source-library-001'],
       sourceAsset: {
@@ -49,11 +74,26 @@ function buildApiClient(mode: 'success' | 'failure'): RemixIpcContract {
     runSourceSegmentation:
       mode === 'success'
         ? async () => ({
-            ...MOCK_ASSET_PROCESSING_SNAPSHOTS['source-library-001'],
+            ...clone(MOCK_ASSET_PROCESSING_SNAPSHOTS['source-library-001']),
+            sourceAsset: {
+              ...clone(MOCK_ASSET_PROCESSING_SNAPSHOTS['source-library-001'].sourceAsset),
+              status: 'processing',
+            },
             processingStageStates: {
               ...MOCK_ASSET_PROCESSING_SNAPSHOTS['source-library-001'].processingStageStates,
               remix_segmentation: 'approved',
             },
+            processingJobs: [
+              {
+                id: 'job-success-001',
+                sourceAssetId: 'source-library-001',
+                stepId: 'remix_segmentation',
+                status: 'succeeded',
+                message: '切片任务完成',
+                startedAt: '2026-06-23T12:00:00.000Z',
+                finishedAt: '2026-06-23T12:01:00.000Z',
+              },
+            ],
           })
         : async () => {
             throw new Error('切片失败');
@@ -158,6 +198,53 @@ describe('SceneForge Remix asset processing workspace', () => {
     });
 
     expect(container.textContent).toContain('最近保存：2026-06-23 12:00');
+  });
+
+  it('未保存人工标注时返回会触发退出守卫', async () => {
+    const container = await renderProcessing(
+      <RemixAssetProcessing
+        projectDir="/tmp/remix-project"
+        apiClient={buildApiClient('success')}
+        sourceAssetId="source-library-001"
+        initialStepId="annotate"
+      />,
+    );
+
+    await act(async () => {
+      const removeButton = Array.from(container.querySelectorAll('button')).find((element) =>
+        element.getAttribute('aria-label') === '移除标签 hero-asset',
+      );
+      removeButton?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    });
+
+    const backButton = container.querySelector('[data-testid="remix-processing-back"]');
+    await act(async () => {
+      backButton?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    });
+
+    expect(document.body.textContent).toContain('当前人工标注尚未保存');
+    expect(document.body.textContent).toContain('保存并返回');
+    expect(document.body.textContent).toContain('不保存返回');
+  });
+
+  it('失败素材返回时提供异常队列与重跑入口', async () => {
+    const container = await renderProcessing(
+      <RemixAssetProcessing
+        projectDir="/tmp/remix-project"
+        apiClient={buildApiClient('success')}
+        sourceAssetId="source-failed-001"
+        initialStepId="segmentation"
+      />,
+    );
+
+    const backButton = container.querySelector('[data-testid="remix-processing-back"]');
+    await act(async () => {
+      backButton?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    });
+
+    expect(document.body.textContent).toContain('当前步骤执行失败');
+    expect(document.body.textContent).toContain('重跑失败步骤');
+    expect(document.body.textContent).toContain('返回异常队列');
   });
 
   it('人工标注有未保存修改时，不把步骤显示成已完成', () => {

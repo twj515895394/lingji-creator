@@ -138,6 +138,10 @@ export const remixMockApi: RemixIpcContract = {
     return snapshot;
   },
 
+  async deleteSourceAsset(input: RemixSourceAssetRefInput) {
+    return { deletedSourceAssetId: input.sourceAssetId };
+  },
+
   async updateSourceAssetMetadata(input: UpdateSourceAssetMetadataInput) {
     const snapshot = findProcessingSnapshot(input.sourceAssetId);
     snapshot.sourceAsset.tags = clone(input.tags ?? snapshot.sourceAsset.tags);
@@ -166,6 +170,7 @@ export const remixMockApi: RemixIpcContract = {
 
   async runSourceSegmentation(input: RunSourceAssetStageInput) {
     const snapshot = findProcessingSnapshot(input.sourceAssetId);
+    snapshot.sourceAsset.status = 'processing';
     setProcessingStage(snapshot, 'remix_segmentation', 'approved');
     setProcessingStage(snapshot, 'remix_keyframes', 'ready_for_review');
     return snapshot;
@@ -173,6 +178,7 @@ export const remixMockApi: RemixIpcContract = {
 
   async runSourceKeyframes(input: RunSourceAssetStageInput) {
     const snapshot = findProcessingSnapshot(input.sourceAssetId);
+    snapshot.sourceAsset.status = 'processing';
     setProcessingStage(snapshot, 'remix_segmentation', 'approved');
     setProcessingStage(snapshot, 'remix_keyframes', 'approved');
     setProcessingStage(snapshot, 'remix_understanding', 'ready_for_review');
@@ -195,6 +201,10 @@ export const remixMockApi: RemixIpcContract = {
   },
 
   async createVariantFromSourceAsset(input: CreateVariantFromSourceAssetInput) {
+    const sourceAsset = findSourceAsset(input.sourceAssetId);
+    if (sourceAsset.status !== 'published_to_library') {
+      throw new Error('这份素材尚未保存入库，不能创建二创版本。请先完成处理并保存入库。');
+    }
     return buildWorkspace('variant-created-001', {
       variant: {
         sourceAssetId: input.sourceAssetId,

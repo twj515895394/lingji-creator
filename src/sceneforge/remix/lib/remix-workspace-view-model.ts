@@ -495,6 +495,44 @@ export interface AssetProcessingWorkspaceState {
   totalSteps: number;
 }
 
+export interface AssetProcessingTaskSummary {
+  assetStatus: RemixAssetProcessingSnapshot['sourceAsset']['status'];
+  activeJob: RemixProcessingJob | null;
+  latestFailedJob: RemixProcessingJob | null;
+  blockingReason: string | null;
+  completedSteps: number;
+  totalSteps: number;
+  returnSection: RemixAssetLibrarySection;
+}
+
+export function buildAssetProcessingTaskSummary(
+  snapshot: RemixAssetProcessingSnapshot,
+  hasUnsavedAnnotationChanges = false,
+): AssetProcessingTaskSummary {
+  const stepStatuses = getAssetProcessingStepStatuses(snapshot, hasUnsavedAnnotationChanges);
+  const activeJob =
+    snapshot.activeProcessingJob ??
+    snapshot.processingJobs?.find((job) => job.status === 'queued' || job.status === 'running') ??
+    null;
+  const latestFailedJob = snapshot.processingJobs?.find((job) => job.status === 'failed') ?? null;
+  const completedSteps = Object.values(stepStatuses).filter((status) => status === 'approved').length;
+  const totalSteps = Object.keys(stepStatuses).length;
+  const blockingReason =
+    activeJob?.status === 'running'
+      ? activeJob.message ?? '系统正在执行当前步骤。'
+      : latestFailedJob?.error ?? null;
+
+  return {
+    assetStatus: snapshot.sourceAsset.status,
+    activeJob,
+    latestFailedJob,
+    blockingReason,
+    completedSteps,
+    totalSteps,
+    returnSection: getAssetLibrarySectionForStatus(snapshot.sourceAsset.status),
+  };
+}
+
 export function buildAssetProcessingWorkspaceState(
   snapshot: RemixAssetProcessingSnapshot,
   options: {
@@ -503,31 +541,24 @@ export function buildAssetProcessingWorkspaceState(
     activeJobOverride?: RemixProcessingJob | null;
   },
 ): AssetProcessingWorkspaceState {
-  const stepStatuses = getAssetProcessingStepStatuses(snapshot, options.hasUnsavedAnnotationChanges);
-  const activeJob =
-    options.activeJobOverride ??
-    snapshot.activeProcessingJob ??
-    snapshot.processingJobs?.find((job) => job.status === 'queued' || job.status === 'running') ??
-    null;
-  const completedSteps = Object.values(stepStatuses).filter((status) => status === 'approved').length;
-  const totalSteps = Object.keys(stepStatuses).length;
+  const taskSummary = buildAssetProcessingTaskSummary(snapshot, options.hasUnsavedAnnotationChanges);
   const blockingReason =
-    activeJob?.status === 'running'
-      ? activeJob.message ?? '系统正在执行当前步骤。'
+    taskSummary.activeJob?.status === 'running'
+      ? taskSummary.activeJob.message ?? '系统正在执行当前步骤。'
       : options.activeStepId === 'annotate' && options.hasUnsavedAnnotationChanges
         ? '人工标注尚未保存。'
         : snapshot.sourceAsset.status === 'failed'
-          ? '当前素材存在失败步骤，请先恢复后再继续。'
+          ? taskSummary.latestFailedJob?.error ?? '当前素材存在失败步骤，请先恢复后再继续。'
           : null;
 
   return {
-    assetStatus: snapshot.sourceAsset.status,
-    activeJob,
+    assetStatus: taskSummary.assetStatus,
+    activeJob: options.activeJobOverride ?? taskSummary.activeJob,
     hasUnsavedChanges: options.hasUnsavedAnnotationChanges,
-    returnSection: getAssetLibrarySectionForStatus(snapshot.sourceAsset.status),
+    returnSection: taskSummary.returnSection,
     blockingReason,
-    completedSteps,
-    totalSteps,
+    completedSteps: taskSummary.completedSteps,
+    totalSteps: taskSummary.totalSteps,
   };
 }
 

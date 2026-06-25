@@ -56,6 +56,7 @@ function buildRoutingApiClient(): RemixIpcContract {
   return {
     listSourceAssets: async () => ({ sourceAssets: [] }),
     getSourceAsset: async () => processing,
+    deleteSourceAsset: async (input) => ({ deletedSourceAssetId: input.sourceAssetId }),
     updateSourceAssetMetadata: async () => processing,
     createSourceAssetFromImport: async () => { throw new Error('not implemented'); },
     runSourceSegmentation: async () => processing,

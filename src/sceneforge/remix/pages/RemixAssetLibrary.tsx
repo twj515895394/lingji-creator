@@ -11,9 +11,15 @@ import {
   getAssetLibraryAvailableTags,
   getStatusesForAssetLibrarySection,
 } from '../lib/asset-library-state';
+import { getLatestFailedJob, getVariantGateReason } from '../lib/asset-library-view-model';
 import { getRemixApiClient } from '../services/remix-api-client';
 import { REMIX_ROUTE_PATTERNS } from '../types';
-import type { RemixAssetLibrarySection, RemixVariantSummary, SourceAsset } from '../types';
+import type {
+  RemixAssetLibrarySection,
+  RemixAssetProcessingSnapshot,
+  RemixVariantSummary,
+  SourceAsset,
+} from '../types';
 import styles from './RemixWorkspaceShell.module.css';
 
 interface RemixAssetLibraryProps {
@@ -41,6 +47,7 @@ export function RemixAssetLibrary({
 }: RemixAssetLibraryProps) {
   const resolveClient = () => apiClient ?? getRemixApiClient();
   const [assets, setAssets] = useState<SourceAsset[]>([]);
+  const [assetSnapshots, setAssetSnapshots] = useState<Record<string, RemixAssetProcessingSnapshot>>({});
   const [activeStatus, setActiveStatus] = useState<AssetLibraryStatusFilter>(initialSection);
   const [activeTag, setActiveTag] = useState<string | null>(null);
   const [activeAssetId, setActiveAssetId] = useState<string | null>(selectedSourceAssetId);
@@ -61,6 +68,7 @@ export function RemixAssetLibrary({
   }, [activeStatus, activeTag, assets]);
 
   const activeAsset = filteredAssets.find((asset) => asset.id === activeAssetId) ?? null;
+  const activeSnapshot = activeAsset ? assetSnapshots[activeAsset.id] ?? null : null;
   const isCreationEntry = entryIntent === 'creation';
   const preferredCreationAsset =
     (activeAsset?.status === 'published_to_library' ? activeAsset : null) ??
@@ -89,10 +97,13 @@ export function RemixAssetLibrary({
               projectDir,
               sourceAssetId: sourceAsset.id,
             });
-            return response.sourceAsset;
+            return response;
           }),
         );
-        setAssets(details);
+        setAssetSnapshots(
+          Object.fromEntries(details.map((response) => [response.sourceAsset.id, response])),
+        );
+        setAssets(details.map((response) => response.sourceAsset));
         setVariantMap(
           Object.fromEntries(
             await Promise.all(
@@ -158,6 +169,11 @@ export function RemixAssetLibrary({
     if (!sourceAsset) {
       return;
     }
+    const gateReason = getVariantGateReason(sourceAsset);
+    if (gateReason) {
+      setErrorMessage(gateReason);
+      return;
+    }
 
     setCreatingVariantFor(sourceAssetId);
     setErrorMessage(null);
@@ -219,6 +235,75 @@ export function RemixAssetLibrary({
   function handleSelect(assetId: string) {
     setActiveAssetId(assetId);
     onOpenDetails?.(assetId, activeStatus);
+  }
+
+  async function refreshAssetSnapshot(sourceAssetId: string) {
+    if (!projectDir) {
+      return null;
+    }
+    const response = await resolveClient().getSourceAsset({ projectDir, sourceAssetId });
+    setAssetSnapshots((current) => ({ ...current, [sourceAssetId]: response }));
+    setAssets((current) =>
+      current.map((asset) => (asset.id === sourceAssetId ? response.sourceAsset : asset)),
+    );
+    return response;
+  }
+
+  function resolveRetryRunner(snapshot: RemixAssetProcessingSnapshot) {
+    const failedJob = getLatestFailedJob(snapshot.processingJobs);
+    switch (failedJob?.stepId) {
+      case 'remix_keyframes':
+        return () => resolveClient().runSourceKeyframes({ projectDir: projectDir!, sourceAssetId: snapshot.sourceAsset.id });
+      case 'remix_understanding':
+        return () => resolveClient().runSourceUnderstanding({ projectDir: projectDir!, sourceAssetId: snapshot.sourceAsset.id });
+      case 'remix_segmentation':
+      default:
+        return () => resolveClient().runSourceSegmentation({ projectDir: projectDir!, sourceAssetId: snapshot.sourceAsset.id });
+    }
+  }
+
+  async function handleRetrySourceAsset(sourceAssetId: string) {
+    if (!projectDir) {
+      return;
+    }
+    const snapshot = assetSnapshots[sourceAssetId];
+    if (!snapshot) {
+      return;
+    }
+    setErrorMessage(null);
+    try {
+      const nextSnapshot = await resolveRetryRunner(snapshot)();
+      setAssetSnapshots((current) => ({ ...current, [sourceAssetId]: nextSnapshot }));
+      setAssets((current) =>
+        current.map((asset) => (asset.id === sourceAssetId ? nextSnapshot.sourceAsset : asset)),
+      );
+    } catch (error) {
+      setErrorMessage(error instanceof Error ? error.message : '重跑失败。');
+      await refreshAssetSnapshot(sourceAssetId);
+    }
+  }
+
+  async function handleDeleteSourceAsset(sourceAssetId: string) {
+    if (
+      !projectDir ||
+      !window.confirm('删除这份处理中或异常素材会同时移除草稿与处理记录，无法恢复。确认继续吗？')
+    ) {
+      return;
+    }
+
+    setErrorMessage(null);
+    try {
+      await resolveClient().deleteSourceAsset({ projectDir, sourceAssetId });
+      setAssetSnapshots((current) => {
+        const next = { ...current };
+        delete next[sourceAssetId];
+        return next;
+      });
+      setAssets((current) => current.filter((asset) => asset.id !== sourceAssetId));
+      setActiveAssetId((current) => (current === sourceAssetId ? null : current));
+    } catch (error) {
+      setErrorMessage(error instanceof Error ? error.message : '删除草稿失败。');
+    }
   }
 
   async function refreshVariants(sourceAssetId: string) {
@@ -387,10 +472,20 @@ export function RemixAssetLibrary({
               <Button
                 variant="outline"
                 data-testid="remix-secondary-action-button"
-                disabled={isImporting || creatingVariantFor !== null || !projectDir}
+                disabled={
+                  isImporting ||
+                  creatingVariantFor !== null ||
+                  !projectDir ||
+                  (activeStatus === 'published' && !isCreationEntry && !preferredCreationAsset)
+                }
                 onClick={() => {
                   if (isCreationEntry) {
                     void handleImportSource();
+                    return;
+                  }
+                  if (activeStatus !== 'published') {
+                    setActiveStatus('published');
+                    onSectionChange?.('published');
                     return;
                   }
                   if (preferredCreationAsset) {
@@ -398,7 +493,11 @@ export function RemixAssetLibrary({
                   }
                 }}
               >
-                {isCreationEntry ? '补充导入新原片' : '基于已入库素材创建二创版本'}
+                {isCreationEntry
+                  ? '补充导入新原片'
+                  : activeStatus === 'published'
+                    ? '基于已入库素材创建二创版本'
+                    : '查看已入库资产'}
               </Button>
               {isLoading ? <span className={styles.description}>正在同步资产库…</span> : null}
               {creatingVariantFor ? <span className={styles.description}>正在创建二创版本…</span> : null}
@@ -407,10 +506,17 @@ export function RemixAssetLibrary({
 
           <AssetGrid
             assets={filteredAssets}
+            snapshotsByAssetId={assetSnapshots}
             selectedAssetId={activeAssetId}
             onSelect={handleSelect}
             onOpenProcessing={onOpenProcessing}
             onCreateVariant={handleCreateVariant}
+            onRetrySourceAsset={(sourceAssetId) => {
+              void handleRetrySourceAsset(sourceAssetId);
+            }}
+            onDeleteSourceAsset={(sourceAssetId) => {
+              void handleDeleteSourceAsset(sourceAssetId);
+            }}
           />
         </div>
       </main>
@@ -419,10 +525,17 @@ export function RemixAssetLibrary({
         <div className={styles.panelContent}>
           <AssetDetailSidebar
             asset={activeAsset}
+            snapshot={activeSnapshot}
             variants={activeAsset ? variantMap[activeAsset.id] ?? [] : []}
             isLoadingVariants={loadingVariantAssetId === activeAsset?.id}
             onOpenProcessing={onOpenProcessing}
             onCreateVariant={handleCreateVariant}
+            onRetrySourceAsset={(sourceAssetId) => {
+              void handleRetrySourceAsset(sourceAssetId);
+            }}
+            onDeleteSourceAsset={(sourceAssetId) => {
+              void handleDeleteSourceAsset(sourceAssetId);
+            }}
             onOpenVariant={onOpenCreation}
             onRenameVariant={(variantId, name) => {
               void handleRenameVariant(variantId, name);

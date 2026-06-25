@@ -1,4 +1,4 @@
-import type { RemixCreationStageId, SourceAsset } from '../types';
+import type { RemixAssetProcessingStageId, RemixCreationStageId, RemixProcessingJob, SourceAsset } from '../types';
 
 export const REMIX_SOURCE_STATUS_LABELS = {
   draft: '未处理',
@@ -46,7 +46,12 @@ export function getSourceAssetPrimaryAction(asset: SourceAsset): {
   label: string;
   emphasis: 'outline' | 'accent';
 } | null {
-  if (asset.status === 'processing' || asset.status === 'ready_for_review' || asset.status === 'failed') {
+  if (
+    asset.status === 'draft' ||
+    asset.status === 'processing' ||
+    asset.status === 'ready_for_review' ||
+    asset.status === 'failed'
+  ) {
     return {
       label: asset.status === 'failed' ? '重新处理' : '继续处理',
       emphasis: 'outline',
@@ -78,6 +83,31 @@ export function getSourceAssetNextStep(asset: SourceAsset): string {
     default:
       return '下一步：继续推进当前素材处理。';
   }
+}
+
+const PROCESSING_STEP_LABELS: Record<RemixAssetProcessingStageId, string> = {
+  remix_source_import: '导入原片',
+  remix_segmentation: '真实镜头切片',
+  remix_keyframes: '关键帧提取',
+  remix_understanding: '原片理解',
+};
+
+export function getProcessingStepLabel(stepId: RemixAssetProcessingStageId): string {
+  return PROCESSING_STEP_LABELS[stepId] ?? stepId;
+}
+
+export function getLatestFailedJob(jobs: RemixProcessingJob[] = []): RemixProcessingJob | null {
+  return jobs.find((job) => job.status === 'failed') ?? null;
+}
+
+export function getVariantGateReason(asset: SourceAsset): string | null {
+  if (asset.status === 'published_to_library') {
+    return null;
+  }
+  if (asset.status === 'failed') {
+    return '这份素材当前在异常队列，先恢复失败步骤后才能创建二创。';
+  }
+  return '这份素材还没有保存入库，先完成处理并保存入库后才能创建二创。';
 }
 
 export function getSourceAssetKeyframeCount(asset: SourceAsset): number {

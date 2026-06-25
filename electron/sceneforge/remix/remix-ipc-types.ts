@@ -18,6 +18,8 @@ export interface RemixSourceAssetRefInput {
   sourceAssetId: string;
 }
 
+export interface DeleteSourceAssetInput extends RemixSourceAssetRefInput {}
+
 export interface ListSourceAssetsInput {
   projectDir: string;
   statuses?: RemixSourceAssetStatus | RemixSourceAssetStatus[];
@@ -99,6 +101,7 @@ export interface ExportPromptBundleInput extends RemixVariantRefInput {
 export interface RemixIpcContract {
   listSourceAssets(input: ListSourceAssetsInput): Promise<RemixAssetLibrarySnapshot>;
   getSourceAsset(input: RemixSourceAssetRefInput): Promise<RemixAssetProcessingSnapshot>;
+  deleteSourceAsset(input: DeleteSourceAssetInput): Promise<{ deletedSourceAssetId: string }>;
   updateSourceAssetMetadata(
     input: UpdateSourceAssetMetadataInput,
   ): Promise<RemixAssetProcessingSnapshot>;

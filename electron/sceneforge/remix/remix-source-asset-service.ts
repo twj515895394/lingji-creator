@@ -160,4 +160,16 @@ export class RemixSourceAssetService {
     await writeStoredSourceAsset(input.projectDir, document);
     return document;
   }
+
+  async delete(projectDir: string, sourceAssetId: string): Promise<void> {
+    const document = await readStoredSourceAsset(projectDir, sourceAssetId);
+    if (document.sourceAsset.status === 'published_to_library') {
+      throw new Error('已入库素材不能直接删除，请先处理关联二创版本后再操作。');
+    }
+
+    await fs.rm(path.join(projectDir, path.dirname(document.sourceAsset.sourceManifestPath)), {
+      recursive: true,
+      force: true,
+    });
+  }
 }

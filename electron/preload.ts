@@ -212,6 +212,8 @@ contextBridge.exposeInMainWorld('electronAPI', {
       ipcRenderer.invoke('sceneForgeRemix:listSourceAssets', input),
     getSourceAsset: (input: RemixSourceAssetRefInput) =>
       ipcRenderer.invoke('sceneForgeRemix:getSourceAsset', input),
+    deleteSourceAsset: (input: RemixSourceAssetRefInput) =>
+      ipcRenderer.invoke('sceneForgeRemix:deleteSourceAsset', input),
     updateSourceAssetMetadata: (input: UpdateSourceAssetMetadataInput) =>
       ipcRenderer.invoke('sceneForgeRemix:updateSourceAssetMetadata', input),
     createSourceAssetFromImport: (input: CreateSourceAssetFromImportInput) =>

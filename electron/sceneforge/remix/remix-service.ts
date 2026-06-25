@@ -15,6 +15,7 @@ import type {
   ListSourceAssetsInput,
   RegisterEditedKeyframeInput,
   RenameVariantInput,
+  DeleteSourceAssetInput,
   RemixSourceAssetRefInput,
   RemixVariantRefInput,
   RunSourceAssetStageInput,
@@ -99,6 +100,7 @@ export class RemixService {
     runner: () => Promise<Awaited<ReturnType<RemixSegmentationService['run']>>>,
     message: string,
   ) {
+    const sourceDocument = await readStoredSourceAsset(input.projectDir, input.sourceAssetId);
     const jobsDocument = await readStoredSourceAssetJobs(input.projectDir, input.sourceAssetId);
     const startedAt = new Date().toISOString();
     const jobId = `${stepId}-${startedAt.replace(/[:.]/g, '-')}`;
@@ -111,6 +113,10 @@ export class RemixService {
       startedAt,
       finishedAt: null,
     };
+
+    sourceDocument.sourceAsset.status = 'processing';
+    sourceDocument.sourceAsset.updatedAt = startedAt;
+    await writeStoredSourceAsset(input.projectDir, sourceDocument);
 
     jobsDocument.jobs = [runningJob, ...jobsDocument.jobs.filter((job) => job.id !== jobId)];
     await writeStoredSourceAssetJobs(input.projectDir, jobsDocument);
@@ -138,11 +144,16 @@ export class RemixService {
               ...job,
               status: 'failed',
               error: error instanceof Error ? error.message : '执行失败。',
+              message: `${message}失败`,
               finishedAt,
             }
           : job,
       );
       await writeStoredSourceAssetJobs(input.projectDir, jobsDocument);
+      const failedDocument = await readStoredSourceAsset(input.projectDir, input.sourceAssetId);
+      failedDocument.sourceAsset.status = 'failed';
+      failedDocument.sourceAsset.updatedAt = finishedAt;
+      await writeStoredSourceAsset(input.projectDir, failedDocument);
       throw error;
     }
   }
@@ -167,6 +178,11 @@ export class RemixService {
     const snapshot = await this.buildProcessingSnapshot(input.projectDir, input.sourceAssetId);
     snapshot.variants = await this.variantService.listForSourceAsset(input.projectDir, input.sourceAssetId);
     return snapshot;
+  }
+
+  async deleteSourceAsset(input: DeleteSourceAssetInput) {
+    await this.sourceAssetService.delete(input.projectDir, input.sourceAssetId);
+    return { deletedSourceAssetId: input.sourceAssetId };
   }
 
   async updateSourceAssetMetadata(input: UpdateSourceAssetMetadataInput) {

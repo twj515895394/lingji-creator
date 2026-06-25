@@ -49,7 +49,7 @@ describe('SceneForge Remix variant service', () => {
         name: '未入库版本',
         concept: '不应通过',
       }),
-    ).rejects.toThrow('只有已入库 Source Asset 才能创建 Variant');
+    ).rejects.toThrow('这份素材尚未保存入库，不能创建二创版本');
 
     const sourceAssetId = await createPublishedSource(service);
     const workspace = await service.createVariantFromSourceAsset({

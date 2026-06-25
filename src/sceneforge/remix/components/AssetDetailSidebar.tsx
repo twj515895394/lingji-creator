@@ -3,23 +3,30 @@ import { Badge, Button, Input } from '../../../ui';
 import {
   formatAssetLibraryDate,
   formatAssetLibraryDuration,
+  getLatestFailedJob,
+  getProcessingStepLabel,
   getSourceAssetFilename,
   getSourceAssetKeyframeCount,
   getSourceAssetNextStep,
+  getVariantGateReason,
   getVariantStageLabel,
   REMIX_SOURCE_STATUS_BADGE_VARIANTS,
   REMIX_SOURCE_STATUS_LABELS,
 } from '../lib/asset-library-view-model';
-import type { RemixVariantSummary, SourceAsset } from '../types';
+import { buildAssetProcessingTaskSummary } from '../lib/remix-workspace-view-model';
+import type { RemixAssetProcessingSnapshot, RemixVariantSummary, SourceAsset } from '../types';
 import { SourceAssetThumbnail } from './SourceAssetThumbnail';
 import styles from './AssetLibrary.module.css';
 
 interface AssetDetailSidebarProps {
   asset: SourceAsset | null;
+  snapshot?: RemixAssetProcessingSnapshot | null;
   variants?: RemixVariantSummary[];
   isLoadingVariants?: boolean;
   onOpenProcessing?: (sourceAssetId: string) => void;
   onCreateVariant?: (sourceAssetId: string) => void;
+  onRetrySourceAsset?: (sourceAssetId: string) => void;
+  onDeleteSourceAsset?: (sourceAssetId: string) => void;
   onOpenVariant?: (variantId: string, sourceAssetId: string) => void;
   onRenameVariant?: (variantId: string, name: string) => void;
   onDuplicateVariant?: (variantId: string) => void;
@@ -28,10 +35,13 @@ interface AssetDetailSidebarProps {
 
 export function AssetDetailSidebar({
   asset,
+  snapshot = null,
   variants = [],
   isLoadingVariants = false,
   onOpenProcessing,
   onCreateVariant,
+  onRetrySourceAsset,
+  onDeleteSourceAsset,
   onOpenVariant,
   onRenameVariant,
   onDuplicateVariant,
@@ -61,6 +71,9 @@ export function AssetDetailSidebar({
   }
 
   const keyframeCount = getSourceAssetKeyframeCount(asset);
+  const taskSummary = snapshot ? buildAssetProcessingTaskSummary(snapshot) : null;
+  const latestFailedJob = snapshot ? getLatestFailedJob(snapshot.processingJobs) : null;
+  const variantGateReason = getVariantGateReason(asset);
 
   return (
     <div className={styles.detailRail} data-testid="remix-asset-library-inspector">
@@ -123,6 +136,27 @@ export function AssetDetailSidebar({
         <div className={styles.detailHero}>
           <div className={styles.inspectorTitle}>人工备注</div>
           <div className={styles.detailNote}>{asset.annotationNote}</div>
+        </div>
+      ) : null}
+
+      {taskSummary && asset.status !== 'published_to_library' ? (
+        <div className={styles.detailHero}>
+          <div className={styles.inspectorTitle}>
+            {asset.status === 'failed' ? '失败恢复' : '处理进度'}
+          </div>
+          <div className={styles.detailNote}>
+            已完成 {taskSummary.completedSteps}/{taskSummary.totalSteps} 步
+            {taskSummary.blockingReason ? ` · ${taskSummary.blockingReason}` : ''}
+          </div>
+          {latestFailedJob ? (
+            <div className={styles.detailMeta}>
+              <div className={styles.detailRow}>
+                <span>失败步骤</span>
+                <strong>{getProcessingStepLabel(latestFailedJob.stepId)}</strong>
+              </div>
+              <div className={styles.detailNote}>{latestFailedJob.error ?? '请回到处理页查看详情。'}</div>
+            </div>
+          ) : null}
         </div>
       ) : null}
 
@@ -196,13 +230,13 @@ export function AssetDetailSidebar({
       ) : null}
 
       <div className={styles.actionRow}>
-        {asset.status === 'processing' ? (
+        {asset.status !== 'published_to_library' ? (
           <Button
-            variant="outline"
+            variant="primary"
             onClick={() => onOpenProcessing?.(asset.id)}
             data-testid="remix-detail-open-processing"
           >
-            继续处理
+            {asset.status === 'failed' ? '回到处理页修复' : '继续处理'}
           </Button>
         ) : null}
         {asset.status === 'published_to_library' ? (
@@ -214,7 +248,32 @@ export function AssetDetailSidebar({
             创建二创
           </Button>
         ) : null}
+        {asset.status === 'failed' ? (
+          <Button
+            variant="outline"
+            onClick={() => onRetrySourceAsset?.(asset.id)}
+            data-testid="remix-detail-retry-processing"
+          >
+            重跑失败步骤
+          </Button>
+        ) : null}
+        {asset.status !== 'published_to_library' ? (
+          <Button
+            variant="ghost"
+            onClick={() => onDeleteSourceAsset?.(asset.id)}
+            data-testid="remix-detail-delete-source"
+          >
+            删除草稿
+          </Button>
+        ) : null}
       </div>
+
+      {variantGateReason ? (
+        <div className={styles.emptyState}>
+          <div className={styles.emptyTitle}>二创门禁</div>
+          <div className={styles.emptyText}>{variantGateReason}</div>
+        </div>
+      ) : null}
     </div>
   );
 }

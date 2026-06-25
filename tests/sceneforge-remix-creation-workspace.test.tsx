@@ -40,6 +40,7 @@ function buildApiClient(options?: { trimForUploadFlow?: boolean }): RemixIpcCont
   return {
     listSourceAssets: async () => ({ sourceAssets: [] }),
     getSourceAsset: async () => { throw new Error('not implemented'); },
+    deleteSourceAsset: async (input) => ({ deletedSourceAssetId: input.sourceAssetId }),
     updateSourceAssetMetadata: async () => { throw new Error('not implemented'); },
     createSourceAssetFromImport: async () => { throw new Error('not implemented'); },
     runSourceSegmentation: async () => { throw new Error('not implemented'); },

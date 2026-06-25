@@ -108,7 +108,7 @@ export class RemixVariantService {
   async create(projectDir: string, input: CreateVariantFromSourceAssetInput): Promise<StoredVariantDocument> {
     const sourceDocument = await readStoredSourceAsset(projectDir, input.sourceAssetId);
     if (sourceDocument.sourceAsset.status !== 'published_to_library') {
-      throw new Error('只有已入库 Source Asset 才能创建 Variant。');
+      throw new Error('这份素材尚未保存入库，不能创建二创版本。请先完成处理并保存入库。');
     }
 
     const variantId = [

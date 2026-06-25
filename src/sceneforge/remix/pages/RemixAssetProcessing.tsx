@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState, type ReactElement } from 'react';
-import { Badge, Button } from '../../../ui';
+import { Badge, Button, Dialog, DialogBody, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '../../../ui';
 import { PanelHeader } from '../../../ui/patterns/PanelHeader';
 import type { RemixIpcContract } from '../../../../electron/sceneforge/remix/remix-ipc-types';
 import { AnnotationEditor } from '../components/AnnotationEditor';
@@ -10,7 +10,7 @@ import { SegmentTable } from '../components/SegmentTable';
 import { SegmentTimeline } from '../components/SegmentTimeline';
 import { SourceVideoPreview } from '../components/SourceVideoPreview';
 import { SourceOverviewPanel } from '../components/SourceOverviewPanel';
-import { formatAssetLibraryDate, getSourceAssetFilename } from '../lib/asset-library-view-model';
+import { formatAssetLibraryDate, getLatestFailedJob, getProcessingStepLabel, getSourceAssetFilename } from '../lib/asset-library-view-model';
 import { formatCompactPath } from '../lib/remix-display-text';
 import panelStyles from '../components/RemixWorkspacePanels.module.css';
 import {
@@ -32,6 +32,15 @@ import {
   type RemixProcessingJob,
 } from '../types';
 import shellStyles from './RemixWorkspaceShell.module.css';
+
+type ExitGuardMode = 'unsaved' | 'running' | 'incomplete' | 'failed';
+
+interface ExitGuardAction {
+  id: string;
+  label: string;
+  variant: 'ghost' | 'outline' | 'primary' | 'destructive';
+  onSelect: () => void | Promise<void>;
+}
 
 function normalizeTags(tags: string[]): string[] {
   return Array.from(new Set(tags.map((tag) => tag.trim()).filter(Boolean))).sort((left, right) =>
@@ -167,13 +176,14 @@ export function RemixAssetProcessing({
   const [activeStepId, setActiveStepId] = useState<AssetProcessingStepId>(initialStepId);
   const [tags, setTags] = useState<string[]>(snapshot?.sourceAsset.tags ?? []);
   const [draftTag, setDraftTag] = useState('');
-  const [annotationNote, setAnnotationNote] = useState(snapshot?.sourceAsset.annotationNote ?? initialAnnotationNote);
+  const [annotationNote, setAnnotationNote] = useState(snapshot?.sourceAsset.annotationNote ?? '');
   const [isLoading, setIsLoading] = useState(true);
-  const [activeAction, setActiveAction] = useState<string | null>(null);
+  const [pendingActionId, setPendingActionId] = useState<string | null>(null);
   const [activeJob, setActiveJob] = useState<RemixProcessingJob | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [previewCurrentTimeMs, setPreviewCurrentTimeMs] = useState(0);
   const [previewSeekMs, setPreviewSeekMs] = useState<number | null>(null);
+  const [exitGuardMode, setExitGuardMode] = useState<ExitGuardMode | null>(null);
 
   useEffect(() => {
     async function loadSnapshot() {
@@ -191,7 +201,7 @@ export function RemixAssetProcessing({
         const nextSnapshot = await resolveClient().getSourceAsset({ projectDir, sourceAssetId });
         setSnapshot(nextSnapshot);
         setTags(nextSnapshot.sourceAsset.tags);
-        setAnnotationNote(nextSnapshot.sourceAsset.annotationNote ?? initialAnnotationNote);
+        setAnnotationNote(nextSnapshot.sourceAsset.annotationNote ?? '');
         setActiveJob(nextSnapshot.activeProcessingJob ?? null);
       } catch (error) {
         setSnapshot(null);
@@ -233,8 +243,9 @@ export function RemixAssetProcessing({
     actionId: string,
     stepId: RemixProcessingJob['stepId'] | null,
     runner: () => Promise<RemixAssetProcessingSnapshot>,
+    runningMessage?: string,
   ) {
-    setActiveAction(actionId);
+    setPendingActionId(actionId);
     setErrorMessage(null);
     if (stepId) {
       setActiveJob({
@@ -242,7 +253,7 @@ export function RemixAssetProcessing({
         sourceAssetId,
         stepId,
         status: 'running',
-        message: `${REMIX_ASSET_PROCESSING_NAV_ITEMS.find((item) => item.id === activeStepId)?.title ?? '当前步骤'}处理中`,
+        message: runningMessage ?? `${getProcessingStepLabel(stepId)}处理中`,
         startedAt: new Date().toISOString(),
         finishedAt: null,
       });
@@ -254,13 +265,24 @@ export function RemixAssetProcessing({
         setTags(nextSnapshot.sourceAsset.tags);
         setAnnotationNote(nextSnapshot.sourceAsset.annotationNote ?? '');
         setDraftTag('');
-        setActiveJob(nextSnapshot.activeProcessingJob ?? null);
+        setActiveJob(nextSnapshot.activeProcessingJob ?? getLatestFailedJob(nextSnapshot.processingJobs) ?? null);
       }
     } catch (error) {
       setErrorMessage(error instanceof Error ? error.message : '执行失败。');
-      setActiveJob(null);
+      if (stepId) {
+        setActiveJob({
+          id: `${actionId}-failed-local`,
+          sourceAssetId,
+          stepId,
+          status: 'failed',
+          message: `${getProcessingStepLabel(stepId)}失败`,
+          error: error instanceof Error ? error.message : '执行失败。',
+          startedAt: new Date().toISOString(),
+          finishedAt: new Date().toISOString(),
+        });
+      }
     } finally {
-      setActiveAction(null);
+      setPendingActionId(null);
     }
   }
 
@@ -280,6 +302,90 @@ export function RemixAssetProcessing({
   function syncPreviewTo(timeMs: number) {
     setPreviewSeekMs(timeMs);
     setPreviewCurrentTimeMs(timeMs);
+  }
+
+  async function reloadSnapshot() {
+    if (!projectDir) {
+      return null;
+    }
+    const nextSnapshot = await resolveClient().getSourceAsset({ projectDir, sourceAssetId });
+    setSnapshot(nextSnapshot);
+    setTags(nextSnapshot.sourceAsset.tags);
+    setAnnotationNote(nextSnapshot.sourceAsset.annotationNote ?? '');
+    setActiveJob(nextSnapshot.activeProcessingJob ?? getLatestFailedJob(nextSnapshot.processingJobs) ?? null);
+    return nextSnapshot;
+  }
+
+  async function saveAnnotationDraft() {
+    if (!projectDir) {
+      return;
+    }
+    await runAction(
+      'save-annotation',
+      null,
+      () =>
+        resolveClient().updateSourceAssetMetadata({
+          projectDir,
+          sourceAssetId,
+          tags,
+          annotationNote,
+          annotationSource: 'workspace_manual',
+        }),
+    );
+  }
+
+  function handleBackIntent() {
+    if (!asset) {
+      return;
+    }
+    if (hasUnsavedAnnotationChanges) {
+      setExitGuardMode('unsaved');
+      return;
+    }
+    if (workspaceState?.activeJob?.status === 'running') {
+      setExitGuardMode('running');
+      return;
+    }
+    if (asset.status === 'failed') {
+      setExitGuardMode('failed');
+      return;
+    }
+    if (asset.status !== 'published_to_library') {
+      setExitGuardMode('incomplete');
+      return;
+    }
+    onBackToLibrary?.(workspaceState?.returnSection ?? getAssetLibrarySectionForStatus(asset.status));
+  }
+
+  async function rerunLatestFailedStep() {
+    const failedJob = snapshot ? getLatestFailedJob(snapshot.processingJobs) : null;
+    if (!failedJob) {
+      return;
+    }
+    if (failedJob.stepId === 'remix_understanding') {
+      await runAction(
+        'retry-understanding',
+        'remix_understanding',
+        () => resolveClient().runSourceUnderstanding({ projectDir: projectDir!, sourceAssetId }),
+        '正在重跑原片理解',
+      );
+      return;
+    }
+    if (failedJob.stepId === 'remix_keyframes') {
+      await runAction(
+        'retry-keyframes',
+        'remix_keyframes',
+        () => resolveClient().runSourceKeyframes({ projectDir: projectDir!, sourceAssetId }),
+        '正在重跑关键帧提取',
+      );
+      return;
+    }
+    await runAction(
+      'retry-segmentation',
+      'remix_segmentation',
+      () => resolveClient().runSourceSegmentation({ projectDir: projectDir!, sourceAssetId }),
+      '正在重跑真实镜头切片',
+    );
   }
 
   if (!asset || !projectDir) {
@@ -325,6 +431,121 @@ export function RemixAssetProcessing({
   const navStatuses = Object.fromEntries(
     Object.entries(stepStatuses).map(([key, value]) => [key, getStageStatusLabel(value)]),
   );
+  const latestFailedJob = snapshot ? getLatestFailedJob(snapshot.processingJobs) : null;
+  const latestSucceededJob =
+    snapshot?.processingJobs?.find((job) => job.status === 'succeeded') ?? null;
+  const exitGuardTitle =
+    exitGuardMode === 'unsaved'
+      ? '当前人工标注尚未保存'
+      : exitGuardMode === 'running'
+        ? '当前任务仍在运行'
+        : exitGuardMode === 'failed'
+          ? '当前步骤执行失败'
+          : '这份素材还没有保存入库';
+  const exitGuardDescription =
+    exitGuardMode === 'unsaved'
+      ? '你可以先保存人工标注再返回，也可以放弃这次改动并回到处理中队列。'
+      : exitGuardMode === 'running'
+        ? `${workspaceState?.activeJob?.message ?? '系统正在执行当前步骤。'} 当前任务会继续在后台运行。`
+        : exitGuardMode === 'failed'
+          ? latestFailedJob?.error ?? '请先查看失败原因，再决定返回异常队列还是立即重跑。'
+          : `当前素材处于${asset.status === 'ready_for_review' ? '待确认' : '处理中'}状态，离开后会回到${workspaceState?.returnSection === 'failed' ? '异常队列' : '处理中队列'}。`;
+  const exitGuardActions: ExitGuardAction[] =
+    exitGuardMode === 'unsaved'
+      ? [
+          {
+            id: 'save-and-return',
+            label: '保存并返回',
+            variant: 'primary',
+            onSelect: async () => {
+              await saveAnnotationDraft();
+              setExitGuardMode(null);
+              onBackToLibrary?.(workspaceState?.returnSection ?? getAssetLibrarySectionForStatus(asset.status));
+            },
+          },
+          {
+            id: 'discard-and-return',
+            label: '不保存返回',
+            variant: 'outline',
+            onSelect: () => {
+              setTags(savedTags);
+              setAnnotationNote(asset.annotationNote ?? '');
+              setDraftTag('');
+              setExitGuardMode(null);
+              onBackToLibrary?.(workspaceState?.returnSection ?? getAssetLibrarySectionForStatus(asset.status));
+            },
+          },
+        ]
+      : exitGuardMode === 'running'
+        ? [
+            {
+              id: 'stay',
+              label: '继续等待',
+              variant: 'primary',
+              onSelect: () => {
+                setExitGuardMode(null);
+              },
+            },
+            {
+              id: 'return-while-running',
+              label: '保留草稿并返回',
+              variant: 'outline',
+              onSelect: () => {
+                setExitGuardMode(null);
+                onBackToLibrary?.(workspaceState?.returnSection ?? getAssetLibrarySectionForStatus(asset.status));
+              },
+            },
+          ]
+        : exitGuardMode === 'failed'
+          ? [
+              {
+                id: 'retry-failed',
+                label: '重跑失败步骤',
+                variant: 'primary',
+                onSelect: async () => {
+                  setExitGuardMode(null);
+                  await rerunLatestFailedStep();
+                },
+              },
+              {
+                id: 'return-failed-queue',
+                label: '返回异常队列',
+                variant: 'outline',
+                onSelect: () => {
+                  setExitGuardMode(null);
+                  onBackToLibrary?.('failed');
+                },
+              },
+            ]
+          : [
+              {
+                id: 'return-processing',
+                label: '保存为处理中草稿并返回',
+                variant: 'primary',
+                onSelect: () => {
+                  setExitGuardMode(null);
+                  onBackToLibrary?.(workspaceState?.returnSection ?? getAssetLibrarySectionForStatus(asset.status));
+                },
+              },
+              {
+                id: 'stay-in-workspace',
+                label: '继续处理',
+                variant: 'outline',
+                onSelect: () => {
+                  setExitGuardMode(null);
+                },
+              },
+            ];
+  const currentTaskMessage =
+    workspaceState?.activeJob?.status === 'running'
+      ? workspaceState.activeJob.message ?? '系统正在执行当前步骤，请稍候。'
+      : latestFailedJob
+        ? `${getProcessingStepLabel(latestFailedJob.stepId)}失败：${latestFailedJob.error ?? '请先恢复后再继续。'}`
+        : latestSucceededJob
+          ? `最近完成：${getProcessingStepLabel(latestSucceededJob.stepId)}。${latestSucceededJob.message ?? '可以进入下一步。'}`
+          : stepStatuses[activeStepId] === 'approved'
+            ? '本步骤已完成，可从左侧进入下一步。'
+            : '完成本步骤主操作后，再进入后续切片、关键帧或入库流程。';
 
   const stepPanels: Record<AssetProcessingStepId, ReactElement> = {
     'source-import': (
@@ -366,7 +587,7 @@ export function RemixAssetProcessing({
         <div className={panelStyles.copyRow}>
           <Button
             variant="accent"
-            disabled={Boolean(activeAction)}
+            disabled={Boolean(pendingActionId)}
             onClick={() => {
               void runAction(
                 'segmentation',
@@ -376,10 +597,11 @@ export function RemixAssetProcessing({
                   projectDir: projectDir,
                   sourceAssetId,
                 }),
+                '正在执行真实镜头切片',
               );
             }}
           >
-            {activeAction === 'segmentation' ? '处理中…' : '运行切片'}
+            {pendingActionId === 'segmentation' ? '处理中…' : '运行切片'}
           </Button>
         </div>
         <SegmentTimeline
@@ -422,7 +644,7 @@ export function RemixAssetProcessing({
         <div className={panelStyles.copyRow}>
           <Button
             variant="accent"
-            disabled={Boolean(activeAction)}
+            disabled={Boolean(pendingActionId)}
             onClick={() => {
               void runAction(
                 'keyframes',
@@ -432,10 +654,11 @@ export function RemixAssetProcessing({
                   projectDir: projectDir,
                   sourceAssetId,
                 }),
+                '正在提取关键帧',
               );
             }}
           >
-            {activeAction === 'keyframes' ? '提取中…' : '提取关键帧'}
+            {pendingActionId === 'keyframes' ? '提取中…' : '提取关键帧'}
           </Button>
         </div>
         <KeyframeGallery asset={asset} />
@@ -455,7 +678,7 @@ export function RemixAssetProcessing({
         <div className={panelStyles.copyRow}>
           <Button
             variant="accent"
-            disabled={Boolean(activeAction)}
+            disabled={Boolean(pendingActionId)}
             onClick={() => {
               void runAction(
                 'understanding',
@@ -465,10 +688,11 @@ export function RemixAssetProcessing({
                   projectDir: projectDir,
                   sourceAssetId,
                 }),
+                '正在生成原片理解',
               );
             }}
           >
-            {activeAction === 'understanding' ? '生成中…' : '生成原片理解'}
+            {pendingActionId === 'understanding' ? '生成中…' : '生成原片理解'}
           </Button>
         </div>
         <SourceOverviewPanel asset={asset} />
@@ -497,23 +721,12 @@ export function RemixAssetProcessing({
         <div className={panelStyles.copyRow}>
           <Button
             variant="accent"
-            disabled={!annotationReady || !hasUnsavedAnnotationChanges || Boolean(activeAction)}
+            disabled={!annotationReady || !hasUnsavedAnnotationChanges || Boolean(pendingActionId)}
             onClick={() => {
-              void runAction(
-                'save-annotation',
-                null,
-                () =>
-                resolveClient().updateSourceAssetMetadata({
-                  projectDir: projectDir,
-                  sourceAssetId,
-                  tags,
-                  annotationNote,
-                  annotationSource: 'workspace_manual',
-                }),
-              );
+              void saveAnnotationDraft();
             }}
           >
-            {activeAction === 'save-annotation' ? '保存中…' : '保存人工标注'}
+            {pendingActionId === 'save-annotation' ? '保存中…' : '保存人工标注'}
           </Button>
           <span className={panelStyles.copyFeedback}>
             {hasUnsavedAnnotationChanges
@@ -536,7 +749,7 @@ export function RemixAssetProcessing({
         </div>
         <PublishToLibraryButton
           items={publishChecklist}
-          disabled={!canPublish || Boolean(activeAction)}
+          disabled={!canPublish || Boolean(pendingActionId)}
           onPublish={() => {
               void runAction(
                 'publish-source',
@@ -548,7 +761,7 @@ export function RemixAssetProcessing({
                 }),
               );
           }}
-          isPublishing={activeAction === 'publish-source'}
+          isPublishing={pendingActionId === 'publish-source'}
         />
       </section>
     ),
@@ -593,7 +806,7 @@ export function RemixAssetProcessing({
               <div className={panelStyles.copyRow}>
                 <Button
                   variant="outline"
-                  onClick={() => onBackToLibrary?.(workspaceState?.returnSection ?? getAssetLibrarySectionForStatus(asset.status))}
+                  onClick={handleBackIntent}
                   data-testid="remix-processing-back"
                 >
                   返回资产库
@@ -634,13 +847,7 @@ export function RemixAssetProcessing({
             <div className={panelStyles.panelTitle}>
               {REMIX_ASSET_PROCESSING_NAV_ITEMS.find((item) => item.id === activeStepId)?.title ?? '当前任务'}
             </div>
-            <div className={panelStyles.panelDescription}>
-              {workspaceState?.activeJob?.status === 'running'
-                ? workspaceState.activeJob.message ?? '系统正在执行当前步骤，请稍候。'
-                : stepStatuses[activeStepId] === 'approved'
-                  ? '本步骤已完成，可从左侧进入下一步。'
-                  : '完成本步骤主操作后，再进入后续切片、关键帧或入库流程。'}
-            </div>
+            <div className={panelStyles.panelDescription}>{currentTaskMessage}</div>
           </section>
 
           <section className={panelStyles.workspaceGrid}>
@@ -677,6 +884,49 @@ export function RemixAssetProcessing({
           </div>
         </div>
       </aside>
+
+      <Dialog open={exitGuardMode !== null} onOpenChange={(open) => {
+        if (!open) {
+          setExitGuardMode(null);
+        }
+      }}>
+        <DialogContent size="sm">
+          <DialogHeader>
+            <DialogTitle>{exitGuardTitle}</DialogTitle>
+            <DialogDescription>{exitGuardDescription}</DialogDescription>
+          </DialogHeader>
+          <DialogBody>
+            <div className={shellStyles.summaryList}>
+              <div className={shellStyles.summaryRow}>
+                <span>返回目标</span>
+                <strong>{workspaceState?.returnSection === 'published' ? '已入库资产' : workspaceState?.returnSection === 'failed' ? '异常队列' : '处理中队列'}</strong>
+              </div>
+              {latestFailedJob ? (
+                <div className={shellStyles.summaryRow}>
+                  <span>失败步骤</span>
+                  <strong>{getProcessingStepLabel(latestFailedJob.stepId)}</strong>
+                </div>
+              ) : null}
+            </div>
+          </DialogBody>
+          <DialogFooter>
+            <Button variant="ghost" onClick={() => setExitGuardMode(null)}>
+              取消
+            </Button>
+            {exitGuardActions.map((action) => (
+              <Button
+                key={action.id}
+                variant={action.variant}
+                onClick={() => {
+                  void action.onSelect();
+                }}
+              >
+                {action.label}
+              </Button>
+            ))}
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

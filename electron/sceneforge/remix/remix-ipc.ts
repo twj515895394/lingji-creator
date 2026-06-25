@@ -2,6 +2,7 @@ import { ipcMain } from 'electron';
 import type {
   CreateSourceAssetFromImportInput,
   CreateVariantFromSourceAssetInput,
+  DeleteSourceAssetInput,
   DeleteVariantInput,
   DuplicateVariantInput,
   ListSourceAssetsInput,
@@ -28,6 +29,13 @@ export function registerSceneForgeRemixIpc(): void {
     'sceneForgeRemix:getSourceAsset',
     async (_event, input: RemixSourceAssetRefInput) => {
       return service.getSourceAsset(input);
+    },
+  );
+
+  ipcMain.handle(
+    'sceneForgeRemix:deleteSourceAsset',
+    async (_event, input: DeleteSourceAssetInput) => {
+      return service.deleteSourceAsset(input);
     },
   );
 
