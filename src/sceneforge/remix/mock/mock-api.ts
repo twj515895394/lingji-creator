@@ -230,6 +230,29 @@ export const remixMockApi: RemixIpcContract = {
     return findProcessingSnapshot(input.sourceAssetId).sourceAsset.segmentationDiagnostics ?? null;
   },
 
+  async validateSourceAssetMedia(input: RemixSourceAssetRefInput) {
+    return clone(findProcessingSnapshot(input.sourceAssetId).sourceAsset.mediaValidation ?? {
+      sourceVideo: {
+        path: null,
+        exists: false,
+        readable: false,
+        error: '缺少源视频路径',
+      },
+      keyframes: {
+        totalCount: 0,
+        validCount: 0,
+        invalidCount: 0,
+        items: [],
+      },
+      thumbnail: {
+        source: 'fallback',
+        status: 'failed',
+        error: '缺少可用缩略图。',
+      },
+      validatedAt: NOW,
+    });
+  },
+
   async publishSourceAssetToLibrary(input: RemixSourceAssetRefInput) {
     const snapshot = findProcessingSnapshot(input.sourceAssetId);
     snapshot.sourceAsset.status = 'published_to_library';

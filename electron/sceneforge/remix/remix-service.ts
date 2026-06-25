@@ -40,6 +40,7 @@ import {
   getRemixSegmentAnalysisJsonPath,
   getRemixSegmentAnalysisMarkdownPath,
 } from './remix-artifact-paths';
+import { RemixMediaValidationService } from './remix-media-validation-service';
 import { RemixSegmentationService, writeSegmentArtifacts } from './remix-segmentation-service';
 import { RemixSourceAssetService, type RemixSourceAssetServiceOptions } from './remix-source-asset-service';
 import { RemixUnderstandingService } from './remix-understanding-service';
@@ -57,6 +58,8 @@ export class RemixService {
   private readonly segmentationService;
 
   private readonly keyframeService;
+
+  private readonly mediaValidationService;
 
   private readonly understandingService;
 
@@ -76,6 +79,7 @@ export class RemixService {
     this.sourceAssetService = new RemixSourceAssetService(options);
     this.segmentationService = new RemixSegmentationService();
     this.keyframeService = new RemixKeyframeService();
+    this.mediaValidationService = new RemixMediaValidationService(options);
     this.understandingService = new RemixUnderstandingService();
     this.variantService = new RemixVariantService(options);
     this.strategyService = new RemixStrategyService();
@@ -115,6 +119,7 @@ export class RemixService {
 
   private async buildProcessingSnapshot(projectDir: string, sourceAssetId: string) {
     const document = await readStoredSourceAsset(projectDir, sourceAssetId);
+    await this.mediaValidationService.validate(projectDir, document);
     const jobsDocument = await readStoredSourceAssetJobs(projectDir, sourceAssetId);
     return buildSourceAssetSnapshot(document, jobsDocument.jobs);
   }
@@ -148,6 +153,7 @@ export class RemixService {
 
     try {
       const document = await runner();
+      await this.mediaValidationService.validate(input.projectDir, document);
       const finishedAt = new Date().toISOString();
       jobsDocument.jobs = jobsDocument.jobs.map((job) =>
         job.id === jobId
@@ -222,6 +228,7 @@ export class RemixService {
     input: CreateSourceAssetFromImportInput,
   ) {
     const { document } = await this.sourceAssetService.createFromImport(input);
+    await this.mediaValidationService.validate(input.projectDir, document);
     return buildSourceAssetSnapshot(document, []);
   }
 
@@ -321,6 +328,7 @@ export class RemixService {
       normalizedSegments,
     );
     await writeStoredSourceAsset(input.projectDir, document);
+    await this.mediaValidationService.validate(input.projectDir, document);
     const jobsDocument = await readStoredSourceAssetJobs(input.projectDir, input.sourceAssetId);
     const snapshot = buildSourceAssetSnapshot(document, jobsDocument.jobs);
     snapshot.variants = await this.variantService.listForSourceAsset(input.projectDir, input.sourceAssetId);
@@ -330,6 +338,11 @@ export class RemixService {
   async getSegmentationDiagnostics(input: RemixSourceAssetRefInput) {
     const document = await readStoredSourceAsset(input.projectDir, input.sourceAssetId);
     return document.sourceAsset.segmentationDiagnostics ?? null;
+  }
+
+  async validateSourceAssetMedia(input: RemixSourceAssetRefInput) {
+    const document = await readStoredSourceAsset(input.projectDir, input.sourceAssetId);
+    return this.mediaValidationService.validate(input.projectDir, document);
   }
 
   async createVariantFromSourceAsset(

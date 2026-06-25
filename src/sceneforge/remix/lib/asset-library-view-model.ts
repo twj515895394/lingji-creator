@@ -114,6 +114,10 @@ export function getSourceAssetKeyframeCount(asset: SourceAsset): number {
   return asset.segments.reduce((sum, segment) => sum + segment.keyframes.length, 0);
 }
 
+export function getSourceAssetKeyframeIssueCount(asset: SourceAsset): number {
+  return asset.mediaValidation?.keyframes.invalidCount ?? 0;
+}
+
 export function getVariantStageLabel(stageId?: RemixCreationStageId | null): string {
   if (!stageId) {
     return '草稿';

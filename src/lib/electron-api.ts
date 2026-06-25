@@ -76,6 +76,7 @@ import type {
   RemixAssetProcessingSnapshot,
   RemixCreationWorkspaceSnapshot,
   RemixSegmentationDiagnostics,
+  RemixSourceAssetMediaValidation,
   RemixVariantSummary,
 } from '../sceneforge/remix/types';
 
@@ -487,6 +488,9 @@ export interface ElectronAPI {
     getSegmentationDiagnostics: (
       input: RemixSourceAssetRefInput,
     ) => Promise<RemixSegmentationDiagnostics | null>;
+    validateSourceAssetMedia: (
+      input: RemixSourceAssetRefInput,
+    ) => Promise<RemixSourceAssetMediaValidation>;
     publishSourceAssetToLibrary: (
       input: RemixSourceAssetRefInput,
     ) => Promise<RemixAssetProcessingSnapshot>;

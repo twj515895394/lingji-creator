@@ -3,6 +3,7 @@ import {
   formatAssetLibraryDate,
   formatAssetLibraryDuration,
   getSourceAssetFilename,
+  getSourceAssetKeyframeIssueCount,
   getSourceAssetKeyframeCount,
   getSourceAssetNextStep,
   REMIX_SOURCE_STATUS_BADGE_VARIANTS,
@@ -26,6 +27,7 @@ export function PublishedAssetCard({
   onCreateVariant,
 }: PublishedAssetCardProps) {
   const keyframeCount = getSourceAssetKeyframeCount(asset);
+  const keyframeIssueCount = getSourceAssetKeyframeIssueCount(asset);
   const visibleTags = asset.tags.slice(0, 3);
 
   return (
@@ -76,6 +78,10 @@ export function PublishedAssetCard({
           <div className={styles.metricLabel}>帧率</div>
         </div>
       </div>
+
+      {keyframeIssueCount > 0 ? (
+        <div className={styles.cardMetaLine}>关键帧 {keyframeCount} 张 · {keyframeIssueCount} 张异常</div>
+      ) : null}
 
       <div className={styles.tagRow}>
         {visibleTags.map((tag) => (

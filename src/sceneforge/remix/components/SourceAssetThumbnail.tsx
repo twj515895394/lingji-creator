@@ -11,7 +11,12 @@ export function SourceAssetThumbnail({ asset }: SourceAssetThumbnailProps) {
   const videoRef = useRef<HTMLVideoElement>(null);
   const [hasImageError, setHasImageError] = useState(false);
   const [hasVideoError, setHasVideoError] = useState(false);
-  const posterPath = asset.segments.flatMap((segment) => segment.keyframes)[0]?.imagePath ?? null;
+  const posterPath =
+    asset.mediaValidation?.thumbnail.source === 'keyframe'
+      ? asset.mediaValidation.keyframes.items.find((item) => item.readable)?.imagePath ??
+        asset.segments.flatMap((segment) => segment.keyframes)[0]?.imagePath ??
+        null
+      : null;
   const posterSrc = useMemo(() => (posterPath ? toFileSrc(posterPath) : null), [posterPath]);
   const sourceVideoSrc = useMemo(() => toFileSrc(asset.sourceVideoPath), [asset.sourceVideoPath]);
 
@@ -84,13 +89,14 @@ export function SourceAssetThumbnail({ asset }: SourceAssetThumbnailProps) {
       : hasVideoError
         ? '源视频不可读'
         : '暂无可用缩略图';
-  const fallbackBody = !asset.sourceVideoPath
+  const fallbackBody = asset.mediaValidation?.thumbnail.error
+    ?? (!asset.sourceVideoPath
     ? '请先补齐源视频路径，再重新生成预览。'
     : hasImageError && !hasVideoError
       ? '已回退到视频首帧预览，如果仍失败请重新提取关键帧。'
       : hasVideoError
         ? '请确认源文件仍存在，并检查当前项目目录中的素材路径。'
-        : '当前既没有可加载关键帧，也没有可回退的视频首帧。';
+        : '当前既没有可加载关键帧，也没有可回退的视频首帧。');
 
   return (
     <div className={styles.coverFallback}>

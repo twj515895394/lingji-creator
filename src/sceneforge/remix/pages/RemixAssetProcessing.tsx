@@ -806,14 +806,14 @@ export function RemixAssetProcessing({
             onClick={() => setSegmentationMode('fast')}
             disabled={Boolean(pendingActionId)}
           >
-            Fast 模式
+            快速模式
           </Button>
           <Button
             variant={segmentationMode === 'accurate' ? 'accent' : 'outline'}
             onClick={() => setSegmentationMode('accurate')}
             disabled={Boolean(pendingActionId)}
           >
-            Accurate 模式
+            高精模式
           </Button>
           <Button
             variant="accent"

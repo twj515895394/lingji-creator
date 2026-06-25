@@ -118,6 +118,10 @@ function buildApiClient(mode: 'success' | 'failure'): RemixIpcContract {
       input.sourceAssetId === 'source-failed-001'
         ? clone(MOCK_ASSET_PROCESSING_SNAPSHOTS['source-failed-001'].sourceAsset.segmentationDiagnostics ?? null)
         : clone(MOCK_ASSET_PROCESSING_SNAPSHOTS['source-library-001'].sourceAsset.segmentationDiagnostics ?? null),
+    validateSourceAssetMedia: async (input) =>
+      input.sourceAssetId === 'source-failed-001'
+        ? clone(MOCK_ASSET_PROCESSING_SNAPSHOTS['source-failed-001'].sourceAsset.mediaValidation!)
+        : clone(MOCK_ASSET_PROCESSING_SNAPSHOTS['source-library-001'].sourceAsset.mediaValidation!),
     publishSourceAssetToLibrary: async () => MOCK_ASSET_PROCESSING_SNAPSHOTS['source-library-001'],
     createVariantFromSourceAsset: async () => { throw new Error('not implemented'); },
     listVariantsForSourceAsset: async () => [],
@@ -163,8 +167,8 @@ describe('SceneForge Remix asset processing workspace', () => {
     );
 
     expect(container.textContent).toContain('真实镜头切片');
-    expect(container.textContent).toContain('Fast 模式');
-    expect(container.textContent).toContain('Fast 模式 · 0 个低置信度镜头段');
+    expect(container.textContent).toContain('快速模式');
+    expect(container.textContent).toContain('快速模式 · 0 个低置信度镜头段');
     expect(container.textContent).toContain('文件：source.mp4');
     expect(container.textContent).toContain('技术信息');
     expect(container.textContent).not.toContain('Seedance 2.0 视频提示词');

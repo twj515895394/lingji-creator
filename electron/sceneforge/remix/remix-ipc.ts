@@ -91,6 +91,13 @@ export function registerSceneForgeRemixIpc(): void {
   );
 
   ipcMain.handle(
+    'sceneForgeRemix:validateSourceAssetMedia',
+    async (_event, input: RemixSourceAssetRefInput) => {
+      return service.validateSourceAssetMedia(input);
+    },
+  );
+
+  ipcMain.handle(
     'sceneForgeRemix:publishSourceAssetToLibrary',
     async (_event, input: RemixSourceAssetRefInput) => {
       return service.publishSourceAssetToLibrary(input);

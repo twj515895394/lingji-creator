@@ -61,9 +61,9 @@ export function SourceVideoPreview({
             {!sourceVideoSrc ? '缺少源视频路径' : '当前无法加载原片预览'}
           </div>
           <div className={reviewStyles.previewFallbackBody}>
-            {sourceVideoSrc
+            {asset.mediaValidation?.sourceVideo.error ?? (sourceVideoSrc
               ? '请确认源视频仍然存在，并检查项目目录中的素材路径是否可读。'
-              : '当前素材没有可用的视频路径，暂时无法验证切片与关键帧。'}
+              : '当前素材没有可用的视频路径，暂时无法验证切片与关键帧。')}
           </div>
         </div>
       ) : (

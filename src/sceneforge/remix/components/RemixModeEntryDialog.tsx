@@ -19,12 +19,12 @@ const OPTIONS: Array<{
   {
     value: 'asset-ingestion',
     title: '资产入库',
-    detail: '导入原片、切片、关键帧和人工标注，先把原片沉淀成稳定的源资产（Source Asset）。',
+    detail: '导入原片、切片、关键帧和人工标注，先把原片沉淀成稳定的源素材。',
   },
   {
     value: 'creation',
     title: '二次创作',
-    detail: '基于已经入库的源资产（Source Asset），继续已有二创版本（Variant）或创建新的二创版本。',
+    detail: '基于已经入库的源素材，继续已有二创版本或创建新的二创版本。',
   },
 ];
 
@@ -53,7 +53,7 @@ export function RemixModeEntryDialog({
         onClick={(event) => event.stopPropagation()}
       >
         <h2 id="remix-entry-title" className={styles.title}>
-          进入 Remix Mode
+          进入 Remix 二创
         </h2>
         <p className={styles.lead}>先选择你这次是要做“资产入库”，还是直接基于已有资产发起二创。</p>
         <div className={styles.options} role="radiogroup" aria-label="Remix 入口模式">

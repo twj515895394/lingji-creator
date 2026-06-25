@@ -486,6 +486,62 @@ export const MOCK_ASSET_PROCESSING_SNAPSHOTS: Record<string, RemixAssetProcessin
         preserveManualEdits: true,
         generatedAt: NOW,
       },
+      mediaValidation: {
+        sourceVideo: {
+          path: '/mock/remix/source-processing-001/source.mp4',
+          exists: true,
+          readable: true,
+          error: null,
+        },
+        keyframes: {
+          totalCount: 5,
+          validCount: 4,
+          invalidCount: 1,
+          items: [
+            {
+              keyframeId: 'keyframe-p-001-first',
+              imagePath: '/mock/remix/source-processing-001/keyframes/segment-p-001-first.png',
+              exists: true,
+              readable: true,
+              error: null,
+            },
+            {
+              keyframeId: 'keyframe-p-001-middle',
+              imagePath: '/mock/remix/source-processing-001/keyframes/segment-p-001-middle.png',
+              exists: true,
+              readable: true,
+              error: null,
+            },
+            {
+              keyframeId: 'keyframe-p-001-last',
+              imagePath: '/mock/remix/source-processing-001/keyframes/segment-p-001-last.png',
+              exists: true,
+              readable: true,
+              error: null,
+            },
+            {
+              keyframeId: 'keyframe-p-002-first',
+              imagePath: '/mock/remix/source-processing-001/keyframes/segment-p-002-first.png',
+              exists: false,
+              readable: false,
+              error: '关键帧文件不存在或不可读',
+            },
+            {
+              keyframeId: 'keyframe-p-002-last',
+              imagePath: '/mock/remix/source-processing-001/keyframes/segment-p-002-last.png',
+              exists: true,
+              readable: true,
+              error: null,
+            },
+          ],
+        },
+        thumbnail: {
+          source: 'keyframe',
+          status: 'ready',
+          error: null,
+        },
+        validatedAt: NOW,
+      },
     },
     processingStageStates: buildAssetProcessingStages({
       remix_segmentation: 'approved',
@@ -514,6 +570,26 @@ export const MOCK_ASSET_PROCESSING_SNAPSHOTS: Record<string, RemixAssetProcessin
         preserveManualEdits: true,
         generatedAt: NOW,
       },
+      mediaValidation: {
+        sourceVideo: {
+          path: '/mock/remix/source-library-001/source.mp4',
+          exists: true,
+          readable: true,
+          error: null,
+        },
+        keyframes: {
+          totalCount: 7,
+          validCount: 7,
+          invalidCount: 0,
+          items: [],
+        },
+        thumbnail: {
+          source: 'keyframe',
+          status: 'ready',
+          error: null,
+        },
+        validatedAt: NOW,
+      },
     },
     processingStageStates: buildAssetProcessingStages({
       remix_segmentation: 'approved',
@@ -541,6 +617,34 @@ export const MOCK_ASSET_PROCESSING_SNAPSHOTS: Record<string, RemixAssetProcessin
         usedFallback: true,
         preserveManualEdits: true,
         generatedAt: NOW,
+      },
+      mediaValidation: {
+        sourceVideo: {
+          path: '/mock/remix/source-failed-001/source.mp4',
+          exists: false,
+          readable: false,
+          error: '源视频不存在或不可读',
+        },
+        keyframes: {
+          totalCount: 1,
+          validCount: 0,
+          invalidCount: 1,
+          items: [
+            {
+              keyframeId: 'keyframe-f-001-first',
+              imagePath: '/mock/remix/source-failed-001/keyframes/segment-f-001-first.png',
+              exists: false,
+              readable: false,
+              error: '关键帧文件不存在或不可读',
+            },
+          ],
+        },
+        thumbnail: {
+          source: 'fallback',
+          status: 'failed',
+          error: '缺少可用关键帧，且源视频不可读。',
+        },
+        validatedAt: NOW,
       },
     },
     processingStageStates: buildAssetProcessingStages({

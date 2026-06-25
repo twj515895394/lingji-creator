@@ -119,6 +119,7 @@ export class RemixSourceAssetService {
         segmentationMode: 'fast',
         segmentationDiagnostics: null,
         manualSegmentationOverride: null,
+        mediaValidation: null,
         variantCount: 0,
         tags: [],
         annotationNote: null,

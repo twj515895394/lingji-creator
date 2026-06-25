@@ -10,6 +10,7 @@ import type {
   RemixReferenceStrength,
   RemixSegmentationDiagnostics,
   RemixSegmentationMode,
+  RemixSourceAssetMediaValidation,
   RemixSourceAssetStatus,
   RemixVariantSummary,
   SourceSegment,
@@ -132,6 +133,7 @@ export interface RemixIpcContract {
   ): Promise<RemixAssetProcessingSnapshot>;
   updateSourceSegments(input: UpdateSourceSegmentsInput): Promise<RemixAssetProcessingSnapshot>;
   getSegmentationDiagnostics(input: RemixSourceAssetRefInput): Promise<RemixSegmentationDiagnostics | null>;
+  validateSourceAssetMedia(input: RemixSourceAssetRefInput): Promise<RemixSourceAssetMediaValidation>;
   publishSourceAssetToLibrary(
     input: RemixSourceAssetRefInput,
   ): Promise<RemixAssetProcessingSnapshot>;

@@ -158,6 +158,35 @@ export interface SourceKeyframe {
   imagePath: string;
 }
 
+export interface RemixKeyframeValidationResult {
+  keyframeId: string;
+  imagePath: string;
+  exists: boolean;
+  readable: boolean;
+  error?: string | null;
+}
+
+export interface RemixSourceAssetMediaValidation {
+  sourceVideo: {
+    path: string | null;
+    exists: boolean;
+    readable: boolean;
+    error?: string | null;
+  };
+  keyframes: {
+    totalCount: number;
+    validCount: number;
+    invalidCount: number;
+    items: RemixKeyframeValidationResult[];
+  };
+  thumbnail: {
+    source: 'keyframe' | 'video_frame' | 'fallback';
+    status: 'ready' | 'failed';
+    error?: string | null;
+  };
+  validatedAt: string;
+}
+
 export interface RemixSegmentBoundaryDetails {
   startConfidence: number;
   endConfidence: number;
@@ -235,6 +264,7 @@ export interface SourceAsset {
   segmentationMode?: RemixSegmentationMode | null;
   segmentationDiagnostics?: RemixSegmentationDiagnostics | null;
   manualSegmentationOverride?: RemixManualSegmentationOverride | null;
+  mediaValidation?: RemixSourceAssetMediaValidation | null;
   variantCount: number;
   tags: string[];
   annotationNote?: string | null;

@@ -6,6 +6,7 @@ import {
   getLatestFailedJob,
   getProcessingStepLabel,
   getSourceAssetFilename,
+  getSourceAssetKeyframeIssueCount,
   getSourceAssetKeyframeCount,
   getSourceAssetNextStep,
   getVariantGateReason,
@@ -71,6 +72,7 @@ export function AssetDetailSidebar({
   }
 
   const keyframeCount = getSourceAssetKeyframeCount(asset);
+  const keyframeIssueCount = getSourceAssetKeyframeIssueCount(asset);
   const taskSummary = snapshot ? buildAssetProcessingTaskSummary(snapshot) : null;
   const latestFailedJob = snapshot ? getLatestFailedJob(snapshot.processingJobs) : null;
   const variantGateReason = getVariantGateReason(asset);
@@ -104,7 +106,7 @@ export function AssetDetailSidebar({
         </div>
         <div className={styles.detailRow}>
           <span>关键帧</span>
-          <strong>{keyframeCount}</strong>
+          <strong>{keyframeIssueCount > 0 ? `${keyframeCount} · ${keyframeIssueCount} 张异常` : keyframeCount}</strong>
         </div>
         <div className={styles.detailRow}>
           <span>已派生二创版本</span>

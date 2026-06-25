@@ -29,17 +29,20 @@ describe('SceneForge Remix IPC contract', () => {
     expect(preload).toContain('sceneForgeRemix:deleteSourceAsset');
     expect(preload).toContain('sceneForgeRemix:updateSourceSegments');
     expect(preload).toContain('sceneForgeRemix:getSegmentationDiagnostics');
+    expect(preload).toContain('sceneForgeRemix:validateSourceAssetMedia');
     expect(preload).toContain('sceneForgeRemix:updateSourceAssetMetadata');
     expect(preload).toContain('sceneForgeRemix:listVariantsForSourceAsset');
     expect(preload).toContain('sceneForgeRemix:exportPromptBundle');
     expect(api).toContain('sceneForgeRemix: {');
     expect(api).toContain('createVariantFromSourceAsset');
     expect(api).toContain('getSegmentationDiagnostics');
+    expect(api).toContain('validateSourceAssetMedia');
     expect(api).toContain('updateEditedKeyframeStatus');
     expect(api).toContain('ExportPromptBundleResult');
     expect(ipc).toContain('sceneForgeRemix:listSourceAssets');
     expect(ipc).toContain('sceneForgeRemix:deleteSourceAsset');
     expect(ipc).toContain('sceneForgeRemix:updateSourceSegments');
+    expect(ipc).toContain('sceneForgeRemix:validateSourceAssetMedia');
     expect(ipc).toContain('sceneForgeRemix:renameVariant');
     expect(ipc).toContain('sceneForgeRemix:runRemixStrategy');
     expect(ipc).toContain('sceneForgeRemix:exportPromptBundle');
@@ -97,6 +100,12 @@ describe('SceneForge Remix IPC contract', () => {
       sourceAssetId: liveSourceAssetId,
     });
     expect(diagnostics?.mode).toBe('accurate');
+
+    const mediaValidation = await service.validateSourceAssetMedia({
+      projectDir,
+      sourceAssetId: liveSourceAssetId,
+    });
+    expect(mediaValidation.sourceVideo.readable).toBe(true);
 
     const keyframed = await service.runSourceKeyframes({
       projectDir,

@@ -8,7 +8,7 @@ describe('Remix mode entry dialog', () => {
       <RemixModeEntryDialog open onOpenChange={() => undefined} onConfirm={() => undefined} />,
     );
 
-    expect(html).toContain('进入 Remix Mode');
+    expect(html).toContain('进入 Remix 二创');
     expect(html).toContain('资产入库');
     expect(html).toContain('二次创作');
     expect(html).toContain('选择项目并进入');

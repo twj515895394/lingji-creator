@@ -9,6 +9,7 @@ import {
   getGenerationModeLabel,
   getReferenceStrengthLabel,
 } from '../lib/remix-workspace-view-model';
+import { REMIX_SOURCE_STATUS_LABELS } from '../lib/asset-library-view-model';
 import styles from './RemixWorkspacePanels.module.css';
 
 interface VariantConfigPanelProps {
@@ -44,12 +45,12 @@ export function VariantConfigPanel({
     <div className={styles.splitPanel} data-testid="remix-variant-config-panel">
       <section className={styles.configCard}>
         <div className={styles.configTitle}>引用资产</div>
-        <div className={styles.configBody}>
+        <div className={styles.configBody} title={sourceAsset.title}>
           {sourceAsset.title} · {formatRemixDuration(sourceAsset.durationMs)} ·{' '}
           {sourceAsset.segmentCount} 段 / {sourceAsset.keyframeCount} 张关键帧
         </div>
         <div className={styles.inlineStats}>
-          <span className={styles.inlineStat}>状态 {sourceAsset.status}</span>
+          <span className={styles.inlineStat}>状态 {REMIX_SOURCE_STATUS_LABELS[sourceAsset.status]}</span>
           <span className={styles.inlineStat}>已有 {sourceAsset.variantCount} 个二创版本</span>
         </div>
       </section>

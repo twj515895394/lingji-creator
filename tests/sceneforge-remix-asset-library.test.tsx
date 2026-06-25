@@ -121,6 +121,27 @@ function buildApiClient(): RemixIpcContract {
       throw new Error('not implemented');
     },
     listVariantsForSourceAsset: async () => variants,
+    validateSourceAssetMedia: async (input) =>
+      clone(snapshots[input.sourceAssetId as keyof typeof snapshots].sourceAsset.mediaValidation ?? {
+        sourceVideo: {
+          path: '/tmp/mock.mp4',
+          exists: true,
+          readable: true,
+          error: null,
+        },
+        keyframes: {
+          totalCount: 0,
+          validCount: 0,
+          invalidCount: 0,
+          items: [],
+        },
+        thumbnail: {
+          source: 'video_frame',
+          status: 'ready',
+          error: null,
+        },
+        validatedAt: '2026-06-23T12:00:00.000Z',
+      }),
     renameVariant: async (input) => {
       variants = variants.map((item) =>
         item.id === input.variantId ? { ...item, name: input.name, updatedAt: '2026-06-24T12:00:00.000Z' } : item,
@@ -269,6 +290,20 @@ describe('SceneForge Remix asset library', () => {
 
     expect(container.textContent).toContain('选择一份源素材');
     expect(container.textContent).not.toContain('关键帧索引损坏，请重新切片。');
+  });
+
+  it('在存在关键帧异常时显示异常计数', async () => {
+    const container = await renderLibrary(
+      <RemixAssetLibrary
+        projectDir="/tmp/remix-project"
+        apiClient={buildApiClient()}
+        initialSection="processing"
+        selectedSourceAssetId="source-processing-001"
+      />,
+    );
+
+    expect(container.textContent).toContain('关键帧');
+    expect(container.textContent).toContain('1 张异常');
   });
 
   it('在缺少关键帧时回退到真实视频缩略图', () => {

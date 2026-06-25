@@ -391,7 +391,7 @@ export function RemixCreationWorkspace({
           <div className={shellStyles.panelContent}>
             <section className={[panelStyles.heroPanel, panelStyles.heroPanelCompact].join(" ")}>
               <div className={panelStyles.heroCopy}>
-                <h1 className={panelStyles.heroTitle}>{isLoading ? '正在加载二创版本（Variant）…' : '暂时无法打开当前工作区'}</h1>
+                <h1 className={panelStyles.heroTitle}>{isLoading ? '正在加载二创版本…' : '暂时无法打开当前工作区'}</h1>
                 <p className={panelStyles.heroDescription}>{errorMessage ?? '请稍后重试。'}</p>
               </div>
             </section>
@@ -420,7 +420,7 @@ export function RemixCreationWorkspace({
             {snapshot.sourceAsset.segmentCount} 段 / {snapshot.sourceAsset.keyframeCount} 张关键帧
           </div>
           <div className={panelStyles.inlineStats}>
-            <span className={panelStyles.inlineStat}>已有 {snapshot.sourceAsset.variantCount} 个二创版本（Variant）</span>
+            <span className={panelStyles.inlineStat}>已有 {snapshot.sourceAsset.variantCount} 个二创版本</span>
             <span className={panelStyles.inlineStat}>最近更新 {snapshot.sourceAsset.updatedAt.slice(0, 10)}</span>
           </div>
         </div>

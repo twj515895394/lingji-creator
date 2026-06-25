@@ -70,4 +70,41 @@ describe('SceneForge Remix source asset service', () => {
     });
     expect(reloaded.sourceAsset.lastAnnotatedAt).toBe('2026-06-23T12:00:00.000Z');
   });
+
+  it('validates media readiness and persists keyframe anomalies', async () => {
+    const service = new RemixService({
+      readDurationMs: async () => 9800,
+      now: () => new Date('2026-06-23T12:00:00.000Z'),
+    });
+
+    const snapshot = await service.createSourceAssetFromImport({
+      projectDir,
+      sourceVideoPath: path.join(projectDir, 'source.mp4'),
+      title: '夜市原片',
+    });
+    await service.runSourceSegmentation({ projectDir, sourceAssetId: snapshot.sourceAsset.id });
+    await service.runSourceKeyframes({ projectDir, sourceAssetId: snapshot.sourceAsset.id });
+
+    const sourceAsset = await service.getSourceAsset({
+      projectDir,
+      sourceAssetId: snapshot.sourceAsset.id,
+    });
+    const brokenKeyframePath = path.join(projectDir, sourceAsset.sourceAsset.segments[0]!.keyframes[0]!.imagePath);
+    await fs.rm(brokenKeyframePath, { force: true });
+
+    const validation = await service.validateSourceAssetMedia({
+      projectDir,
+      sourceAssetId: snapshot.sourceAsset.id,
+    });
+
+    expect(validation.sourceVideo.readable).toBe(true);
+    expect(validation.keyframes.invalidCount).toBe(1);
+    expect(validation.thumbnail.source).toBe('keyframe');
+
+    const reloaded = await service.getSourceAsset({
+      projectDir,
+      sourceAssetId: snapshot.sourceAsset.id,
+    });
+    expect(reloaded.sourceAsset.mediaValidation?.keyframes.invalidCount).toBe(1);
+  });
 });

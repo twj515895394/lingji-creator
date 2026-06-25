@@ -230,6 +230,8 @@ contextBridge.exposeInMainWorld('electronAPI', {
       ipcRenderer.invoke('sceneForgeRemix:updateSourceSegments', input),
     getSegmentationDiagnostics: (input: RemixSourceAssetRefInput) =>
       ipcRenderer.invoke('sceneForgeRemix:getSegmentationDiagnostics', input),
+    validateSourceAssetMedia: (input: RemixSourceAssetRefInput) =>
+      ipcRenderer.invoke('sceneForgeRemix:validateSourceAssetMedia', input),
     publishSourceAssetToLibrary: (input: RemixSourceAssetRefInput) =>
       ipcRenderer.invoke('sceneForgeRemix:publishSourceAssetToLibrary', input),
     createVariantFromSourceAsset: (input: CreateVariantFromSourceAssetInput) =>

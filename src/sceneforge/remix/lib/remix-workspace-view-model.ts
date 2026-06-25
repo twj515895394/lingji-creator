@@ -149,8 +149,8 @@ const SEGMENT_REVIEW_STATUS_LABELS: Record<RemixSegmentReviewStatus, string> = {
 };
 
 const SEGMENTATION_MODE_LABELS: Record<RemixSegmentationMode, string> = {
-  fast: 'Fast',
-  accurate: 'Accurate',
+  fast: '快速模式',
+  accurate: '高精模式',
 };
 
 export const RETENTION_MATRIX_DIMENSIONS: RetentionMatrixDimension[] = [
@@ -338,7 +338,7 @@ export function buildSegmentationDiagnosticsSummary(
     return '当前还没有切片诊断信息。';
   }
   const lowConfidenceCount = diagnostics.lowConfidenceSegmentIds.length;
-  return `${getSegmentationModeLabel(diagnostics.mode)} 模式 · ${lowConfidenceCount} 个低置信度镜头段`;
+  return `${getSegmentationModeLabel(diagnostics.mode)} · ${lowConfidenceCount} 个低置信度镜头段`;
 }
 
 export function getRetentionMatrixChoiceLabel<K extends keyof RetentionMatrix>(
@@ -653,7 +653,7 @@ export function buildCreationPublishChecklist(
       id: 'source-bound',
       label: '资产引用已锁定',
       passed: Boolean(snapshot.sourceAsset.id),
-      note: `${snapshot.sourceAsset.title} 已绑定到当前二创版本（Variant）。`,
+      note: `${snapshot.sourceAsset.title} 已绑定到当前二创版本。`,
     },
     {
       id: 'variant-defined',

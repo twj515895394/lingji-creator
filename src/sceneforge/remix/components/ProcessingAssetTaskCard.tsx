@@ -3,6 +3,7 @@ import {
   formatAssetLibraryDate,
   formatAssetLibraryDuration,
   getSourceAssetFilename,
+  getSourceAssetKeyframeIssueCount,
   getSourceAssetPrimaryAction,
   REMIX_SOURCE_STATUS_BADGE_VARIANTS,
   REMIX_SOURCE_STATUS_LABELS,
@@ -30,6 +31,7 @@ export function ProcessingAssetTaskCard({
   const asset = snapshot.sourceAsset;
   const summary = buildAssetProcessingTaskSummary(snapshot);
   const primaryAction = getSourceAssetPrimaryAction(asset);
+  const keyframeIssueCount = getSourceAssetKeyframeIssueCount(asset);
 
   return (
     <article
@@ -69,6 +71,10 @@ export function ProcessingAssetTaskCard({
         <div className={styles.taskMetric}>
           <span className={styles.taskMetricLabel}>生命周期</span>
           <strong>{REMIX_SOURCE_STATUS_LABELS[asset.status]}</strong>
+        </div>
+        <div className={styles.taskMetric}>
+          <span className={styles.taskMetricLabel}>关键帧状态</span>
+          <strong>{keyframeIssueCount > 0 ? `${keyframeIssueCount} 张异常` : '正常'}</strong>
         </div>
         <div className={styles.taskMetric}>
           <span className={styles.taskMetricLabel}>当前阻塞</span>

@@ -62,6 +62,9 @@ function buildRoutingApiClient(): RemixIpcContract {
     runSourceSegmentation: async () => processing,
     runSourceKeyframes: async () => processing,
     runSourceUnderstanding: async () => processing,
+    updateSourceSegments: async () => processing,
+    getSegmentationDiagnostics: async () => processing.sourceAsset.segmentationDiagnostics ?? null,
+    validateSourceAssetMedia: async () => processing.sourceAsset.mediaValidation!,
     publishSourceAssetToLibrary: async () => processing,
     createVariantFromSourceAsset: async () => { throw new Error('not implemented'); },
     listVariantsForSourceAsset: async () => [],
@@ -133,6 +136,7 @@ describe('SceneForge Remix routing', () => {
     expect(creationHtml).toContain('data-testid="remix-creation-workspace-page"');
     expect(creationHtml).toContain('创建二创版本');
     expect(creationHtml).toContain('Seedance 2.0 视频提示词');
+    expect(creationHtml).not.toContain('二创版本（Variant）');
     expect(creationHtml).not.toContain('导入原片');
     expect(creationHtml).not.toContain('真实镜头切片');
   });

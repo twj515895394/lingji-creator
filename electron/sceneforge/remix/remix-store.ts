@@ -73,6 +73,7 @@ function normalizeSourceAsset(sourceAsset: SourceAsset): SourceAsset {
     segmentationMode: sourceAsset.segmentationMode ?? 'fast',
     segmentationDiagnostics: sourceAsset.segmentationDiagnostics ?? null,
     manualSegmentationOverride: sourceAsset.manualSegmentationOverride ?? null,
+    mediaValidation: sourceAsset.mediaValidation ?? null,
   };
 }
 
