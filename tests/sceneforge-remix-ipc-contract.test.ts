@@ -27,15 +27,19 @@ describe('SceneForge Remix IPC contract', () => {
     expect(preload).toContain('sceneForgeRemix: {');
     expect(preload).toContain('sceneForgeRemix:listSourceAssets');
     expect(preload).toContain('sceneForgeRemix:deleteSourceAsset');
+    expect(preload).toContain('sceneForgeRemix:updateSourceSegments');
+    expect(preload).toContain('sceneForgeRemix:getSegmentationDiagnostics');
     expect(preload).toContain('sceneForgeRemix:updateSourceAssetMetadata');
     expect(preload).toContain('sceneForgeRemix:listVariantsForSourceAsset');
     expect(preload).toContain('sceneForgeRemix:exportPromptBundle');
     expect(api).toContain('sceneForgeRemix: {');
     expect(api).toContain('createVariantFromSourceAsset');
+    expect(api).toContain('getSegmentationDiagnostics');
     expect(api).toContain('updateEditedKeyframeStatus');
     expect(api).toContain('ExportPromptBundleResult');
     expect(ipc).toContain('sceneForgeRemix:listSourceAssets');
     expect(ipc).toContain('sceneForgeRemix:deleteSourceAsset');
+    expect(ipc).toContain('sceneForgeRemix:updateSourceSegments');
     expect(ipc).toContain('sceneForgeRemix:renameVariant');
     expect(ipc).toContain('sceneForgeRemix:runRemixStrategy');
     expect(ipc).toContain('sceneForgeRemix:exportPromptBundle');
@@ -81,10 +85,18 @@ describe('SceneForge Remix IPC contract', () => {
     const segmented = await service.runSourceSegmentation({
       projectDir,
       sourceAssetId: liveSourceAssetId,
+      mode: 'accurate',
     });
     expect(segmented.processingStageStates.remix_segmentation).toBe('approved');
     expect(segmented.processingJobs?.[0]?.stepId).toBe('remix_segmentation');
     expect(segmented.processingJobs?.[0]?.status).toBe('succeeded');
+    expect(segmented.sourceAsset.segmentationDiagnostics?.mode).toBe('accurate');
+
+    const diagnostics = await service.getSegmentationDiagnostics({
+      projectDir,
+      sourceAssetId: liveSourceAssetId,
+    });
+    expect(diagnostics?.mode).toBe('accurate');
 
     const keyframed = await service.runSourceKeyframes({
       projectDir,

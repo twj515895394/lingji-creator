@@ -466,7 +466,27 @@ export const MOCK_ASSET_LIBRARY_SNAPSHOT: RemixAssetLibrarySnapshot = {
 
 export const MOCK_ASSET_PROCESSING_SNAPSHOTS: Record<string, RemixAssetProcessingSnapshot> = {
   'source-processing-001': {
-    sourceAsset: MOCK_SOURCE_ASSETS[0],
+    sourceAsset: {
+      ...MOCK_SOURCE_ASSETS[0],
+      segmentationMode: 'fast',
+      segmentationDiagnostics: {
+        mode: 'fast',
+        detector: 'adaptive',
+        inputProfile: {
+          durationMs: 18400,
+          fps: 25,
+          analysisFps: 8,
+          width: 1920,
+          height: 1080,
+          frameCount: 147,
+        },
+        lowConfidenceSegmentIds: ['segment-p-002'],
+        notes: ['检测到 1 个低置信度镜头段，建议人工校准。'],
+        usedFallback: false,
+        preserveManualEdits: true,
+        generatedAt: NOW,
+      },
+    },
     processingStageStates: buildAssetProcessingStages({
       remix_segmentation: 'approved',
       remix_keyframes: 'running',
@@ -474,7 +494,27 @@ export const MOCK_ASSET_PROCESSING_SNAPSHOTS: Record<string, RemixAssetProcessin
     }),
   },
   'source-library-001': {
-    sourceAsset: MOCK_SOURCE_ASSETS[1],
+    sourceAsset: {
+      ...MOCK_SOURCE_ASSETS[1],
+      segmentationMode: 'fast',
+      segmentationDiagnostics: {
+        mode: 'fast',
+        detector: 'adaptive',
+        inputProfile: {
+          durationMs: 24600,
+          fps: 30,
+          analysisFps: 8,
+          width: 1080,
+          height: 1920,
+          frameCount: 197,
+        },
+        lowConfidenceSegmentIds: [],
+        notes: ['当前没有低置信度镜头段。'],
+        usedFallback: false,
+        preserveManualEdits: true,
+        generatedAt: NOW,
+      },
+    },
     processingStageStates: buildAssetProcessingStages({
       remix_segmentation: 'approved',
       remix_keyframes: 'approved',
@@ -482,7 +522,27 @@ export const MOCK_ASSET_PROCESSING_SNAPSHOTS: Record<string, RemixAssetProcessin
     }),
   },
   'source-failed-001': {
-    sourceAsset: MOCK_SOURCE_ASSETS[2],
+    sourceAsset: {
+      ...MOCK_SOURCE_ASSETS[2],
+      segmentationMode: 'accurate',
+      segmentationDiagnostics: {
+        mode: 'accurate',
+        detector: 'hybrid',
+        inputProfile: {
+          durationMs: 9100,
+          fps: 24,
+          analysisFps: 12,
+          width: 1920,
+          height: 1080,
+          frameCount: 109,
+        },
+        lowConfidenceSegmentIds: ['segment-f-001'],
+        notes: ['accurate 模式降级运行。', '检测到 1 个低置信度镜头段，建议人工校准。'],
+        usedFallback: true,
+        preserveManualEdits: true,
+        generatedAt: NOW,
+      },
+    },
     processingStageStates: buildAssetProcessingStages({
       remix_segmentation: 'failed',
     }),

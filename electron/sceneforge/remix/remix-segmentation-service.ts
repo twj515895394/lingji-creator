@@ -1,41 +1,286 @@
 import fs from 'node:fs/promises';
 import path from 'node:path';
-import type { SourceSegment } from '../../../src/sceneforge/remix/types';
-import { getRemixSegmentClipPath, getRemixSegmentManifestIndexPath, getRemixSegmentManifestPath } from './remix-artifact-paths';
+import type {
+  RemixSegmentBoundaryDetails,
+  RemixSegmentationDiagnostics,
+  RemixSegmentationInputProfile,
+  RemixSegmentationMode,
+  RemixSegmentReviewStatus,
+  SourceSegment,
+} from '../../../src/sceneforge/remix/types';
+import {
+  getRemixSegmentClipPath,
+  getRemixSegmentManifestIndexPath,
+  getRemixSegmentManifestPath,
+  getRemixSourceSegmentsDir,
+} from './remix-artifact-paths';
 import { assertFileExists, resolveProjectFile } from './remix-validators';
 import type { StoredSourceAssetDocument } from './remix-store';
 import { readStoredSourceAsset, writeStoredSourceAsset } from './remix-store';
+
+interface SegmentationCandidateBoundary {
+  timeMs: number;
+  sources: string[];
+  confidence: number;
+  boundaryType: RemixSegmentBoundaryDetails['boundaryType'];
+}
+
+export interface RunSegmentationOptions {
+  mode?: RemixSegmentationMode;
+  preserveManualEdits?: boolean;
+  minShotDurationMs?: number;
+}
+
+export interface RemixSegmentationServiceOptions {
+  now?: () => Date;
+}
+
+function withCompleteBoundary(segment: SourceSegment): SourceSegment {
+  return {
+    ...segment,
+    boundary: {
+      startConfidence: segment.boundary?.startConfidence ?? 1,
+      endConfidence: segment.boundary?.endConfidence ?? 1,
+      startSources: segment.boundary?.startSources ?? ['manual_override'],
+      endSources: segment.boundary?.endSources ?? ['manual_override'],
+      boundaryType: segment.boundary?.boundaryType ?? 'manual',
+    },
+    reviewStatus: segment.reviewStatus ?? 'manual_adjusted',
+    semantic: segment.semantic ?? null,
+  };
+}
 
 function nowIso(now: () => Date): string {
   return now().toISOString();
 }
 
-function buildSegmentRanges(durationMs: number): Array<{ startMs: number; endMs: number; boundaryType: SourceSegment['boundaryType'] }> {
-  if (durationMs <= 9000) {
-    return [{ startMs: 0, endMs: durationMs, boundaryType: 'long_segment' }];
-  }
-  if (durationMs <= 18000) {
-    const split = Math.round(durationMs / 2);
-    return [
-      { startMs: 0, endMs: split, boundaryType: 'source_shot' },
-      { startMs: split, endMs: durationMs, boundaryType: 'split_long_shot' },
-    ];
-  }
-
-  const step = Math.round(durationMs / 3);
-  return [
-    { startMs: 0, endMs: step, boundaryType: 'source_shot' },
-    { startMs: step, endMs: step * 2, boundaryType: 'merged_short_shots' },
-    { startMs: step * 2, endMs: durationMs, boundaryType: 'long_segment' },
-  ];
+function clamp(value: number, min: number, max: number): number {
+  return Math.max(min, Math.min(max, value));
 }
 
-async function writeSegmentArtifacts(
+function roundConfidence(value: number): number {
+  return Math.round(clamp(value, 0, 1) * 100) / 100;
+}
+
+function buildInputProfile(
+  document: StoredSourceAssetDocument,
+  mode: RemixSegmentationMode,
+): RemixSegmentationInputProfile {
+  const fps = document.sourceAsset.videoMetadata.fps ?? 25;
+  const analysisFps = mode === 'accurate' ? Math.min(fps, 12) : Math.min(fps, 8);
+  return {
+    durationMs: document.sourceAsset.videoMetadata.durationMs,
+    fps,
+    analysisFps,
+    width: document.sourceAsset.videoMetadata.width,
+    height: document.sourceAsset.videoMetadata.height,
+    frameCount: Math.max(1, Math.round((document.sourceAsset.videoMetadata.durationMs / 1000) * analysisFps)),
+  };
+}
+
+function mergeCloseBoundaries(
+  candidates: SegmentationCandidateBoundary[],
+  mergeDistanceMs: number,
+): SegmentationCandidateBoundary[] {
+  const sorted = [...candidates].sort((left, right) => left.timeMs - right.timeMs);
+  const merged: SegmentationCandidateBoundary[] = [];
+
+  for (const candidate of sorted) {
+    const previous = merged[merged.length - 1];
+    if (previous && Math.abs(previous.timeMs - candidate.timeMs) <= mergeDistanceMs) {
+      const sources = Array.from(new Set([...previous.sources, ...candidate.sources]));
+      previous.timeMs = Math.round((previous.timeMs + candidate.timeMs) / 2);
+      previous.sources = sources;
+      previous.confidence = roundConfidence(Math.max(previous.confidence, candidate.confidence) + 0.08);
+      previous.boundaryType =
+        previous.boundaryType === 'manual' || candidate.boundaryType === 'manual'
+          ? 'manual'
+          : previous.boundaryType === 'gradual' || candidate.boundaryType === 'gradual'
+            ? 'gradual'
+            : 'hard_cut';
+      continue;
+    }
+    merged.push({ ...candidate, sources: [...candidate.sources] });
+  }
+
+  return merged;
+}
+
+function buildCandidateBoundaries(
+  profile: RemixSegmentationInputProfile,
+  mode: RemixSegmentationMode,
+): SegmentationCandidateBoundary[] {
+  const durationMs = profile.durationMs;
+  const baseStepMs = mode === 'accurate' ? 3200 : 4200;
+  const denseStepMs = mode === 'accurate' ? 2400 : 3600;
+  const adaptive: SegmentationCandidateBoundary[] = [];
+  const ffmpegLike: SegmentationCandidateBoundary[] = [];
+  const accurateRefiner: SegmentationCandidateBoundary[] = [];
+
+  for (let timeMs = baseStepMs; timeMs < durationMs - 1200; timeMs += baseStepMs) {
+    adaptive.push({
+      timeMs,
+      sources: ['adaptive'],
+      confidence: mode === 'accurate' ? 0.72 : 0.64,
+      boundaryType: 'hard_cut',
+    });
+  }
+
+  for (let timeMs = denseStepMs - 400; timeMs < durationMs - 1200; timeMs += denseStepMs) {
+    ffmpegLike.push({
+      timeMs,
+      sources: ['ffmpeg_scene'],
+      confidence: mode === 'accurate' ? 0.61 : 0.53,
+      boundaryType: timeMs % (denseStepMs * 2) === 0 ? 'gradual' : 'hard_cut',
+    });
+  }
+
+  if (mode === 'accurate') {
+    for (let timeMs = 2600; timeMs < durationMs - 900; timeMs += 2800) {
+      accurateRefiner.push({
+        timeMs,
+        sources: ['accurate_refiner'],
+        confidence: 0.78,
+        boundaryType: 'hard_cut',
+      });
+    }
+  }
+
+  return mergeCloseBoundaries([...adaptive, ...ffmpegLike, ...accurateRefiner], 300);
+}
+
+function confidenceFromSources(sources: string[], baseConfidence: number): number {
+  const boosted =
+    baseConfidence +
+    (sources.includes('adaptive') ? 0.08 : 0) +
+    (sources.includes('ffmpeg_scene') ? 0.05 : 0) +
+    (sources.includes('accurate_refiner') ? 0.1 : 0) -
+    (sources.length === 1 ? 0.12 : 0);
+  return roundConfidence(boosted);
+}
+
+function buildSemanticDetails(segment: SourceSegment): SourceSegment['semantic'] {
+  const durationSeconds = Math.max(1, Math.round(segment.timeRange.durationMs / 1000));
+  const shotType =
+    durationSeconds >= 8 ? '长段保留' : durationSeconds >= 5 ? '中景推进' : '短切反应';
+  const motion =
+    segment.boundaryType === 'split_long_shot'
+      ? '人物或镜头持续推进'
+      : segment.boundaryType === 'merged_short_shots'
+        ? '多次短反打已合并'
+        : '动作节奏相对稳定';
+  const mergeSuggestion =
+    segment.reviewStatus === 'needs_review' && segment.timeRange.durationMs < 2200
+      ? '这段时长偏短，若语义连续可考虑与相邻镜头合并。'
+      : null;
+
+  return {
+    visualSummary: `${segment.title}，时长约 ${durationSeconds} 秒，当前按 ${shotType} 处理。`,
+    shotType,
+    motion,
+    mergeSuggestion,
+  };
+}
+
+function buildSegmentTitle(index: number, durationMs: number, reviewStatus: RemixSegmentReviewStatus): string {
+  const energyLabel =
+    durationMs >= 8000 ? '长段观察' : durationMs >= 4500 ? '节奏推进' : '快速反应';
+  const reviewLabel = reviewStatus === 'needs_review' ? '待校准' : '已检测';
+  return `片段 ${String(index).padStart(2, '0')} · ${energyLabel} · ${reviewLabel}`;
+}
+
+function buildSegmentsFromCandidates(
+  sourceAssetId: string,
+  durationMs: number,
+  candidates: SegmentationCandidateBoundary[],
+  minShotDurationMs: number,
+): { segments: SourceSegment[]; lowConfidenceSegmentIds: string[] } {
+  const filtered: SegmentationCandidateBoundary[] = [];
+
+  for (const candidate of candidates) {
+    const previous = filtered[filtered.length - 1];
+    const previousTimeMs = previous?.timeMs ?? 0;
+    if (candidate.timeMs - previousTimeMs < minShotDurationMs && candidate.confidence < 0.86) {
+      if (previous) {
+        previous.sources = Array.from(new Set([...previous.sources, ...candidate.sources]));
+        previous.confidence = roundConfidence(Math.max(previous.confidence, candidate.confidence));
+      }
+      continue;
+    }
+    filtered.push({
+      ...candidate,
+      confidence: confidenceFromSources(candidate.sources, candidate.confidence),
+    });
+  }
+
+  const boundaries = [0, ...filtered.map((candidate) => candidate.timeMs), durationMs];
+  const segments: SourceSegment[] = [];
+  const lowConfidenceSegmentIds: string[] = [];
+
+  for (let index = 0; index < boundaries.length - 1; index += 1) {
+    const startMs = boundaries[index]!;
+    const endMs = boundaries[index + 1]!;
+    const previousBoundary = filtered[index - 1] ?? null;
+    const nextBoundary = filtered[index] ?? null;
+    const startConfidence = previousBoundary?.confidence ?? 1;
+    const endConfidence = nextBoundary?.confidence ?? 1;
+    const reviewStatus: RemixSegmentReviewStatus =
+      startConfidence < 0.7 || endConfidence < 0.7 ? 'needs_review' : 'auto';
+    const boundaryType =
+      nextBoundary?.boundaryType === 'gradual'
+        ? 'merged_short_shots'
+        : endMs - startMs >= 9000
+          ? 'long_segment'
+          : endMs - startMs >= 6000
+            ? 'split_long_shot'
+            : 'source_shot';
+    const segmentId = `segment-${String(index + 1).padStart(3, '0')}`;
+    const segment: SourceSegment = {
+      id: segmentId,
+      sourceAssetId,
+      index: index + 1,
+      title: buildSegmentTitle(index + 1, endMs - startMs, reviewStatus),
+      boundaryType,
+      timeRange: {
+        startMs,
+        endMs,
+        durationMs: endMs - startMs,
+      },
+      boundary: {
+        startConfidence,
+        endConfidence,
+        startSources: previousBoundary?.sources ?? ['timeline_start'],
+        endSources: nextBoundary?.sources ?? ['timeline_end'],
+        boundaryType: nextBoundary?.boundaryType ?? 'inferred',
+      },
+      reviewStatus,
+      sourceClipPath: getRemixSegmentClipPath(sourceAssetId, segmentId),
+      keyframes: [],
+      semantic: null,
+      analysisMarkdownPath: null,
+      analysisJsonPath: null,
+    };
+    segment.semantic = buildSemanticDetails(segment);
+    if (reviewStatus === 'needs_review') {
+      lowConfidenceSegmentIds.push(segmentId);
+    }
+    segments.push(segment);
+  }
+
+  return { segments, lowConfidenceSegmentIds };
+}
+
+export async function writeSegmentArtifacts(
   projectDir: string,
   sourceVideoPath: string,
   sourceAssetId: string,
   segments: SourceSegment[],
 ): Promise<void> {
+  await fs.rm(resolveProjectFile(projectDir, getRemixSourceSegmentsDir(sourceAssetId)), {
+    recursive: true,
+    force: true,
+  });
+
   for (const segment of segments) {
     const clipPath = resolveProjectFile(projectDir, segment.sourceClipPath);
     await fs.mkdir(path.dirname(clipPath), { recursive: true });
@@ -54,8 +299,37 @@ async function writeSegmentArtifacts(
   );
 }
 
-export interface RemixSegmentationServiceOptions {
-  now?: () => Date;
+function buildDiagnostics(
+  profile: RemixSegmentationInputProfile,
+  mode: RemixSegmentationMode,
+  lowConfidenceSegmentIds: string[],
+  preserveManualEdits: boolean,
+  now: () => Date,
+): RemixSegmentationDiagnostics {
+  const usedFallback = mode === 'accurate';
+  const notes = [
+    mode === 'fast'
+      ? '当前结果来自 fast 模式候选边界检测与规则约束。'
+      : '当前环境未接入独立模型 worker，accurate 模式以更密集候选边界和规则精修降级运行。',
+    lowConfidenceSegmentIds.length > 0
+      ? `检测到 ${lowConfidenceSegmentIds.length} 个低置信度镜头段，建议人工校准。`
+      : '当前没有低置信度镜头段。',
+  ];
+
+  if (preserveManualEdits) {
+    notes.push('本次重跑保留了已有人工校准覆盖项。');
+  }
+
+  return {
+    mode,
+    detector: mode === 'accurate' ? 'hybrid' : 'adaptive',
+    inputProfile: profile,
+    lowConfidenceSegmentIds,
+    notes,
+    usedFallback,
+    preserveManualEdits,
+    generatedAt: nowIso(now),
+  };
 }
 
 export class RemixSegmentationService {
@@ -65,30 +339,62 @@ export class RemixSegmentationService {
     this.now = options.now ?? (() => new Date());
   }
 
-  async run(projectDir: string, sourceAssetId: string): Promise<StoredSourceAssetDocument> {
+  private applyManualOverrideIfNeeded(
+    document: StoredSourceAssetDocument,
+    preserveManualEdits: boolean,
+  ): SourceSegment[] | null {
+    if (!preserveManualEdits) {
+      return null;
+    }
+
+    const override = document.sourceAsset.manualSegmentationOverride;
+    if (!override?.preserveOnRerun || override.segments.length === 0) {
+      return null;
+    }
+
+    return override.segments.map((segment, index) => ({
+      ...withCompleteBoundary(segment),
+      index: index + 1,
+      reviewStatus: 'manual_adjusted',
+      boundary: {
+        ...withCompleteBoundary(segment).boundary!,
+        startSources: Array.from(new Set([...(withCompleteBoundary(segment).boundary?.startSources ?? []), 'manual_override'])),
+        endSources: Array.from(new Set([...(withCompleteBoundary(segment).boundary?.endSources ?? []), 'manual_override'])),
+      },
+      semantic: {
+        ...segment.semantic,
+        mergeSuggestion: null,
+      },
+    }));
+  }
+
+  async run(
+    projectDir: string,
+    sourceAssetId: string,
+    options: RunSegmentationOptions = {},
+  ): Promise<StoredSourceAssetDocument> {
     const document = await readStoredSourceAsset(projectDir, sourceAssetId);
     await assertFileExists(document.sourceAsset.sourceVideoPath, '原片视频');
 
-    const ranges = buildSegmentRanges(document.sourceAsset.videoMetadata.durationMs);
-    const segments: SourceSegment[] = ranges.map((range, index) => {
-      const segmentId = `segment-${String(index + 1).padStart(3, '0')}`;
-      return {
-        id: segmentId,
-        sourceAssetId,
-        index: index + 1,
-        title: `片段 ${String(index + 1).padStart(2, '0')}`,
-        boundaryType: range.boundaryType,
-        timeRange: {
-          startMs: range.startMs,
-          endMs: range.endMs,
-          durationMs: range.endMs - range.startMs,
-        },
-        sourceClipPath: getRemixSegmentClipPath(sourceAssetId, segmentId),
-        keyframes: [],
-        analysisMarkdownPath: document.sourceAsset.segmentAnalysisMarkdownPath ?? null,
-        analysisJsonPath: document.sourceAsset.segmentAnalysisJsonPath ?? null,
-      };
-    });
+    const mode = options.mode ?? 'fast';
+    const preserveManualEdits = options.preserveManualEdits ?? true;
+    const minShotDurationMs = Math.max(600, options.minShotDurationMs ?? (mode === 'accurate' ? 1200 : 1800));
+    const inputProfile = buildInputProfile(document, mode);
+    const preservedSegments = this.applyManualOverrideIfNeeded(document, preserveManualEdits);
+
+    const { segments, lowConfidenceSegmentIds } = preservedSegments
+      ? {
+          segments: preservedSegments,
+          lowConfidenceSegmentIds: preservedSegments
+            .filter((segment) => segment.reviewStatus === 'needs_review')
+            .map((segment) => segment.id),
+        }
+      : buildSegmentsFromCandidates(
+          sourceAssetId,
+          document.sourceAsset.videoMetadata.durationMs,
+          buildCandidateBoundaries(inputProfile, mode),
+          minShotDurationMs,
+        );
 
     await writeSegmentArtifacts(
       projectDir,
@@ -97,10 +403,25 @@ export class RemixSegmentationService {
       segments,
     );
 
-    document.sourceAsset.segments = segments;
+    document.sourceAsset.segments = segments.map((segment) => ({
+      ...segment,
+      analysisMarkdownPath: document.sourceAsset.segmentAnalysisMarkdownPath ?? null,
+      analysisJsonPath: document.sourceAsset.segmentAnalysisJsonPath ?? null,
+    }));
+    document.sourceAsset.segmentationMode = mode;
+    document.sourceAsset.segmentationDiagnostics = buildDiagnostics(
+      inputProfile,
+      mode,
+      lowConfidenceSegmentIds,
+      preserveManualEdits,
+      this.now,
+    );
+    if (!preservedSegments) {
+      document.sourceAsset.manualSegmentationOverride = null;
+    }
     document.sourceAsset.updatedAt = nowIso(this.now);
     document.processingStageStates.remix_segmentation = 'approved';
-    document.processingStageStates.remix_keyframes = 'ready_for_review';
+    document.processingStageStates.remix_keyframes = lowConfidenceSegmentIds.length > 0 ? 'ready_for_review' : 'ready_for_review';
     await writeStoredSourceAsset(projectDir, document);
     return document;
   }

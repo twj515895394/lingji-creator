@@ -91,14 +91,6 @@ export function AssetDetailSidebar({
 
       <div className={styles.detailMeta}>
         <div className={styles.detailRow}>
-          <span>源文件</span>
-          <strong>{getSourceAssetFilename(asset)}</strong>
-        </div>
-        <div className={styles.detailRow}>
-          <span>素材编号</span>
-          <strong className={styles.compactValue}>{asset.id}</strong>
-        </div>
-        <div className={styles.detailRow}>
           <span>画面规格</span>
           <strong>{asset.videoMetadata.width} × {asset.videoMetadata.height}</strong>
         </div>
@@ -123,6 +115,20 @@ export function AssetDetailSidebar({
           <strong>{formatAssetLibraryDate(asset.updatedAt)}</strong>
         </div>
       </div>
+
+      <details className={styles.detailDisclosure}>
+        <summary className={styles.detailDisclosureSummary}>技术信息</summary>
+        <div className={styles.detailMeta}>
+          <div className={styles.detailRow} title={asset.sourceVideoPath}>
+            <span>源文件</span>
+            <strong>{getSourceAssetFilename(asset)}</strong>
+          </div>
+          <div className={styles.detailRow} title={asset.id}>
+            <span>素材编号</span>
+            <strong className={styles.compactValue}>{asset.id}</strong>
+          </div>
+        </div>
+      </details>
 
       <div className={styles.tagRow}>
         {asset.tags.map((tag) => (

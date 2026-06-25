@@ -11,7 +11,9 @@ import type {
   RenameVariantInput,
   RemixSourceAssetRefInput,
   RemixVariantRefInput,
+  RunSourceSegmentationInput,
   RunSourceAssetStageInput,
+  UpdateSourceSegmentsInput,
   UpdateSourceAssetMetadataInput,
   UpdateEditedKeyframeStatusInput,
   UpdateVariantConfigInput,
@@ -55,7 +57,7 @@ export function registerSceneForgeRemixIpc(): void {
 
   ipcMain.handle(
     'sceneForgeRemix:runSourceSegmentation',
-    async (_event, input: RunSourceAssetStageInput) => {
+    async (_event, input: RunSourceSegmentationInput) => {
       return service.runSourceSegmentation(input);
     },
   );
@@ -71,6 +73,20 @@ export function registerSceneForgeRemixIpc(): void {
     'sceneForgeRemix:runSourceUnderstanding',
     async (_event, input: RunSourceAssetStageInput) => {
       return service.runSourceUnderstanding(input);
+    },
+  );
+
+  ipcMain.handle(
+    'sceneForgeRemix:updateSourceSegments',
+    async (_event, input: UpdateSourceSegmentsInput) => {
+      return service.updateSourceSegments(input);
+    },
+  );
+
+  ipcMain.handle(
+    'sceneForgeRemix:getSegmentationDiagnostics',
+    async (_event, input: RemixSourceAssetRefInput) => {
+      return service.getSegmentationDiagnostics(input);
     },
   );
 

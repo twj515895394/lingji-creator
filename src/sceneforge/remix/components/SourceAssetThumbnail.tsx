@@ -77,10 +77,29 @@ export function SourceAssetThumbnail({ asset }: SourceAssetThumbnailProps) {
     );
   }
 
+  const fallbackTitle = !asset.sourceVideoPath
+    ? '缺少源视频路径'
+    : hasImageError && !hasVideoError
+      ? '关键帧封面不可用'
+      : hasVideoError
+        ? '源视频不可读'
+        : '暂无可用缩略图';
+  const fallbackBody = !asset.sourceVideoPath
+    ? '请先补齐源视频路径，再重新生成预览。'
+    : hasImageError && !hasVideoError
+      ? '已回退到视频首帧预览，如果仍失败请重新提取关键帧。'
+      : hasVideoError
+        ? '请确认源文件仍存在，并检查当前项目目录中的素材路径。'
+        : '当前既没有可加载关键帧，也没有可回退的视频首帧。';
+
   return (
-    <div className={styles.coverFallback} aria-hidden>
+    <div className={styles.coverFallback}>
       <div className={styles.coverFallbackGlow} />
-      <div className={styles.coverFallbackLabel}>{asset.videoMetadata.width} × {asset.videoMetadata.height}</div>
+      <div className={styles.coverFallbackContent}>
+        <div className={styles.coverFallbackTitle}>{fallbackTitle}</div>
+        <div className={styles.coverFallbackBody}>{fallbackBody}</div>
+        <div className={styles.coverFallbackLabel}>{asset.videoMetadata.width} × {asset.videoMetadata.height}</div>
+      </div>
     </div>
   );
 }

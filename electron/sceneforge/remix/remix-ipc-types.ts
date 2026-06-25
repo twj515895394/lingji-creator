@@ -8,8 +8,11 @@ import type {
   RemixKeyframeRole,
   RemixQualityCheck,
   RemixReferenceStrength,
+  RemixSegmentationDiagnostics,
+  RemixSegmentationMode,
   RemixSourceAssetStatus,
   RemixVariantSummary,
+  SourceSegment,
   RetentionMatrix,
 } from '../../../src/sceneforge/remix/types';
 
@@ -40,6 +43,18 @@ export interface CreateSourceAssetFromImportInput {
 }
 
 export interface RunSourceAssetStageInput extends RemixSourceAssetRefInput {}
+
+export interface RunSourceSegmentationInput extends RemixSourceAssetRefInput {
+  mode?: RemixSegmentationMode;
+  preserveManualEdits?: boolean;
+  minShotDurationMs?: number;
+}
+
+export interface UpdateSourceSegmentsInput extends RemixSourceAssetRefInput {
+  segments: SourceSegment[];
+  reason: 'manual_adjust' | 'merge' | 'split' | 'rerun';
+  preserveOnRerun?: boolean;
+}
 
 export interface CreateVariantFromSourceAssetInput extends RemixSourceAssetRefInput {
   name: string;
@@ -109,12 +124,14 @@ export interface RemixIpcContract {
     input: CreateSourceAssetFromImportInput,
   ): Promise<RemixAssetProcessingSnapshot>;
   runSourceSegmentation(
-    input: RunSourceAssetStageInput,
+    input: RunSourceSegmentationInput,
   ): Promise<RemixAssetProcessingSnapshot>;
   runSourceKeyframes(input: RunSourceAssetStageInput): Promise<RemixAssetProcessingSnapshot>;
   runSourceUnderstanding(
     input: RunSourceAssetStageInput,
   ): Promise<RemixAssetProcessingSnapshot>;
+  updateSourceSegments(input: UpdateSourceSegmentsInput): Promise<RemixAssetProcessingSnapshot>;
+  getSegmentationDiagnostics(input: RemixSourceAssetRefInput): Promise<RemixSegmentationDiagnostics | null>;
   publishSourceAssetToLibrary(
     input: RemixSourceAssetRefInput,
   ): Promise<RemixAssetProcessingSnapshot>;

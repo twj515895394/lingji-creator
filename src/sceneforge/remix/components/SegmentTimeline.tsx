@@ -1,10 +1,13 @@
 import { useRef, type MouseEvent } from 'react';
 import type { SourceAsset } from '../types';
 import {
+  formatSegmentConfidence,
   formatRemixTimestamp,
   formatRemixDuration,
   formatRemixTimeRange,
   getSegmentBoundaryLabel,
+  getSegmentReviewStatusLabel,
+  getSegmentLowestConfidence,
   findSourceSegmentAtTime,
 } from '../lib/remix-workspace-view-model';
 import styles from './RemixSegmentReview.module.css';
@@ -67,6 +70,9 @@ export function SegmentTimeline({
             </div>
             <div className={styles.timelineSegmentMeta}>
               {getSegmentBoundaryLabel(segment.boundaryType)}
+            </div>
+            <div className={styles.timelineSegmentMeta}>
+              {formatSegmentConfidence(getSegmentLowestConfidence(segment))} · {getSegmentReviewStatusLabel(segment.reviewStatus)}
             </div>
           </button>
         ))}

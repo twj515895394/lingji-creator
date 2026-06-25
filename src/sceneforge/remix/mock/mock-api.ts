@@ -10,7 +10,9 @@ import type {
   RemixIpcContract,
   RemixSourceAssetRefInput,
   RemixVariantRefInput,
+  RunSourceSegmentationInput,
   RunSourceAssetStageInput,
+  UpdateSourceSegmentsInput,
   UpdateSourceAssetMetadataInput,
   UpdateEditedKeyframeStatusInput,
   UpdateVariantConfigInput,
@@ -171,6 +173,24 @@ export const remixMockApi: RemixIpcContract = {
   async runSourceSegmentation(input: RunSourceAssetStageInput) {
     const snapshot = findProcessingSnapshot(input.sourceAssetId);
     snapshot.sourceAsset.status = 'processing';
+    snapshot.sourceAsset.segmentationMode = (input as RunSourceSegmentationInput).mode ?? 'fast';
+    snapshot.sourceAsset.segmentationDiagnostics = {
+      mode: snapshot.sourceAsset.segmentationMode,
+      detector: snapshot.sourceAsset.segmentationMode === 'accurate' ? 'hybrid' : 'adaptive',
+      inputProfile: {
+        durationMs: snapshot.sourceAsset.videoMetadata.durationMs,
+        fps: snapshot.sourceAsset.videoMetadata.fps ?? 25,
+        analysisFps: snapshot.sourceAsset.segmentationMode === 'accurate' ? 12 : 8,
+        width: snapshot.sourceAsset.videoMetadata.width,
+        height: snapshot.sourceAsset.videoMetadata.height,
+        frameCount: 96,
+      },
+      lowConfidenceSegmentIds: [],
+      notes: ['Mock segmentation diagnostics'],
+      usedFallback: snapshot.sourceAsset.segmentationMode === 'accurate',
+      preserveManualEdits: (input as RunSourceSegmentationInput).preserveManualEdits ?? true,
+      generatedAt: NOW,
+    };
     setProcessingStage(snapshot, 'remix_segmentation', 'approved');
     setProcessingStage(snapshot, 'remix_keyframes', 'ready_for_review');
     return snapshot;
@@ -192,6 +212,22 @@ export const remixMockApi: RemixIpcContract = {
     setProcessingStage(snapshot, 'remix_understanding', 'approved');
     snapshot.sourceAsset.status = 'ready_for_review';
     return snapshot;
+  },
+
+  async updateSourceSegments(input: UpdateSourceSegmentsInput) {
+    const snapshot = findProcessingSnapshot(input.sourceAssetId);
+    snapshot.sourceAsset.segments = clone(input.segments);
+    snapshot.sourceAsset.manualSegmentationOverride = {
+      updatedAt: NOW,
+      reason: input.reason,
+      preserveOnRerun: input.preserveOnRerun ?? true,
+      segments: clone(input.segments),
+    };
+    return snapshot;
+  },
+
+  async getSegmentationDiagnostics(input: RemixSourceAssetRefInput) {
+    return findProcessingSnapshot(input.sourceAssetId).sourceAsset.segmentationDiagnostics ?? null;
   },
 
   async publishSourceAssetToLibrary(input: RemixSourceAssetRefInput) {

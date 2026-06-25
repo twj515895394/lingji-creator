@@ -3,6 +3,7 @@ import type {
   RemixAssetProcessingStageId,
   RemixProcessingJob,
   RemixCreationWorkspaceSnapshot,
+  SourceSegment,
 } from '../../../src/sceneforge/remix/types';
 import type {
   CreateSourceAssetFromImportInput,
@@ -18,7 +19,9 @@ import type {
   DeleteSourceAssetInput,
   RemixSourceAssetRefInput,
   RemixVariantRefInput,
+  RunSourceSegmentationInput,
   RunSourceAssetStageInput,
+  UpdateSourceSegmentsInput,
   UpdateSourceAssetMetadataInput,
   UpdateEditedKeyframeStatusInput,
   UpdateVariantConfigInput,
@@ -33,7 +36,11 @@ import {
   writeStoredSourceAsset,
   writeStoredSourceAssetJobs,
 } from './remix-store';
-import { RemixSegmentationService } from './remix-segmentation-service';
+import {
+  getRemixSegmentAnalysisJsonPath,
+  getRemixSegmentAnalysisMarkdownPath,
+} from './remix-artifact-paths';
+import { RemixSegmentationService, writeSegmentArtifacts } from './remix-segmentation-service';
 import { RemixSourceAssetService, type RemixSourceAssetServiceOptions } from './remix-source-asset-service';
 import { RemixUnderstandingService } from './remix-understanding-service';
 import { RemixVariantService } from './remix-variant-service';
@@ -76,6 +83,24 @@ export class RemixService {
     this.keyframePromptService = new RemixKeyframePromptService();
     this.editedKeyframeService = new RemixEditedKeyframeService();
     this.seedancePromptService = new RemixSeedancePromptService();
+  }
+
+  private withCompleteSegmentBoundary(segment: SourceSegment): SourceSegment {
+    return {
+      ...segment,
+      boundary: {
+        startConfidence: segment.boundary?.startConfidence ?? 1,
+        endConfidence: segment.boundary?.endConfidence ?? 1,
+        startSources: segment.boundary?.startSources ?? ['manual_override'],
+        endSources: segment.boundary?.endSources ?? ['manual_override'],
+        boundaryType: segment.boundary?.boundaryType ?? 'manual',
+      },
+      reviewStatus:
+        segment.reviewStatus === 'approved' || segment.reviewStatus === 'needs_review'
+          ? segment.reviewStatus
+          : 'manual_adjusted',
+      semantic: segment.semantic ?? null,
+    };
   }
 
   private normalizeStatuses(
@@ -200,11 +225,11 @@ export class RemixService {
     return buildSourceAssetSnapshot(document, []);
   }
 
-  async runSourceSegmentation(input: RunSourceAssetStageInput) {
+  async runSourceSegmentation(input: RunSourceSegmentationInput) {
     return this.runProcessingStage(
       input,
       'remix_segmentation',
-      () => this.segmentationService.run(input.projectDir, input.sourceAssetId),
+      () => this.segmentationService.run(input.projectDir, input.sourceAssetId, input as RunSourceSegmentationInput),
       '切片任务',
     );
   }
@@ -239,6 +264,72 @@ export class RemixService {
     await writeStoredSourceAsset(input.projectDir, document);
     const jobsDocument = await readStoredSourceAssetJobs(input.projectDir, input.sourceAssetId);
     return buildSourceAssetSnapshot(document, jobsDocument.jobs);
+  }
+
+  async updateSourceSegments(input: UpdateSourceSegmentsInput) {
+    const document = await readStoredSourceAsset(input.projectDir, input.sourceAssetId);
+    const normalizedSegments: SourceSegment[] = input.segments.map((segment, index) => {
+      const completeSegment = this.withCompleteSegmentBoundary(segment);
+      return {
+        ...completeSegment,
+        index: index + 1,
+        sourceAssetId: input.sourceAssetId,
+        analysisMarkdownPath:
+          document.sourceAsset.segmentAnalysisMarkdownPath ?? getRemixSegmentAnalysisMarkdownPath(input.sourceAssetId),
+        analysisJsonPath:
+          document.sourceAsset.segmentAnalysisJsonPath ?? getRemixSegmentAnalysisJsonPath(input.sourceAssetId),
+        reviewStatus: segment.reviewStatus === 'approved' ? 'approved' : 'manual_adjusted',
+        semantic: {
+          ...segment.semantic,
+          mergeSuggestion: null,
+        },
+        boundary: {
+          ...completeSegment.boundary!,
+          startSources: Array.from(new Set([...(completeSegment.boundary?.startSources ?? []), 'manual_override'])),
+          endSources: Array.from(new Set([...(completeSegment.boundary?.endSources ?? []), 'manual_override'])),
+          boundaryType: 'manual',
+        },
+      };
+    });
+
+    document.sourceAsset.segments = normalizedSegments;
+    document.sourceAsset.manualSegmentationOverride = {
+      updatedAt: new Date().toISOString(),
+      reason: input.reason,
+      preserveOnRerun: input.preserveOnRerun ?? true,
+      segments: normalizedSegments,
+    };
+    document.sourceAsset.segmentationDiagnostics = document.sourceAsset.segmentationDiagnostics
+      ? {
+          ...document.sourceAsset.segmentationDiagnostics,
+          notes: [
+            ...document.sourceAsset.segmentationDiagnostics.notes,
+            `已应用人工校准：${input.reason}。`,
+          ],
+          preserveManualEdits: input.preserveOnRerun ?? true,
+          lowConfidenceSegmentIds: normalizedSegments
+            .filter((segment) => segment.reviewStatus === 'needs_review')
+            .map((segment) => segment.id),
+          generatedAt: new Date().toISOString(),
+        }
+      : null;
+    document.sourceAsset.updatedAt = new Date().toISOString();
+    await writeSegmentArtifacts(
+      input.projectDir,
+      document.sourceAsset.sourceVideoPath,
+      input.sourceAssetId,
+      normalizedSegments,
+    );
+    await writeStoredSourceAsset(input.projectDir, document);
+    const jobsDocument = await readStoredSourceAssetJobs(input.projectDir, input.sourceAssetId);
+    const snapshot = buildSourceAssetSnapshot(document, jobsDocument.jobs);
+    snapshot.variants = await this.variantService.listForSourceAsset(input.projectDir, input.sourceAssetId);
+    return snapshot;
+  }
+
+  async getSegmentationDiagnostics(input: RemixSourceAssetRefInput) {
+    const document = await readStoredSourceAsset(input.projectDir, input.sourceAssetId);
+    return document.sourceAsset.segmentationDiagnostics ?? null;
   }
 
   async createVariantFromSourceAsset(

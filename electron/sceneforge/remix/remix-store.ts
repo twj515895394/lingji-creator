@@ -53,11 +53,26 @@ function clone<T>(value: T): T {
 function normalizeSourceAsset(sourceAsset: SourceAsset): SourceAsset {
   return {
     ...sourceAsset,
+    segments: (sourceAsset.segments ?? []).map((segment) => ({
+      ...segment,
+      boundary: segment.boundary ?? {
+        startConfidence: 1,
+        endConfidence: 1,
+        startSources: ['legacy'],
+        endSources: ['legacy'],
+        boundaryType: 'inferred',
+      },
+      reviewStatus: segment.reviewStatus ?? 'approved',
+      semantic: segment.semantic ?? null,
+    })),
     tags: Array.isArray(sourceAsset.tags) ? sourceAsset.tags : [],
     annotationNote: sourceAsset.annotationNote ?? null,
     lastAnnotatedAt: sourceAsset.lastAnnotatedAt ?? null,
     annotatedBy: sourceAsset.annotatedBy ?? null,
     annotationSource: sourceAsset.annotationSource ?? null,
+    segmentationMode: sourceAsset.segmentationMode ?? 'fast',
+    segmentationDiagnostics: sourceAsset.segmentationDiagnostics ?? null,
+    manualSegmentationOverride: sourceAsset.manualSegmentationOverride ?? null,
   };
 }
 

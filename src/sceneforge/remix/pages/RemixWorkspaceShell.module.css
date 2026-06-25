@@ -2,11 +2,16 @@
   height: 100%;
   min-height: 0;
   display: grid;
-  grid-template-columns: 248px minmax(0, 1fr) 272px;
+  grid-template-columns: 208px minmax(0, 1fr) 304px;
   gap: 12px;
   padding: 12px;
   background: var(--color-window-bg);
   color: var(--color-text-primary);
+}
+
+.shell > *,
+.libraryShell > * {
+  min-width: 0;
 }
 
 .libraryShell {
@@ -15,13 +20,17 @@
 
 .rail {
   min-height: 0;
-  overflow: auto;
+  min-width: 0;
+  overflow-y: auto;
+  overflow-x: hidden;
   padding-right: 2px;
 }
 
 .panel {
   min-height: 0;
-  overflow: auto;
+  min-width: 0;
+  overflow-y: auto;
+  overflow-x: hidden;
   border-radius: 18px;
   border: 1px solid var(--color-separator);
   background: var(--color-panel-bg);
@@ -31,6 +40,7 @@
   display: grid;
   gap: 14px;
   padding: 16px;
+  min-width: 0;
 }
 
 .heroBlock {
@@ -188,9 +198,9 @@
 }
 
 .summaryRow {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
+  display: grid;
+  grid-template-columns: minmax(72px, max-content) minmax(0, 1fr);
+  align-items: start;
   gap: 12px;
   min-height: 40px;
   padding: 0 12px;
@@ -201,9 +211,36 @@
   color: var(--color-text-secondary);
 }
 
+.summaryKey {
+  min-width: 0;
+}
+
 .summaryRow strong {
+  min-width: 0;
   color: var(--color-text-primary);
   font-weight: var(--font-weight-bold);
+  text-align: right;
+  overflow-wrap: anywhere;
+}
+
+.summaryValue {
+  min-width: 0;
+}
+
+.technicalDetails {
+  display: grid;
+  gap: 10px;
+  padding: 12px;
+  border-radius: 14px;
+  border: 1px solid rgba(255, 255, 255, 0.05);
+  background: rgba(255, 255, 255, 0.02);
+}
+
+.technicalSummary {
+  cursor: pointer;
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-bold);
+  color: var(--color-text-secondary);
 }
 
 .inspectorTitle {

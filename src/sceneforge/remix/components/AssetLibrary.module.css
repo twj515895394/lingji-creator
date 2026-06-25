@@ -137,6 +137,29 @@
   font-weight: var(--font-weight-bold);
 }
 
+.coverFallbackContent {
+  position: relative;
+  z-index: 1;
+  display: grid;
+  gap: 8px;
+  width: min(100%, 220px);
+  padding: 16px;
+  text-align: center;
+}
+
+.coverFallbackTitle {
+  font-size: var(--font-size-lg);
+  line-height: 1.35;
+  font-weight: var(--font-weight-bold);
+  color: rgba(255, 248, 235, 0.94);
+}
+
+.coverFallbackBody {
+  font-size: var(--font-size-md);
+  line-height: 1.55;
+  color: rgba(214, 221, 232, 0.74);
+}
+
 .cover::after {
   content: '';
   position: absolute;
@@ -285,6 +308,8 @@
 .detailRail {
   display: grid;
   gap: 16px;
+  min-width: 0;
+  overflow-x: hidden;
 }
 
 .detailPreview {
@@ -317,19 +342,23 @@
 .detailMeta {
   display: grid;
   gap: 10px;
+  min-width: 0;
 }
 
 .detailRow {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
+  display: grid;
+  grid-template-columns: minmax(72px, max-content) minmax(0, 1fr);
+  align-items: start;
   gap: 12px;
   font-size: var(--font-size-lg);
   color: rgba(214, 221, 232, 0.72);
+  min-width: 0;
 }
 
 .detailRow strong {
   color: rgba(255, 248, 235, 0.95);
+  text-align: right;
+  overflow-wrap: anywhere;
 }
 
 .compactValue {
@@ -342,6 +371,24 @@
   font-size: var(--font-size-lg);
   line-height: 1.65;
   color: rgba(214, 221, 232, 0.72);
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.detailDisclosure {
+  display: grid;
+  gap: 10px;
+  padding: 16px 18px;
+  border-radius: 22px;
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  background: rgba(255, 255, 255, 0.02);
+}
+
+.detailDisclosureSummary {
+  cursor: pointer;
+  font-size: var(--font-size-md);
+  font-weight: var(--font-weight-bold);
+  color: rgba(255, 248, 235, 0.9);
 }
 
 .emptyState {

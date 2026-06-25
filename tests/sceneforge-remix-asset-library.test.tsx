@@ -285,6 +285,21 @@ describe('SceneForge Remix asset library', () => {
     expect(html).toContain('source-processing-001/source.mp4');
   });
 
+  it('在缺少源视频路径时显示明确缩略图错误', () => {
+    const assetWithoutVideo = {
+      ...MOCK_SOURCE_ASSETS[0],
+      sourceVideoPath: '',
+      segments: MOCK_SOURCE_ASSETS[0].segments.map((segment) => ({
+        ...segment,
+        keyframes: [],
+      })),
+    };
+
+    const html = renderToStaticMarkup(<SourceAssetThumbnail asset={assetWithoutVideo} />);
+    expect(html).toContain('缺少源视频路径');
+    expect(html).toContain('请先补齐源视频路径');
+  });
+
 
   it('支持复制二创版本并刷新侧栏列表', async () => {
     const container = await renderLibrary(

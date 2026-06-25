@@ -27,7 +27,9 @@ import type {
   RenameVariantInput,
   RemixSourceAssetRefInput,
   RemixVariantRefInput,
+  RunSourceSegmentationInput,
   RunSourceAssetStageInput,
+  UpdateSourceSegmentsInput,
   UpdateSourceAssetMetadataInput,
   UpdateEditedKeyframeStatusInput,
   UpdateVariantConfigInput,
@@ -218,12 +220,16 @@ contextBridge.exposeInMainWorld('electronAPI', {
       ipcRenderer.invoke('sceneForgeRemix:updateSourceAssetMetadata', input),
     createSourceAssetFromImport: (input: CreateSourceAssetFromImportInput) =>
       ipcRenderer.invoke('sceneForgeRemix:createSourceAssetFromImport', input),
-    runSourceSegmentation: (input: RunSourceAssetStageInput) =>
+    runSourceSegmentation: (input: RunSourceSegmentationInput) =>
       ipcRenderer.invoke('sceneForgeRemix:runSourceSegmentation', input),
     runSourceKeyframes: (input: RunSourceAssetStageInput) =>
       ipcRenderer.invoke('sceneForgeRemix:runSourceKeyframes', input),
     runSourceUnderstanding: (input: RunSourceAssetStageInput) =>
       ipcRenderer.invoke('sceneForgeRemix:runSourceUnderstanding', input),
+    updateSourceSegments: (input: UpdateSourceSegmentsInput) =>
+      ipcRenderer.invoke('sceneForgeRemix:updateSourceSegments', input),
+    getSegmentationDiagnostics: (input: RemixSourceAssetRefInput) =>
+      ipcRenderer.invoke('sceneForgeRemix:getSegmentationDiagnostics', input),
     publishSourceAssetToLibrary: (input: RemixSourceAssetRefInput) =>
       ipcRenderer.invoke('sceneForgeRemix:publishSourceAssetToLibrary', input),
     createVariantFromSourceAsset: (input: CreateVariantFromSourceAssetInput) =>

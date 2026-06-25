@@ -15,10 +15,15 @@ import { formatCompactPath } from '../lib/remix-display-text';
 import panelStyles from '../components/RemixWorkspacePanels.module.css';
 import {
   buildAssetProcessingWorkspaceState,
+  buildSegmentationDiagnosticsSummary,
+  formatSegmentConfidence,
   getAssetLibrarySectionForStatus,
   findSourceSegmentAtTime,
   formatRemixDuration,
   getAssetProcessingStepStatuses,
+  getSegmentLowestConfidence,
+  getSegmentReviewStatusLabel,
+  getSegmentationModeLabel,
   getStageStatusLabel,
   isAssetPublishReady,
   type AssetProcessingStepId,
@@ -30,6 +35,7 @@ import {
   type RemixAssetLibrarySection,
   type RemixAssetProcessingSnapshot,
   type RemixProcessingJob,
+  type SourceSegment,
 } from '../types';
 import shellStyles from './RemixWorkspaceShell.module.css';
 
@@ -154,6 +160,22 @@ function buildInspectorRows(
   }
 }
 
+function getWorkspaceStatusLabel(status: RemixAssetProcessingSnapshot['sourceAsset']['status'] | null | undefined) {
+  switch (status) {
+    case 'published_to_library':
+      return '已入库';
+    case 'failed':
+      return '失败待恢复';
+    case 'ready_for_review':
+      return '待确认';
+    case 'processing':
+      return '处理中';
+    case 'draft':
+    default:
+      return '未入库';
+  }
+}
+
 const EMPTY_STEP_STATUSES: ReturnType<typeof getAssetProcessingStepStatuses> = {
   'source-import': 'not_started',
   segmentation: 'not_started',
@@ -184,6 +206,8 @@ export function RemixAssetProcessing({
   const [previewCurrentTimeMs, setPreviewCurrentTimeMs] = useState(0);
   const [previewSeekMs, setPreviewSeekMs] = useState<number | null>(null);
   const [exitGuardMode, setExitGuardMode] = useState<ExitGuardMode | null>(null);
+  const [segmentationMode, setSegmentationMode] = useState<'fast' | 'accurate'>('fast');
+  const [preserveManualEdits, setPreserveManualEdits] = useState(true);
 
   useEffect(() => {
     async function loadSnapshot() {
@@ -203,6 +227,8 @@ export function RemixAssetProcessing({
         setTags(nextSnapshot.sourceAsset.tags);
         setAnnotationNote(nextSnapshot.sourceAsset.annotationNote ?? '');
         setActiveJob(nextSnapshot.activeProcessingJob ?? null);
+        setSegmentationMode(nextSnapshot.sourceAsset.segmentationMode ?? 'fast');
+        setPreserveManualEdits(nextSnapshot.sourceAsset.manualSegmentationOverride?.preserveOnRerun ?? true);
       } catch (error) {
         setSnapshot(null);
         setTags([]);
@@ -266,6 +292,8 @@ export function RemixAssetProcessing({
         setAnnotationNote(nextSnapshot.sourceAsset.annotationNote ?? '');
         setDraftTag('');
         setActiveJob(nextSnapshot.activeProcessingJob ?? getLatestFailedJob(nextSnapshot.processingJobs) ?? null);
+        setSegmentationMode(nextSnapshot.sourceAsset.segmentationMode ?? 'fast');
+        setPreserveManualEdits(nextSnapshot.sourceAsset.manualSegmentationOverride?.preserveOnRerun ?? true);
       }
     } catch (error) {
       setErrorMessage(error instanceof Error ? error.message : '执行失败。');
@@ -313,6 +341,8 @@ export function RemixAssetProcessing({
     setTags(nextSnapshot.sourceAsset.tags);
     setAnnotationNote(nextSnapshot.sourceAsset.annotationNote ?? '');
     setActiveJob(nextSnapshot.activeProcessingJob ?? getLatestFailedJob(nextSnapshot.processingJobs) ?? null);
+    setSegmentationMode(nextSnapshot.sourceAsset.segmentationMode ?? 'fast');
+    setPreserveManualEdits(nextSnapshot.sourceAsset.manualSegmentationOverride?.preserveOnRerun ?? true);
     return nextSnapshot;
   }
 
@@ -332,6 +362,192 @@ export function RemixAssetProcessing({
           annotationSource: 'workspace_manual',
         }),
     );
+  }
+
+  function reindexSegments(segments: SourceSegment[]): SourceSegment[] {
+    return segments.map((segment, index) => ({
+      ...segment,
+      id: `segment-${String(index + 1).padStart(3, '0')}`,
+      index: index + 1,
+      title:
+        segment.reviewStatus === 'manual_adjusted' || segment.reviewStatus === 'approved'
+          ? `片段 ${String(index + 1).padStart(2, '0')} · 人工校准`
+          : segment.title,
+      sourceClipPath: `sceneforge/remix/source-assets/${sourceAssetId}/source_segments/segment-${String(index + 1).padStart(3, '0')}/source_clip.mp4`,
+    }));
+  }
+
+  async function applyManualSegmentUpdate(
+    segments: SourceSegment[],
+    reason: 'manual_adjust' | 'merge' | 'split',
+  ) {
+    if (!projectDir) {
+      return;
+    }
+    await runAction(
+      `segments-${reason}`,
+      null,
+      () =>
+        resolveClient().updateSourceSegments({
+          projectDir,
+          sourceAssetId,
+          segments: reindexSegments(segments),
+          reason,
+          preserveOnRerun: preserveManualEdits,
+        }),
+    );
+  }
+
+  async function rerunSegmentation() {
+    if (!projectDir) {
+      return;
+    }
+    await runAction(
+      'segmentation',
+      'remix_segmentation',
+      () =>
+        resolveClient().runSourceSegmentation({
+          projectDir,
+          sourceAssetId,
+          mode: segmentationMode,
+          preserveManualEdits,
+        }),
+      `正在执行 ${getSegmentationModeLabel(segmentationMode)} 切片`,
+    );
+  }
+
+  async function mergeActiveSegmentWithNext() {
+    if (!asset || !activePreviewSegment) {
+      return;
+    }
+    const activeIndex = asset.segments.findIndex((segment) => segment.id === activePreviewSegment.id);
+    if (activeIndex < 0 || activeIndex >= asset.segments.length - 1) {
+      return;
+    }
+    const current = asset.segments[activeIndex]!;
+    const next = asset.segments[activeIndex + 1]!;
+    const mergedSegment: SourceSegment = {
+      ...current,
+      timeRange: {
+        startMs: current.timeRange.startMs,
+        endMs: next.timeRange.endMs,
+        durationMs: next.timeRange.endMs - current.timeRange.startMs,
+      },
+      boundaryType: 'merged_short_shots',
+      reviewStatus: 'manual_adjusted',
+      boundary: {
+        startConfidence: current.boundary?.startConfidence ?? 1,
+        endConfidence: next.boundary?.endConfidence ?? 1,
+        startSources: Array.from(new Set([...(current.boundary?.startSources ?? ['manual']), 'manual_override'])),
+        endSources: Array.from(new Set([...(next.boundary?.endSources ?? ['manual']), 'manual_override'])),
+        boundaryType: 'manual',
+      },
+      keyframes: [],
+      semantic: {
+        visualSummary: `人工合并 ${current.title} 与 ${next.title} 后形成的新镜头段。`,
+        shotType: '人工合并段',
+        motion: '建议回看合并后的节奏连贯性',
+        mergeSuggestion: null,
+      },
+    };
+
+    const nextSegments = [...asset.segments];
+    nextSegments.splice(activeIndex, 2, mergedSegment);
+    await applyManualSegmentUpdate(nextSegments, 'merge');
+  }
+
+  async function splitSegmentAtPlayhead() {
+    if (!asset || !activePreviewSegment) {
+      return;
+    }
+    const splitMs = Math.max(
+      activePreviewSegment.timeRange.startMs + 600,
+      Math.min(previewCurrentTimeMs, activePreviewSegment.timeRange.endMs - 600),
+    );
+    if (splitMs <= activePreviewSegment.timeRange.startMs || splitMs >= activePreviewSegment.timeRange.endMs) {
+      return;
+    }
+    const first: SourceSegment = {
+      ...activePreviewSegment,
+      timeRange: {
+        startMs: activePreviewSegment.timeRange.startMs,
+        endMs: splitMs,
+        durationMs: splitMs - activePreviewSegment.timeRange.startMs,
+      },
+      boundaryType: 'split_long_shot',
+      reviewStatus: 'manual_adjusted',
+      boundary: {
+        ...(activePreviewSegment.boundary ?? {
+          startConfidence: 1,
+          endConfidence: 1,
+          startSources: ['manual_override'],
+          endSources: ['manual_override'],
+          boundaryType: 'manual',
+        }),
+        endConfidence: 1,
+        endSources: ['manual_override'],
+        boundaryType: 'manual',
+      },
+      keyframes: [],
+      semantic: {
+        visualSummary: '人工切开后的前半段。',
+        shotType: '人工拆分段',
+        motion: '优先确认切点是否落在动作转换处',
+        mergeSuggestion: null,
+      },
+    };
+    const second: SourceSegment = {
+      ...activePreviewSegment,
+      timeRange: {
+        startMs: splitMs,
+        endMs: activePreviewSegment.timeRange.endMs,
+        durationMs: activePreviewSegment.timeRange.endMs - splitMs,
+      },
+      boundaryType: 'split_long_shot',
+      reviewStatus: 'manual_adjusted',
+      boundary: {
+        ...(activePreviewSegment.boundary ?? {
+          startConfidence: 1,
+          endConfidence: 1,
+          startSources: ['manual_override'],
+          endSources: ['manual_override'],
+          boundaryType: 'manual',
+        }),
+        startConfidence: 1,
+        startSources: ['manual_override'],
+        boundaryType: 'manual',
+      },
+      keyframes: [],
+      semantic: {
+        visualSummary: '人工切开后的后半段。',
+        shotType: '人工拆分段',
+        motion: '回看后半段是否需要重新抽关键帧',
+        mergeSuggestion: null,
+      },
+    };
+    const activeIndex = asset.segments.findIndex((segment) => segment.id === activePreviewSegment.id);
+    const nextSegments = [...asset.segments];
+    nextSegments.splice(activeIndex, 1, first, second);
+    await applyManualSegmentUpdate(nextSegments, 'split');
+  }
+
+  async function approveActiveSegment() {
+    if (!asset || !activePreviewSegment) {
+      return;
+    }
+    const nextSegments = asset.segments.map((segment) =>
+      segment.id === activePreviewSegment.id
+        ? {
+            ...segment,
+            reviewStatus: 'approved' as const,
+            semantic: {
+              ...segment.semantic,
+              mergeSuggestion: null,
+            },
+          }
+        : segment,
+    );
+    await applyManualSegmentUpdate(nextSegments, 'manual_adjust');
   }
 
   function handleBackIntent() {
@@ -586,24 +802,57 @@ export function RemixAssetProcessing({
         </div>
         <div className={panelStyles.copyRow}>
           <Button
+            variant={segmentationMode === 'fast' ? 'accent' : 'outline'}
+            onClick={() => setSegmentationMode('fast')}
+            disabled={Boolean(pendingActionId)}
+          >
+            Fast 模式
+          </Button>
+          <Button
+            variant={segmentationMode === 'accurate' ? 'accent' : 'outline'}
+            onClick={() => setSegmentationMode('accurate')}
+            disabled={Boolean(pendingActionId)}
+          >
+            Accurate 模式
+          </Button>
+          <Button
             variant="accent"
             disabled={Boolean(pendingActionId)}
             onClick={() => {
-              void runAction(
-                'segmentation',
-                'remix_segmentation',
-                () =>
-                resolveClient().runSourceSegmentation({
-                  projectDir: projectDir,
-                  sourceAssetId,
-                }),
-                '正在执行真实镜头切片',
-              );
+              void rerunSegmentation();
             }}
           >
             {pendingActionId === 'segmentation' ? '处理中…' : '运行切片'}
           </Button>
+          <Button
+            variant={preserveManualEdits ? 'outline' : 'ghost'}
+            disabled={Boolean(pendingActionId)}
+            onClick={() => setPreserveManualEdits((current) => !current)}
+          >
+            {preserveManualEdits ? '重跑时保留人工校准' : '重跑时覆盖人工校准'}
+          </Button>
         </div>
+        <div className={panelStyles.copyRow}>
+          <span className={panelStyles.copyFeedback}>
+            {buildSegmentationDiagnosticsSummary(asset.segmentationDiagnostics)}
+          </span>
+        </div>
+        {activePreviewSegment ? (
+          <div className={panelStyles.copyRow}>
+            <Button variant="outline" disabled={Boolean(pendingActionId)} onClick={() => { void mergeActiveSegmentWithNext(); }}>
+              合并当前段与下一段
+            </Button>
+            <Button variant="outline" disabled={Boolean(pendingActionId)} onClick={() => { void splitSegmentAtPlayhead(); }}>
+              在当前播放点拆分
+            </Button>
+            <Button variant="outline" disabled={Boolean(pendingActionId)} onClick={() => { void approveActiveSegment(); }}>
+              确认当前边界
+            </Button>
+            <span className={panelStyles.copyFeedback}>
+              当前段 {formatSegmentConfidence(getSegmentLowestConfidence(activePreviewSegment))} · {getSegmentReviewStatusLabel(activePreviewSegment.reviewStatus)}
+            </span>
+          </div>
+        ) : null}
         <SegmentTimeline
           asset={asset}
           activeSegmentId={activePreviewSegment?.id ?? null}
@@ -791,11 +1040,23 @@ export function RemixAssetProcessing({
               <div className={panelStyles.heroEyebrow}>素材处理工作台</div>
               <h1 className={panelStyles.heroTitle}>{asset.title}</h1>
               <p className={panelStyles.heroDescription}>
-                {workspaceState
-                  ? `${workspaceState.assetStatus === 'published_to_library' ? '已入库' : workspaceState.assetStatus === 'failed' ? '失败待恢复' : '未入库'} · 当前步骤：`
-                  : '当前步骤：'}
+                {workspaceState ? `${getWorkspaceStatusLabel(workspaceState.assetStatus)} · 当前步骤：` : '当前步骤：'}
                 <strong>{REMIX_ASSET_PROCESSING_NAV_ITEMS.find((item) => item.id === activeStepId)?.title ?? "处理"}</strong> · {getStageStatusLabel(stepStatuses[activeStepId])}
               </p>
+              <div className={panelStyles.heroMetaLine}>
+                <span className={panelStyles.heroMetaItem} title={asset.sourceVideoPath}>
+                  文件：{getSourceAssetFilename(asset)}
+                </span>
+                <span className={panelStyles.heroMetaItem}>
+                  {formatRemixDuration(asset.videoMetadata.durationMs)} · {asset.videoMetadata.width} × {asset.videoMetadata.height}
+                </span>
+                <span className={panelStyles.heroMetaItem}>
+                  {asset.segments.length} 段 · {asset.segments.flatMap((segment) => segment.keyframes).length} 帧
+                </span>
+                <span className={panelStyles.heroMetaItem}>
+                  最近更新 {formatAssetLibraryDate(asset.updatedAt)}
+                </span>
+              </div>
               {workspaceState ? (
                 <p className={panelStyles.heroDescription}>
                   已完成 {workspaceState.completedSteps}/{workspaceState.totalSteps}
@@ -815,29 +1076,6 @@ export function RemixAssetProcessing({
                   {canPublish ? '可入库' : hasUnsavedAnnotationChanges ? '待保存' : '待补齐'}
                 </Badge>
                 {isLoading ? <span className={panelStyles.chip}>同步中…</span> : null}
-              </div>
-            </div>
-
-            <div className={panelStyles.heroMetaGrid}>
-              <div className={panelStyles.heroMetaCard}>
-                <div className={panelStyles.heroMetaLabel}>源文件</div>
-                <div className={panelStyles.heroMetaValue} title={asset.sourceVideoPath}>{formatCompactPath(asset.sourceVideoPath)}</div>
-              </div>
-              <div className={panelStyles.heroMetaCard}>
-                <div className={panelStyles.heroMetaLabel}>画面规格</div>
-                <div className={panelStyles.heroMetaValue}>{asset.videoMetadata.width} × {asset.videoMetadata.height}</div>
-              </div>
-              <div className={panelStyles.heroMetaCard}>
-                <div className={panelStyles.heroMetaLabel}>时长 / 切片</div>
-                <div className={panelStyles.heroMetaValue}>
-                  {formatRemixDuration(asset.videoMetadata.durationMs)} · {asset.segments.length} 段
-                </div>
-              </div>
-              <div className={panelStyles.heroMetaCard}>
-                <div className={panelStyles.heroMetaLabel}>最近更新</div>
-                <div className={panelStyles.heroMetaValue}>
-                  {formatAssetLibraryDate(asset.updatedAt)}
-                </div>
               </div>
             </div>
           </section>
@@ -876,12 +1114,25 @@ export function RemixAssetProcessing({
           />
           <div className={shellStyles.summaryList} data-testid="remix-processing-inspector">
             {inspectorRows.map((row) => (
-              <div key={row.label} className={shellStyles.summaryRow}>
-                <span>{row.label}</span>
-                <strong>{row.value}</strong>
+              <div key={row.label} className={shellStyles.summaryRow} title={row.value}>
+                <span className={shellStyles.summaryKey}>{row.label}</span>
+                <strong className={shellStyles.summaryValue}>{row.value}</strong>
               </div>
             ))}
           </div>
+          <details className={shellStyles.technicalDetails}>
+            <summary className={shellStyles.technicalSummary}>技术信息</summary>
+            <div className={shellStyles.summaryList}>
+              <div className={shellStyles.summaryRow} title={asset.sourceVideoPath}>
+                <span className={shellStyles.summaryKey}>源文件</span>
+                <strong className={shellStyles.summaryValue}>{formatCompactPath(asset.sourceVideoPath, 48)}</strong>
+              </div>
+              <div className={shellStyles.summaryRow} title={asset.id}>
+                <span className={shellStyles.summaryKey}>素材编号</span>
+                <strong className={shellStyles.summaryValue}>{asset.id}</strong>
+              </div>
+            </div>
+          </details>
         </div>
       </aside>
 

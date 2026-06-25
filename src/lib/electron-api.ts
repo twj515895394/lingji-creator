@@ -64,7 +64,9 @@ import type {
   RenameVariantInput,
   RemixSourceAssetRefInput,
   RemixVariantRefInput,
+  RunSourceSegmentationInput,
   RunSourceAssetStageInput,
+  UpdateSourceSegmentsInput,
   UpdateSourceAssetMetadataInput,
   UpdateEditedKeyframeStatusInput,
   UpdateVariantConfigInput,
@@ -73,6 +75,7 @@ import type {
   RemixAssetLibrarySnapshot,
   RemixAssetProcessingSnapshot,
   RemixCreationWorkspaceSnapshot,
+  RemixSegmentationDiagnostics,
   RemixVariantSummary,
 } from '../sceneforge/remix/types';
 
@@ -470,7 +473,7 @@ export interface ElectronAPI {
       input: CreateSourceAssetFromImportInput,
     ) => Promise<RemixAssetProcessingSnapshot>;
     runSourceSegmentation: (
-      input: RunSourceAssetStageInput,
+      input: RunSourceSegmentationInput,
     ) => Promise<RemixAssetProcessingSnapshot>;
     runSourceKeyframes: (
       input: RunSourceAssetStageInput,
@@ -478,6 +481,12 @@ export interface ElectronAPI {
     runSourceUnderstanding: (
       input: RunSourceAssetStageInput,
     ) => Promise<RemixAssetProcessingSnapshot>;
+    updateSourceSegments: (
+      input: UpdateSourceSegmentsInput,
+    ) => Promise<RemixAssetProcessingSnapshot>;
+    getSegmentationDiagnostics: (
+      input: RemixSourceAssetRefInput,
+    ) => Promise<RemixSegmentationDiagnostics | null>;
     publishSourceAssetToLibrary: (
       input: RemixSourceAssetRefInput,
     ) => Promise<RemixAssetProcessingSnapshot>;

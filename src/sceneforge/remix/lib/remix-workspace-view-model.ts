@@ -10,7 +10,10 @@ import type {
   RemixProcessingJob,
   RemixQualityCheck,
   RemixReferenceStrength,
+  RemixSegmentationDiagnostics,
+  RemixSegmentationMode,
   RemixSegmentBoundaryType,
+  RemixSegmentReviewStatus,
   RemixStageStatus,
   RetentionMatrix,
   SourceAsset,
@@ -136,6 +139,18 @@ const EDITED_KEYFRAME_STATUS_LABELS: Record<RemixEditedKeyframeStatus, string> =
   needs_revision: '待返修',
   approved: '已通过',
   rejected: '已拒绝',
+};
+
+const SEGMENT_REVIEW_STATUS_LABELS: Record<RemixSegmentReviewStatus, string> = {
+  auto: '自动通过',
+  needs_review: '待人工校准',
+  approved: '已确认',
+  manual_adjusted: '人工调整',
+};
+
+const SEGMENTATION_MODE_LABELS: Record<RemixSegmentationMode, string> = {
+  fast: 'Fast',
+  accurate: 'Accurate',
 };
 
 export const RETENTION_MATRIX_DIMENSIONS: RetentionMatrixDimension[] = [
@@ -300,6 +315,32 @@ export function getEditedKeyframeStatusLabel(value: RemixEditedKeyframeStatus): 
   return EDITED_KEYFRAME_STATUS_LABELS[value];
 }
 
+export function getSegmentReviewStatusLabel(value?: RemixSegmentReviewStatus | null): string {
+  return SEGMENT_REVIEW_STATUS_LABELS[value ?? 'approved'];
+}
+
+export function getSegmentationModeLabel(value?: RemixSegmentationMode | null): string {
+  return SEGMENTATION_MODE_LABELS[value ?? 'fast'];
+}
+
+export function formatSegmentConfidence(value?: number | null): string {
+  return `${Math.round((value ?? 1) * 100)}%`;
+}
+
+export function getSegmentLowestConfidence(segment: SourceSegment): number {
+  return Math.min(segment.boundary?.startConfidence ?? 1, segment.boundary?.endConfidence ?? 1);
+}
+
+export function buildSegmentationDiagnosticsSummary(
+  diagnostics?: RemixSegmentationDiagnostics | null,
+): string {
+  if (!diagnostics) {
+    return '当前还没有切片诊断信息。';
+  }
+  const lowConfidenceCount = diagnostics.lowConfidenceSegmentIds.length;
+  return `${getSegmentationModeLabel(diagnostics.mode)} 模式 · ${lowConfidenceCount} 个低置信度镜头段`;
+}
+
 export function getRetentionMatrixChoiceLabel<K extends keyof RetentionMatrix>(
   key: K,
   value: RetentionMatrix[K],
@@ -418,6 +459,7 @@ export function buildSegmentAnalysisMarkdown(asset: SourceAsset): string {
         `### ${String(segment.index).padStart(2, '0')} · ${segment.title}`,
         `- 时间范围：${formatRemixTimeRange(segment)} (${formatRemixDuration(segment.timeRange.durationMs)})`,
         `- 边界类型：${getSegmentBoundaryLabel(segment.boundaryType)}`,
+        `- 置信度：${formatSegmentConfidence(getSegmentLowestConfidence(segment))} · ${getSegmentReviewStatusLabel(segment.reviewStatus)}`,
         `- 关键帧：${segment.keyframes.map((frame) => getKeyframeRoleLabel(frame.frameRole)).join(' / ')}`,
         `- 备注：${buildSegmentNote(segment)}`,
       ].join('\n'),
@@ -426,6 +468,9 @@ export function buildSegmentAnalysisMarkdown(asset: SourceAsset): string {
 }
 
 function buildSegmentNote(segment: SourceSegment): string {
+  if (segment.semantic?.mergeSuggestion) {
+    return segment.semantic.mergeSuggestion;
+  }
   if (segment.boundaryType === 'long_segment') {
     return '长段镜头保留情绪蓄力，避免过度碎切。';
   }

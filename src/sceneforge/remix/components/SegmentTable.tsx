@@ -1,8 +1,11 @@
 import type { SourceAsset } from '../types';
 import {
+  formatSegmentConfidence,
   formatRemixDuration,
   formatRemixTimeRange,
   getSegmentBoundaryLabel,
+  getSegmentLowestConfidence,
+  getSegmentReviewStatusLabel,
 } from '../lib/remix-workspace-view-model';
 import styles from './RemixSegmentReview.module.css';
 
@@ -25,6 +28,7 @@ export function SegmentTable({
           <th>范围</th>
           <th>时长</th>
           <th>边界</th>
+          <th>置信度</th>
           <th>关键帧</th>
         </tr>
       </thead>
@@ -42,6 +46,7 @@ export function SegmentTable({
             <td>{formatRemixTimeRange(segment)}</td>
             <td>{formatRemixDuration(segment.timeRange.durationMs)}</td>
             <td>{getSegmentBoundaryLabel(segment.boundaryType)}</td>
+            <td>{formatSegmentConfidence(getSegmentLowestConfidence(segment))} · {getSegmentReviewStatusLabel(segment.reviewStatus)}</td>
             <td>{segment.keyframes.length} 张</td>
           </tr>
         ))}

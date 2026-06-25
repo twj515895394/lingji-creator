@@ -58,6 +58,15 @@ export const REMIX_SEGMENT_BOUNDARY_TYPES = [
   'long_segment',
 ] as const;
 
+export const REMIX_SEGMENT_REVIEW_STATUSES = [
+  'auto',
+  'needs_review',
+  'approved',
+  'manual_adjusted',
+] as const;
+
+export const REMIX_SEGMENTATION_MODES = ['fast', 'accurate'] as const;
+
 export const REMIX_KEYFRAME_ROLES = ['first', 'middle', 'last'] as const;
 
 export const REMIX_STAGE_IDS = [
@@ -97,6 +106,8 @@ export type RemixEditedKeyframeStatus = (typeof REMIX_EDITED_KEYFRAME_STATUSES)[
 export type RemixReferenceStrength = (typeof REMIX_REFERENCE_STRENGTHS)[number];
 export type RemixGenerationMode = (typeof REMIX_GENERATION_MODES)[number];
 export type RemixSegmentBoundaryType = (typeof REMIX_SEGMENT_BOUNDARY_TYPES)[number];
+export type RemixSegmentReviewStatus = (typeof REMIX_SEGMENT_REVIEW_STATUSES)[number];
+export type RemixSegmentationMode = (typeof REMIX_SEGMENTATION_MODES)[number];
 export type RemixKeyframeRole = (typeof REMIX_KEYFRAME_ROLES)[number];
 export type RemixStageId = (typeof REMIX_STAGE_IDS)[number];
 export type RemixAssetProcessingStageId = (typeof REMIX_ASSET_PROCESSING_STAGE_IDS)[number];
@@ -147,6 +158,21 @@ export interface SourceKeyframe {
   imagePath: string;
 }
 
+export interface RemixSegmentBoundaryDetails {
+  startConfidence: number;
+  endConfidence: number;
+  startSources: string[];
+  endSources: string[];
+  boundaryType: 'hard_cut' | 'gradual' | 'manual' | 'inferred';
+}
+
+export interface RemixSegmentSemanticDetails {
+  visualSummary?: string | null;
+  shotType?: string | null;
+  motion?: string | null;
+  mergeSuggestion?: string | null;
+}
+
 export interface SourceSegment {
   id: string;
   sourceAssetId: string;
@@ -154,10 +180,40 @@ export interface SourceSegment {
   title: string;
   boundaryType: RemixSegmentBoundaryType;
   timeRange: RemixSegmentTimeRange;
+  boundary?: RemixSegmentBoundaryDetails | null;
+  reviewStatus?: RemixSegmentReviewStatus | null;
   sourceClipPath: string;
   keyframes: SourceKeyframe[];
+  semantic?: RemixSegmentSemanticDetails | null;
   analysisMarkdownPath?: string | null;
   analysisJsonPath?: string | null;
+}
+
+export interface RemixSegmentationInputProfile {
+  durationMs: number;
+  fps: number;
+  analysisFps: number;
+  width: number;
+  height: number;
+  frameCount: number;
+}
+
+export interface RemixSegmentationDiagnostics {
+  mode: RemixSegmentationMode;
+  detector: 'adaptive' | 'hybrid';
+  inputProfile: RemixSegmentationInputProfile;
+  lowConfidenceSegmentIds: string[];
+  notes: string[];
+  usedFallback: boolean;
+  preserveManualEdits: boolean;
+  generatedAt: string;
+}
+
+export interface RemixManualSegmentationOverride {
+  updatedAt: string;
+  reason: 'manual_adjust' | 'merge' | 'split' | 'rerun';
+  preserveOnRerun: boolean;
+  segments: SourceSegment[];
 }
 
 export interface SourceAsset {
@@ -176,6 +232,9 @@ export interface SourceAsset {
   segmentAnalysisMarkdownPath?: string | null;
   segmentAnalysisJsonPath?: string | null;
   segments: SourceSegment[];
+  segmentationMode?: RemixSegmentationMode | null;
+  segmentationDiagnostics?: RemixSegmentationDiagnostics | null;
+  manualSegmentationOverride?: RemixManualSegmentationOverride | null;
   variantCount: number;
   tags: string[];
   annotationNote?: string | null;

@@ -14,6 +14,15 @@ interface KeyframeGalleryProps {
 export function KeyframeGallery({ asset }: KeyframeGalleryProps) {
   const keyframes = flattenAssetKeyframes(asset);
 
+  if (keyframes.length === 0) {
+    return (
+      <div className={styles.emptyHint} data-testid="remix-keyframe-gallery">
+        <div className={styles.emptyHintTitle}>暂无可用关键帧</div>
+        <div className={styles.emptyHintBody}>请先完成关键帧提取，或检查当前素材的关键帧文件是否生成成功。</div>
+      </div>
+    );
+  }
+
   return (
     <div className={styles.galleryGrid} data-testid="remix-keyframe-gallery">
       {keyframes.map((frame) => (
