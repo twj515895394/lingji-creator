@@ -1,15 +1,13 @@
 import { Button } from '../../../ui';
-import { REMIX_SOURCE_ASSET_STATUSES, type RemixSourceAssetStatus } from '../types';
+import type { RemixAssetLibrarySection } from '../types';
 import styles from './AssetLibrary.module.css';
 
-export type AssetLibraryStatusFilter = 'all' | RemixSourceAssetStatus;
+export type AssetLibraryStatusFilter = RemixAssetLibrarySection;
 
 const STATUS_FILTERS: ReadonlyArray<{ value: AssetLibraryStatusFilter; label: string }> = [
-  { value: 'all', label: '全部资产' },
+  { value: 'published', label: '已入库资产' },
   { value: 'processing', label: '处理中' },
-  { value: 'ready_for_review', label: '待确认' },
-  { value: 'published_to_library', label: '已入库' },
-  { value: 'failed', label: '解析失败' },
+  { value: 'failed', label: '异常' },
 ];
 
 interface AssetFilterBarProps {
@@ -32,18 +30,17 @@ export function AssetFilterBar({
       <div className={styles.filterGroup}>
         <div className={styles.filterLabel}>状态筛选</div>
         <div className={styles.filterPills}>
-          {STATUS_FILTERS.filter((filter) => filter.value === 'all' || REMIX_SOURCE_ASSET_STATUSES.includes(filter.value))
-            .map((filter) => (
-              <Button
-                key={filter.value}
-                variant={activeStatus === filter.value ? 'accent' : 'ghost'}
-                className={styles.filterButton}
-                onClick={() => onStatusChange(filter.value)}
-                data-testid={`remix-status-filter-${filter.value}`}
-              >
-                {filter.label}
-              </Button>
-            ))}
+          {STATUS_FILTERS.map((filter) => (
+            <Button
+              key={filter.value}
+              variant={activeStatus === filter.value ? 'accent' : 'ghost'}
+              className={styles.filterButton}
+              onClick={() => onStatusChange(filter.value)}
+              data-testid={`remix-status-filter-${filter.value}`}
+            >
+              {filter.label}
+            </Button>
+          ))}
         </div>
       </div>
 

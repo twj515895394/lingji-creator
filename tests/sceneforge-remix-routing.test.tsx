@@ -83,20 +83,20 @@ function buildRoutingApiClient(): RemixIpcContract {
 describe('SceneForge Remix routing', () => {
   it('round-trips the four Remix route patterns', () => {
     const routes = [
-      { kind: 'asset-library' } as const,
+      { kind: 'asset-library', section: 'processing' } as const,
       { kind: 'asset-processing', sourceAssetId: 'source-001' } as const,
-      { kind: 'asset-details', sourceAssetId: 'source-001' } as const,
+      { kind: 'asset-details', sourceAssetId: 'source-001', section: 'failed' } as const,
       { kind: 'creation', variantId: 'variant-001' } as const,
     ];
 
-    expect(buildRemixPath(routes[0])).toBe('/remix/assets');
+    expect(buildRemixPath(routes[0])).toBe('/remix/assets?section=processing');
     expect(buildRemixPath(routes[1])).toBe('/remix/assets/source-001/process');
-    expect(buildRemixPath(routes[2])).toBe('/remix/assets/source-001');
+    expect(buildRemixPath(routes[2])).toBe('/remix/assets/source-001?section=failed');
     expect(buildRemixPath(routes[3])).toBe('/remix/projects/variant-001');
 
-    expect(parseRemixPath('/remix/assets')).toEqual(routes[0]);
+    expect(parseRemixPath('/remix/assets?section=processing')).toEqual(routes[0]);
     expect(parseRemixPath('/remix/assets/source-001/process')).toEqual(routes[1]);
-    expect(parseRemixPath('/remix/assets/source-001')).toEqual(routes[2]);
+    expect(parseRemixPath('/remix/assets/source-001?section=failed')).toEqual(routes[2]);
     expect(parseRemixPath('/remix/projects/variant-001')).toEqual(routes[3]);
 
     expect(getAppPageForRemixRoute(routes[0])).toBe('sceneforge-remix-assets');
@@ -107,7 +107,7 @@ describe('SceneForge Remix routing', () => {
 
   it('renders the Remix page skeletons with distinct workspace boundaries', async () => {
     const libraryHtml = renderToStaticMarkup(
-      <RemixAssetLibrary selectedSourceAssetId="source-library-001" />,
+      <RemixAssetLibrary initialSection="published" selectedSourceAssetId="source-library-001" />,
     );
     expect(libraryHtml).toContain('data-testid="remix-asset-library-page"');
     expect(libraryHtml).toContain('data-testid="remix-asset-grid"');

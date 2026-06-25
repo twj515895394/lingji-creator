@@ -1,5 +1,7 @@
 import type {
   RemixAssetLibrarySnapshot,
+  RemixAssetProcessingStageId,
+  RemixProcessingJob,
   RemixCreationWorkspaceSnapshot,
 } from '../../../src/sceneforge/remix/types';
 import type {
@@ -26,7 +28,9 @@ import {
   buildSourceAssetSummary,
   listStoredSourceAssetIds,
   readStoredSourceAsset,
+  readStoredSourceAssetJobs,
   writeStoredSourceAsset,
+  writeStoredSourceAssetJobs,
 } from './remix-store';
 import { RemixSegmentationService } from './remix-segmentation-service';
 import { RemixSourceAssetService, type RemixSourceAssetServiceOptions } from './remix-source-asset-service';
@@ -73,7 +77,78 @@ export class RemixService {
     this.seedancePromptService = new RemixSeedancePromptService();
   }
 
+  private normalizeStatuses(
+    statuses?: ListSourceAssetsInput['statuses'],
+  ): Set<RemixAssetLibrarySnapshot['sourceAssets'][number]['status']> | null {
+    if (!statuses) {
+      return null;
+    }
+
+    return new Set(Array.isArray(statuses) ? statuses : [statuses]);
+  }
+
+  private async buildProcessingSnapshot(projectDir: string, sourceAssetId: string) {
+    const document = await readStoredSourceAsset(projectDir, sourceAssetId);
+    const jobsDocument = await readStoredSourceAssetJobs(projectDir, sourceAssetId);
+    return buildSourceAssetSnapshot(document, jobsDocument.jobs);
+  }
+
+  private async runProcessingStage(
+    input: RunSourceAssetStageInput,
+    stepId: RemixAssetProcessingStageId,
+    runner: () => Promise<Awaited<ReturnType<RemixSegmentationService['run']>>>,
+    message: string,
+  ) {
+    const jobsDocument = await readStoredSourceAssetJobs(input.projectDir, input.sourceAssetId);
+    const startedAt = new Date().toISOString();
+    const jobId = `${stepId}-${startedAt.replace(/[:.]/g, '-')}`;
+    const runningJob: RemixProcessingJob = {
+      id: jobId,
+      sourceAssetId: input.sourceAssetId,
+      stepId,
+      status: 'running',
+      message,
+      startedAt,
+      finishedAt: null,
+    };
+
+    jobsDocument.jobs = [runningJob, ...jobsDocument.jobs.filter((job) => job.id !== jobId)];
+    await writeStoredSourceAssetJobs(input.projectDir, jobsDocument);
+
+    try {
+      const document = await runner();
+      const finishedAt = new Date().toISOString();
+      jobsDocument.jobs = jobsDocument.jobs.map((job) =>
+        job.id === jobId
+          ? {
+              ...job,
+              status: 'succeeded',
+              message: `${message}完成`,
+              finishedAt,
+            }
+          : job,
+      );
+      await writeStoredSourceAssetJobs(input.projectDir, jobsDocument);
+      return buildSourceAssetSnapshot(document, jobsDocument.jobs);
+    } catch (error) {
+      const finishedAt = new Date().toISOString();
+      jobsDocument.jobs = jobsDocument.jobs.map((job) =>
+        job.id === jobId
+          ? {
+              ...job,
+              status: 'failed',
+              error: error instanceof Error ? error.message : '执行失败。',
+              finishedAt,
+            }
+          : job,
+      );
+      await writeStoredSourceAssetJobs(input.projectDir, jobsDocument);
+      throw error;
+    }
+  }
+
   async listSourceAssets(input: ListSourceAssetsInput): Promise<RemixAssetLibrarySnapshot> {
+    const statusFilter = this.normalizeStatuses(input.statuses);
     const sourceAssetIds = await listStoredSourceAssetIds(input.projectDir);
     const sourceAssets = await Promise.all(
       sourceAssetIds.map(async (sourceAssetId) => {
@@ -81,18 +156,23 @@ export class RemixService {
         return buildSourceAssetSummary(document.sourceAsset);
       }),
     );
-    return { sourceAssets: sourceAssets.sort((left, right) => right.updatedAt.localeCompare(left.updatedAt)) };
+    return {
+      sourceAssets: sourceAssets
+        .filter((sourceAsset) => (statusFilter ? statusFilter.has(sourceAsset.status) : true))
+        .sort((left, right) => right.updatedAt.localeCompare(left.updatedAt)),
+    };
   }
 
   async getSourceAsset(input: RemixSourceAssetRefInput) {
-    const snapshot = buildSourceAssetSnapshot(await readStoredSourceAsset(input.projectDir, input.sourceAssetId));
+    const snapshot = await this.buildProcessingSnapshot(input.projectDir, input.sourceAssetId);
     snapshot.variants = await this.variantService.listForSourceAsset(input.projectDir, input.sourceAssetId);
     return snapshot;
   }
 
   async updateSourceAssetMetadata(input: UpdateSourceAssetMetadataInput) {
     const document = await this.sourceAssetService.updateMetadata(input);
-    const snapshot = buildSourceAssetSnapshot(document);
+    const jobsDocument = await readStoredSourceAssetJobs(input.projectDir, input.sourceAssetId);
+    const snapshot = buildSourceAssetSnapshot(document, jobsDocument.jobs);
     snapshot.variants = await this.variantService.listForSourceAsset(input.projectDir, input.sourceAssetId);
     return snapshot;
   }
@@ -101,21 +181,36 @@ export class RemixService {
     input: CreateSourceAssetFromImportInput,
   ) {
     const { document } = await this.sourceAssetService.createFromImport(input);
-    return buildSourceAssetSnapshot(document);
+    return buildSourceAssetSnapshot(document, []);
   }
 
   async runSourceSegmentation(input: RunSourceAssetStageInput) {
-    return buildSourceAssetSnapshot(await this.segmentationService.run(input.projectDir, input.sourceAssetId));
+    return this.runProcessingStage(
+      input,
+      'remix_segmentation',
+      () => this.segmentationService.run(input.projectDir, input.sourceAssetId),
+      '切片任务',
+    );
   }
 
   async runSourceKeyframes(input: RunSourceAssetStageInput) {
-    return buildSourceAssetSnapshot(await this.keyframeService.run(input.projectDir, input.sourceAssetId));
+    return this.runProcessingStage(
+      input,
+      'remix_keyframes',
+      () => this.keyframeService.run(input.projectDir, input.sourceAssetId),
+      '关键帧任务',
+    );
   }
 
   async runSourceUnderstanding(
     input: RunSourceAssetStageInput,
   ) {
-    return buildSourceAssetSnapshot(await this.understandingService.run(input.projectDir, input.sourceAssetId));
+    return this.runProcessingStage(
+      input,
+      'remix_understanding',
+      () => this.understandingService.run(input.projectDir, input.sourceAssetId),
+      '原片理解任务',
+    );
   }
 
   async publishSourceAssetToLibrary(
@@ -126,7 +221,8 @@ export class RemixService {
     document.sourceAsset.status = 'published_to_library';
     document.sourceAsset.updatedAt = new Date().toISOString();
     await writeStoredSourceAsset(input.projectDir, document);
-    return buildSourceAssetSnapshot(document);
+    const jobsDocument = await readStoredSourceAssetJobs(input.projectDir, input.sourceAssetId);
+    return buildSourceAssetSnapshot(document, jobsDocument.jobs);
   }
 
   async createVariantFromSourceAsset(

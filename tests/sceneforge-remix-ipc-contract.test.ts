@@ -68,18 +68,22 @@ describe('SceneForge Remix IPC contract', () => {
       sourceAssetId,
     });
     expect(segmented.processingStageStates.remix_segmentation).toBe('approved');
+    expect(segmented.processingJobs?.[0]?.stepId).toBe('remix_segmentation');
+    expect(segmented.processingJobs?.[0]?.status).toBe('succeeded');
 
     const keyframed = await service.runSourceKeyframes({
       projectDir,
       sourceAssetId,
     });
     expect(keyframed.processingStageStates.remix_keyframes).toBe('approved');
+    expect(keyframed.processingJobs?.[0]?.stepId).toBe('remix_keyframes');
 
     const understood = await service.runSourceUnderstanding({
       projectDir,
       sourceAssetId,
     });
     expect(understood.processingStageStates.remix_understanding).toBe('approved');
+    expect(understood.processingJobs?.[0]?.stepId).toBe('remix_understanding');
 
     const annotated = await service.updateSourceAssetMetadata({
       projectDir,

@@ -10,12 +10,12 @@ describe('remix app session helpers', () => {
       resolveRemixRecentProjectIdentity({
         page: 'sceneforge-remix-assets',
         remixEntryIntent: 'asset-ingestion',
-        remixRoute: REMIX_DEFAULT_ROUTE,
+        remixRoute: { kind: 'asset-library', section: 'processing' },
       }),
     ).toEqual({
       projectKind: 'remix',
       remixEntryIntent: 'asset-ingestion',
-      remixRoutePath: '/remix/assets',
+      remixRoutePath: '/remix/assets?section=processing',
     });
 
     expect(

@@ -1,11 +1,13 @@
 import type {
   EditedKeyframe,
   KeyframeEditPrompt,
+  RemixAssetLibrarySection,
   RemixAssetProcessingSnapshot,
   RemixCreationWorkspaceSnapshot,
   RemixEditedKeyframeStatus,
   RemixGenerationMode,
   RemixKeyframeRole,
+  RemixProcessingJob,
   RemixQualityCheck,
   RemixReferenceStrength,
   RemixSegmentBoundaryType,
@@ -468,6 +470,64 @@ export function getAssetProcessingStepStatuses(
     understanding,
     annotate: annotateStatus,
     'publish-source': publishStatus,
+  };
+}
+
+export function getAssetLibrarySectionForStatus(
+  status: RemixAssetProcessingSnapshot['sourceAsset']['status'],
+): RemixAssetLibrarySection {
+  if (status === 'published_to_library') {
+    return 'published';
+  }
+  if (status === 'failed') {
+    return 'failed';
+  }
+  return 'processing';
+}
+
+export interface AssetProcessingWorkspaceState {
+  assetStatus: RemixAssetProcessingSnapshot['sourceAsset']['status'];
+  activeJob: RemixProcessingJob | null;
+  hasUnsavedChanges: boolean;
+  returnSection: RemixAssetLibrarySection;
+  blockingReason: string | null;
+  completedSteps: number;
+  totalSteps: number;
+}
+
+export function buildAssetProcessingWorkspaceState(
+  snapshot: RemixAssetProcessingSnapshot,
+  options: {
+    activeStepId: AssetProcessingStepId;
+    hasUnsavedAnnotationChanges: boolean;
+    activeJobOverride?: RemixProcessingJob | null;
+  },
+): AssetProcessingWorkspaceState {
+  const stepStatuses = getAssetProcessingStepStatuses(snapshot, options.hasUnsavedAnnotationChanges);
+  const activeJob =
+    options.activeJobOverride ??
+    snapshot.activeProcessingJob ??
+    snapshot.processingJobs?.find((job) => job.status === 'queued' || job.status === 'running') ??
+    null;
+  const completedSteps = Object.values(stepStatuses).filter((status) => status === 'approved').length;
+  const totalSteps = Object.keys(stepStatuses).length;
+  const blockingReason =
+    activeJob?.status === 'running'
+      ? activeJob.message ?? '系统正在执行当前步骤。'
+      : options.activeStepId === 'annotate' && options.hasUnsavedAnnotationChanges
+        ? '人工标注尚未保存。'
+        : snapshot.sourceAsset.status === 'failed'
+          ? '当前素材存在失败步骤，请先恢复后再继续。'
+          : null;
+
+  return {
+    assetStatus: snapshot.sourceAsset.status,
+    activeJob,
+    hasUnsavedChanges: options.hasUnsavedAnnotationChanges,
+    returnSection: getAssetLibrarySectionForStatus(snapshot.sourceAsset.status),
+    blockingReason,
+    completedSteps,
+    totalSteps,
   };
 }
 

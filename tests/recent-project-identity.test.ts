@@ -73,6 +73,19 @@ describe('recent project identity helpers', () => {
     });
     expect(
       resolveRecentProjectOpenOptions({
+        path: '/tmp/remix-processing',
+        name: 'remix-processing',
+        lastOpenedAt: 1,
+        projectKind: 'remix',
+        remixEntryIntent: 'asset-ingestion',
+        remixRoutePath: '/remix/assets?section=processing',
+      }),
+    ).toEqual({
+      remixRoute: { kind: 'asset-library', section: 'processing' },
+      remixEntryIntent: 'asset-ingestion',
+    });
+    expect(
+      resolveRecentProjectOpenOptions({
         path: '/tmp/script',
         name: 'script',
         lastOpenedAt: 1,

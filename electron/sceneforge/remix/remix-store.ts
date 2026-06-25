@@ -3,6 +3,7 @@ import path from 'node:path';
 import type {
   EditedKeyframe,
   KeyframeEditPrompt,
+  RemixProcessingJob,
   RemixVariantSummary,
   RemixAssetLibrarySnapshot,
   RemixAssetProcessingSnapshot,
@@ -15,6 +16,7 @@ import type {
 } from '../../../src/sceneforge/remix/types';
 import {
   getRemixSourceManifestPath,
+  getRemixSourceProcessingJobsPath,
   getRemixSourceAssetsDir,
   getRemixVariantManifestPath,
   getRemixVariantsDir,
@@ -25,6 +27,13 @@ export interface StoredSourceAssetDocument {
   version: 1;
   sourceAsset: SourceAsset;
   processingStageStates: Partial<Record<RemixAssetProcessingStageId, RemixStageStatus>>;
+}
+
+export interface StoredSourceAssetProcessingJobsDocument {
+  schema: 'sceneforge-remix-source-asset-processing-jobs';
+  version: 1;
+  sourceAssetId: string;
+  jobs: RemixProcessingJob[];
 }
 
 export interface StoredVariantDocument {
@@ -74,11 +83,17 @@ async function writeJsonFile(filePath: string, value: unknown): Promise<void> {
 
 export function buildSourceAssetSnapshot(
   document: StoredSourceAssetDocument,
+  processingJobs: RemixProcessingJob[] = [],
 ): RemixAssetProcessingSnapshot {
   const normalized = normalizeSourceAssetDocument(document);
+  const sortedJobs = clone(processingJobs).sort((left, right) => right.startedAt.localeCompare(left.startedAt));
+  const activeProcessingJob =
+    sortedJobs.find((job) => job.status === 'queued' || job.status === 'running') ?? null;
   return {
     sourceAsset: clone(normalized.sourceAsset),
     processingStageStates: clone(normalized.processingStageStates),
+    processingJobs: sortedJobs,
+    activeProcessingJob,
   };
 }
 
@@ -137,6 +152,36 @@ export async function writeStoredSourceAsset(
   await writeJsonFile(
     resolveProjectPath(projectDir, document.sourceAsset.sourceManifestPath),
     normalizeSourceAssetDocument(document),
+  );
+}
+
+export async function readStoredSourceAssetJobs(
+  projectDir: string,
+  sourceAssetId: string,
+): Promise<StoredSourceAssetProcessingJobsDocument> {
+  const filePath = resolveProjectPath(projectDir, getRemixSourceProcessingJobsPath(sourceAssetId));
+  try {
+    return await readJsonFile<StoredSourceAssetProcessingJobsDocument>(filePath);
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === 'ENOENT') {
+      return {
+        schema: 'sceneforge-remix-source-asset-processing-jobs',
+        version: 1,
+        sourceAssetId,
+        jobs: [],
+      };
+    }
+    throw error;
+  }
+}
+
+export async function writeStoredSourceAssetJobs(
+  projectDir: string,
+  document: StoredSourceAssetProcessingJobsDocument,
+): Promise<void> {
+  await writeJsonFile(
+    resolveProjectPath(projectDir, getRemixSourceProcessingJobsPath(document.sourceAssetId)),
+    document,
   );
 }
 

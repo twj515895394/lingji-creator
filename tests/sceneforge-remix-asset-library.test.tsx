@@ -113,10 +113,10 @@ async function renderLibrary(node: JSX.Element) {
 describe('SceneForge Remix asset library', () => {
   it('按状态与标签筛选资产', () => {
     expect(filterAssetLibraryAssets(MOCK_SOURCE_ASSETS, 'processing', null)).toHaveLength(1);
-    expect(filterAssetLibraryAssets(MOCK_SOURCE_ASSETS, 'published_to_library', null)[0]?.id).toBe(
+    expect(filterAssetLibraryAssets(MOCK_SOURCE_ASSETS, 'published', null)[0]?.id).toBe(
       'source-library-001',
     );
-    expect(filterAssetLibraryAssets(MOCK_SOURCE_ASSETS, 'all', 'hero-asset')[0]?.id).toBe(
+    expect(filterAssetLibraryAssets(MOCK_SOURCE_ASSETS, 'published', 'hero-asset')[0]?.id).toBe(
       'source-library-001',
     );
     expect(getAssetLibraryAvailableTags(MOCK_SOURCE_ASSETS)).toContain('hero-asset');

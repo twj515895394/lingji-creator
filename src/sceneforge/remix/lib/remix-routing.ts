@@ -1,4 +1,5 @@
 import type { AppPage } from '../../../lib/electron-api';
+import type { RemixAssetLibrarySection } from '../types';
 
 export type RemixAppPage =
   | 'sceneforge-remix-assets'
@@ -7,10 +8,17 @@ export type RemixAppPage =
   | 'sceneforge-remix-creation';
 
 export type RemixRoute =
-  | { kind: 'asset-library' }
+  | { kind: 'asset-library'; section?: RemixAssetLibrarySection }
   | { kind: 'asset-processing'; sourceAssetId: string }
-  | { kind: 'asset-details'; sourceAssetId: string }
+  | { kind: 'asset-details'; sourceAssetId: string; section?: RemixAssetLibrarySection }
   | { kind: 'creation'; variantId: string };
+
+function normalizeAssetLibrarySection(value: string | null): RemixAssetLibrarySection | undefined {
+  if (value === 'published' || value === 'processing' || value === 'failed') {
+    return value;
+  }
+  return undefined;
+}
 
 export function isRemixAppPage(page: AppPage): page is RemixAppPage {
   return (
@@ -37,32 +45,41 @@ export function getAppPageForRemixRoute(route: RemixRoute): RemixAppPage {
 export function buildRemixPath(route: RemixRoute): string {
   switch (route.kind) {
     case 'asset-library':
-      return '/remix/assets';
+      return route.section && route.section !== 'published'
+        ? `/remix/assets?section=${route.section}`
+        : '/remix/assets';
     case 'asset-processing':
       return `/remix/assets/${route.sourceAssetId}/process`;
     case 'asset-details':
-      return `/remix/assets/${route.sourceAssetId}`;
+      return route.section && route.section !== 'published'
+        ? `/remix/assets/${route.sourceAssetId}?section=${route.section}`
+        : `/remix/assets/${route.sourceAssetId}`;
     case 'creation':
       return `/remix/projects/${route.variantId}`;
   }
 }
 
 export function parseRemixPath(pathname: string): RemixRoute | null {
-  if (pathname === '/remix/assets') {
-    return { kind: 'asset-library' };
+  const parsed = new URL(pathname, 'https://remix.local');
+  const assetLibrarySection = normalizeAssetLibrarySection(parsed.searchParams.get('section'));
+
+  if (parsed.pathname === '/remix/assets') {
+    return assetLibrarySection ? { kind: 'asset-library', section: assetLibrarySection } : { kind: 'asset-library' };
   }
 
-  const processingMatch = pathname.match(/^\/remix\/assets\/([^/]+)\/process$/);
+  const processingMatch = parsed.pathname.match(/^\/remix\/assets\/([^/]+)\/process$/);
   if (processingMatch) {
     return { kind: 'asset-processing', sourceAssetId: decodeURIComponent(processingMatch[1]) };
   }
 
-  const assetMatch = pathname.match(/^\/remix\/assets\/([^/]+)$/);
+  const assetMatch = parsed.pathname.match(/^\/remix\/assets\/([^/]+)$/);
   if (assetMatch) {
-    return { kind: 'asset-details', sourceAssetId: decodeURIComponent(assetMatch[1]) };
+    return assetLibrarySection
+      ? { kind: 'asset-details', sourceAssetId: decodeURIComponent(assetMatch[1]), section: assetLibrarySection }
+      : { kind: 'asset-details', sourceAssetId: decodeURIComponent(assetMatch[1]) };
   }
 
-  const creationMatch = pathname.match(/^\/remix\/projects\/([^/]+)$/);
+  const creationMatch = parsed.pathname.match(/^\/remix\/projects\/([^/]+)$/);
   if (creationMatch) {
     return { kind: 'creation', variantId: decodeURIComponent(creationMatch[1]) };
   }

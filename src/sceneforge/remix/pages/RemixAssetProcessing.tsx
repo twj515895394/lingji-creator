@@ -14,6 +14,8 @@ import { formatAssetLibraryDate, getSourceAssetFilename } from '../lib/asset-lib
 import { formatCompactPath } from '../lib/remix-display-text';
 import panelStyles from '../components/RemixWorkspacePanels.module.css';
 import {
+  buildAssetProcessingWorkspaceState,
+  getAssetLibrarySectionForStatus,
   findSourceSegmentAtTime,
   formatRemixDuration,
   getAssetProcessingStepStatuses,
@@ -23,7 +25,12 @@ import {
 } from '../lib/remix-workspace-view-model';
 import { REMIX_ASSET_PROCESSING_NAV_ITEMS } from '../lib/remix-stage-nav';
 import { getRemixApiClient } from '../services/remix-api-client';
-import { REMIX_ROUTE_PATTERNS, type RemixAssetProcessingSnapshot } from '../types';
+import {
+  REMIX_ROUTE_PATTERNS,
+  type RemixAssetLibrarySection,
+  type RemixAssetProcessingSnapshot,
+  type RemixProcessingJob,
+} from '../types';
 import shellStyles from './RemixWorkspaceShell.module.css';
 
 function normalizeTags(tags: string[]): string[] {
@@ -36,7 +43,7 @@ interface RemixAssetProcessingProps {
   projectDir?: string | null;
   apiClient?: RemixIpcContract;
   sourceAssetId: string;
-  onBackToLibrary?: () => void;
+  onBackToLibrary?: (section?: RemixAssetLibrarySection) => void;
   initialStepId?: AssetProcessingStepId;
   initialAnnotationNote?: string;
 }
@@ -163,6 +170,7 @@ export function RemixAssetProcessing({
   const [annotationNote, setAnnotationNote] = useState(snapshot?.sourceAsset.annotationNote ?? initialAnnotationNote);
   const [isLoading, setIsLoading] = useState(true);
   const [activeAction, setActiveAction] = useState<string | null>(null);
+  const [activeJob, setActiveJob] = useState<RemixProcessingJob | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [previewCurrentTimeMs, setPreviewCurrentTimeMs] = useState(0);
   const [previewSeekMs, setPreviewSeekMs] = useState<number | null>(null);
@@ -184,6 +192,7 @@ export function RemixAssetProcessing({
         setSnapshot(nextSnapshot);
         setTags(nextSnapshot.sourceAsset.tags);
         setAnnotationNote(nextSnapshot.sourceAsset.annotationNote ?? initialAnnotationNote);
+        setActiveJob(nextSnapshot.activeProcessingJob ?? null);
       } catch (error) {
         setSnapshot(null);
         setTags([]);
@@ -207,6 +216,13 @@ export function RemixAssetProcessing({
     ? getAssetProcessingStepStatuses(snapshot, hasUnsavedAnnotationChanges)
     : EMPTY_STEP_STATUSES;
   const activePreviewSegment = asset ? findSourceSegmentAtTime(asset, previewCurrentTimeMs) : null;
+  const workspaceState = snapshot
+    ? buildAssetProcessingWorkspaceState(snapshot, {
+        activeStepId,
+        hasUnsavedAnnotationChanges,
+        activeJobOverride: activeJob,
+      })
+    : null;
 
   useEffect(() => {
     setPreviewCurrentTimeMs(0);
@@ -215,10 +231,22 @@ export function RemixAssetProcessing({
 
   async function runAction(
     actionId: string,
+    stepId: RemixProcessingJob['stepId'] | null,
     runner: () => Promise<RemixAssetProcessingSnapshot>,
   ) {
     setActiveAction(actionId);
     setErrorMessage(null);
+    if (stepId) {
+      setActiveJob({
+        id: `${actionId}-local`,
+        sourceAssetId,
+        stepId,
+        status: 'running',
+        message: `${REMIX_ASSET_PROCESSING_NAV_ITEMS.find((item) => item.id === activeStepId)?.title ?? '当前步骤'}处理中`,
+        startedAt: new Date().toISOString(),
+        finishedAt: null,
+      });
+    }
     try {
       const nextSnapshot = await runner();
       if (nextSnapshot) {
@@ -226,9 +254,11 @@ export function RemixAssetProcessing({
         setTags(nextSnapshot.sourceAsset.tags);
         setAnnotationNote(nextSnapshot.sourceAsset.annotationNote ?? '');
         setDraftTag('');
+        setActiveJob(nextSnapshot.activeProcessingJob ?? null);
       }
     } catch (error) {
       setErrorMessage(error instanceof Error ? error.message : '执行失败。');
+      setActiveJob(null);
     } finally {
       setActiveAction(null);
     }
@@ -338,7 +368,10 @@ export function RemixAssetProcessing({
             variant="accent"
             disabled={Boolean(activeAction)}
             onClick={() => {
-              void runAction('segmentation', () =>
+              void runAction(
+                'segmentation',
+                'remix_segmentation',
+                () =>
                 resolveClient().runSourceSegmentation({
                   projectDir: projectDir,
                   sourceAssetId,
@@ -391,7 +424,10 @@ export function RemixAssetProcessing({
             variant="accent"
             disabled={Boolean(activeAction)}
             onClick={() => {
-              void runAction('keyframes', () =>
+              void runAction(
+                'keyframes',
+                'remix_keyframes',
+                () =>
                 resolveClient().runSourceKeyframes({
                   projectDir: projectDir,
                   sourceAssetId,
@@ -421,7 +457,10 @@ export function RemixAssetProcessing({
             variant="accent"
             disabled={Boolean(activeAction)}
             onClick={() => {
-              void runAction('understanding', () =>
+              void runAction(
+                'understanding',
+                'remix_understanding',
+                () =>
                 resolveClient().runSourceUnderstanding({
                   projectDir: projectDir,
                   sourceAssetId,
@@ -460,7 +499,10 @@ export function RemixAssetProcessing({
             variant="accent"
             disabled={!annotationReady || !hasUnsavedAnnotationChanges || Boolean(activeAction)}
             onClick={() => {
-              void runAction('save-annotation', () =>
+              void runAction(
+                'save-annotation',
+                null,
+                () =>
                 resolveClient().updateSourceAssetMetadata({
                   projectDir: projectDir,
                   sourceAssetId,
@@ -496,12 +538,15 @@ export function RemixAssetProcessing({
           items={publishChecklist}
           disabled={!canPublish || Boolean(activeAction)}
           onPublish={() => {
-            void runAction('publish-source', () =>
-              resolveClient().publishSourceAssetToLibrary({
-                projectDir: projectDir,
-                sourceAssetId,
-              }),
-            );
+              void runAction(
+                'publish-source',
+                null,
+                () =>
+                resolveClient().publishSourceAssetToLibrary({
+                  projectDir: projectDir,
+                  sourceAssetId,
+                }),
+              );
           }}
           isPublishing={activeAction === 'publish-source'}
         />
@@ -533,11 +578,24 @@ export function RemixAssetProcessing({
               <div className={panelStyles.heroEyebrow}>素材处理工作台</div>
               <h1 className={panelStyles.heroTitle}>{asset.title}</h1>
               <p className={panelStyles.heroDescription}>
-                当前步骤：<strong>{REMIX_ASSET_PROCESSING_NAV_ITEMS.find((item) => item.id === activeStepId)?.title ?? "处理"}</strong> · {getStageStatusLabel(stepStatuses[activeStepId])}
+                {workspaceState
+                  ? `${workspaceState.assetStatus === 'published_to_library' ? '已入库' : workspaceState.assetStatus === 'failed' ? '失败待恢复' : '未入库'} · 当前步骤：`
+                  : '当前步骤：'}
+                <strong>{REMIX_ASSET_PROCESSING_NAV_ITEMS.find((item) => item.id === activeStepId)?.title ?? "处理"}</strong> · {getStageStatusLabel(stepStatuses[activeStepId])}
               </p>
+              {workspaceState ? (
+                <p className={panelStyles.heroDescription}>
+                  已完成 {workspaceState.completedSteps}/{workspaceState.totalSteps}
+                  {workspaceState.blockingReason ? ` · 阻塞：${workspaceState.blockingReason}` : ''}
+                </p>
+              ) : null}
               {errorMessage ? <p className={panelStyles.heroDescription} data-testid="remix-processing-error">{errorMessage}</p> : null}
               <div className={panelStyles.copyRow}>
-                <Button variant="outline" onClick={onBackToLibrary} data-testid="remix-processing-back">
+                <Button
+                  variant="outline"
+                  onClick={() => onBackToLibrary?.(workspaceState?.returnSection ?? getAssetLibrarySectionForStatus(asset.status))}
+                  data-testid="remix-processing-back"
+                >
                   返回资产库
                 </Button>
                 <Badge variant={canPublish ? 'success' : 'warning'}>
@@ -577,8 +635,8 @@ export function RemixAssetProcessing({
               {REMIX_ASSET_PROCESSING_NAV_ITEMS.find((item) => item.id === activeStepId)?.title ?? '当前任务'}
             </div>
             <div className={panelStyles.panelDescription}>
-              {activeAction
-                ? '系统正在执行当前步骤，请稍候。'
+              {workspaceState?.activeJob?.status === 'running'
+                ? workspaceState.activeJob.message ?? '系统正在执行当前步骤，请稍候。'
                 : stepStatuses[activeStepId] === 'approved'
                   ? '本步骤已完成，可从左侧进入下一步。'
                   : '完成本步骤主操作后，再进入后续切片、关键帧或入库流程。'}

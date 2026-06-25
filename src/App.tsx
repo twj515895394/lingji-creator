@@ -1460,22 +1460,30 @@ export default function App() {
                 <RemixAssetLibrary
                   projectDir={currentProjectDir}
                   entryIntent={remixEntryIntent}
+                  initialSection={
+                    remixRoute.kind === 'asset-library' || remixRoute.kind === 'asset-details'
+                      ? remixRoute.section ?? 'published'
+                      : 'published'
+                  }
                   selectedSourceAssetId={remixRoute.kind === 'asset-details' ? remixRoute.sourceAssetId : null}
                   onOpenProcessing={(sourceAssetId) =>
                     applyRemixRoute({ kind: 'asset-processing', sourceAssetId })
                   }
-                  onOpenDetails={(sourceAssetId) =>
-                    applyRemixRoute({ kind: 'asset-details', sourceAssetId })
+                  onOpenDetails={(sourceAssetId, section) =>
+                    applyRemixRoute({ kind: 'asset-details', sourceAssetId, section })
                   }
                   onOpenCreation={(variantId) =>
                     applyRemixRoute({ kind: 'creation', variantId })
+                  }
+                  onSectionChange={(section) =>
+                    applyRemixRoute({ kind: 'asset-library', section }, 'replace')
                   }
                 />
               ) : page === 'sceneforge-remix-asset-processing' ? (
                 <RemixAssetProcessing
                   projectDir={currentProjectDir}
                   sourceAssetId={remixRoute.kind === 'asset-processing' ? remixRoute.sourceAssetId : 'source-001'}
-                  onBackToLibrary={() => applyRemixRoute({ kind: 'asset-library' })}
+                  onBackToLibrary={(section) => applyRemixRoute({ kind: 'asset-library', section }, 'replace')}
                 />
               ) : page === 'sceneforge-remix-creation' ? (
                 <RemixCreationWorkspace

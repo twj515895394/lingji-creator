@@ -50,6 +50,10 @@ export function getRemixSourceManifestPath(sourceAssetId: string): string {
   return joinRemixPath(getRemixSourceAssetDir(sourceAssetId), 'source_manifest.json');
 }
 
+export function getRemixSourceProcessingJobsPath(sourceAssetId: string): string {
+  return joinRemixPath(getRemixSourceAssetDir(sourceAssetId), 'processing_jobs.json');
+}
+
 export function getRemixSourceOverviewMarkdownPath(sourceAssetId: string): string {
   return joinRemixPath(getRemixSourceAssetDir(sourceAssetId), ANALYSIS_DIR, 'source_overview.md');
 }

@@ -6,34 +6,42 @@ import { AssetDetailSidebar } from '../components/AssetDetailSidebar';
 import { AssetFilterBar, type AssetLibraryStatusFilter } from '../components/AssetFilterBar';
 import { AssetGrid } from '../components/AssetGrid';
 import type { RemixEntryIntent } from '../components/RemixModeEntryDialog';
-import { filterAssetLibraryAssets, getAssetLibraryAvailableTags } from '../lib/asset-library-state';
+import {
+  filterAssetLibraryAssets,
+  getAssetLibraryAvailableTags,
+  getStatusesForAssetLibrarySection,
+} from '../lib/asset-library-state';
 import { getRemixApiClient } from '../services/remix-api-client';
 import { REMIX_ROUTE_PATTERNS } from '../types';
-import type { RemixVariantSummary, SourceAsset } from '../types';
+import type { RemixAssetLibrarySection, RemixVariantSummary, SourceAsset } from '../types';
 import styles from './RemixWorkspaceShell.module.css';
 
 interface RemixAssetLibraryProps {
   projectDir?: string | null;
   apiClient?: RemixIpcContract;
   entryIntent?: RemixEntryIntent;
+  initialSection?: RemixAssetLibrarySection;
   selectedSourceAssetId?: string | null;
   onOpenProcessing?: (sourceAssetId: string) => void;
-  onOpenDetails?: (sourceAssetId: string) => void;
+  onOpenDetails?: (sourceAssetId: string, section: RemixAssetLibrarySection) => void;
   onOpenCreation?: (variantId: string, sourceAssetId: string) => void;
+  onSectionChange?: (section: RemixAssetLibrarySection) => void;
 }
 
 export function RemixAssetLibrary({
   projectDir = null,
   apiClient,
   entryIntent = 'asset-ingestion',
+  initialSection = 'published',
   selectedSourceAssetId = null,
   onOpenProcessing,
   onOpenDetails,
   onOpenCreation,
+  onSectionChange,
 }: RemixAssetLibraryProps) {
   const resolveClient = () => apiClient ?? getRemixApiClient();
   const [assets, setAssets] = useState<SourceAsset[]>([]);
-  const [activeStatus, setActiveStatus] = useState<AssetLibraryStatusFilter>('all');
+  const [activeStatus, setActiveStatus] = useState<AssetLibraryStatusFilter>(initialSection);
   const [activeTag, setActiveTag] = useState<string | null>(null);
   const [activeAssetId, setActiveAssetId] = useState<string | null>(selectedSourceAssetId);
   const [isLoading, setIsLoading] = useState(true);
@@ -71,7 +79,10 @@ export function RemixAssetLibrary({
       setIsLoading(true);
       setErrorMessage(null);
       try {
-        const snapshot = await resolveClient().listSourceAssets({ projectDir });
+        const snapshot = await resolveClient().listSourceAssets({
+          projectDir,
+          statuses: getStatusesForAssetLibrarySection(activeStatus),
+        });
         const details = await Promise.all(
           snapshot.sourceAssets.map(async (sourceAsset) => {
             const response = await resolveClient().getSourceAsset({
@@ -103,14 +114,18 @@ export function RemixAssetLibrary({
     }
 
     void loadAssets();
-  }, [apiClient, projectDir]);
+  }, [activeStatus, apiClient, projectDir]);
 
   useEffect(() => {
     if (entryIntent === 'creation') {
-      setActiveStatus('published_to_library');
+      setActiveStatus('published');
       setActiveTag(null);
     }
   }, [entryIntent]);
+
+  useEffect(() => {
+    setActiveStatus(initialSection);
+  }, [initialSection]);
 
   useEffect(() => {
     if (selectedSourceAssetId) {
@@ -203,7 +218,7 @@ export function RemixAssetLibrary({
 
   function handleSelect(assetId: string) {
     setActiveAssetId(assetId);
-    onOpenDetails?.(assetId);
+    onOpenDetails?.(assetId, activeStatus);
   }
 
   async function refreshVariants(sourceAssetId: string) {
@@ -292,18 +307,25 @@ export function RemixAssetLibrary({
         <div className={styles.panelContent}>
           <PanelHeader
             eyebrow="素材资产库"
-            title={isCreationEntry ? '已入库资产' : '原片资产库'}
+            title={isCreationEntry ? '已入库资产' : activeStatus === 'published' ? '项目资产库' : activeStatus === 'processing' ? '处理中队列' : '异常队列'}
             description={
               isCreationEntry
                 ? '选择已入库的源素材，继续已有二创版本，或创建新的二创版本。'
-                : '先把可复用原片沉淀成稳定资产，再从这里发起二创创作。'
+                : activeStatus === 'published'
+                  ? '先把可复用原片沉淀成稳定资产，再从这里发起二创创作。'
+                  : activeStatus === 'processing'
+                    ? '这里只展示仍在处理中或待确认的原片任务。'
+                    : '这里只展示导入或分析失败、需要恢复处理的素材。'
             }
           />
           <AssetFilterBar
             activeStatus={activeStatus}
             activeTag={activeTag}
             availableTags={availableTags}
-            onStatusChange={setActiveStatus}
+            onStatusChange={(nextStatus) => {
+              setActiveStatus(nextStatus);
+              onSectionChange?.(nextStatus);
+            }}
             onTagChange={setActiveTag}
           />
         </div>
@@ -313,11 +335,23 @@ export function RemixAssetLibrary({
         <div className={styles.panelContent}>
           <div className={styles.heroBlock}>
             <div className={styles.eyebrow}>素材治理区</div>
-            <div className={styles.title}>{isCreationEntry ? '先选已入库资产，再发起二创' : '先确认素材，再决定怎么二创'}</div>
+            <div className={styles.title}>
+              {isCreationEntry
+                ? '先选已入库资产，再发起二创'
+                : activeStatus === 'published'
+                  ? '正式资产只在入库后进入这里'
+                  : activeStatus === 'processing'
+                    ? '未入库素材继续在这里完成处理'
+                    : '失败素材需要先恢复，再回到处理链'}
+            </div>
             <div className={styles.description}>
               {isCreationEntry
                 ? '这里只展示已经完成入库确认的素材。你可以继续已有二创版本，或基于当前素材新建一个二创版本。'
-                : '这里负责确认原片的切片、关键帧和分析状态。只有完成入库确认的素材，才允许进入二创工作区。'}
+                : activeStatus === 'published'
+                  ? '这里展示已经完成入库确认的素材，只有这些正式资产才允许进入二创工作区。'
+                  : activeStatus === 'processing'
+                    ? '这里展示 draft / processing / ready_for_review 状态的素材任务。'
+                    : '这里集中展示 failed 状态的素材，可回到处理页查看失败原因并重跑。'}
             </div>
             {errorMessage ? (
               <div className={styles.description} data-testid="remix-asset-library-error">

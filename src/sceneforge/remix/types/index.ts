@@ -9,6 +9,8 @@ export const REMIX_ROUTE_PATTERNS = {
   creationWorkspace: '/remix/projects/:variantId',
 } as const;
 
+export const REMIX_ASSET_LIBRARY_SECTIONS = ['published', 'processing', 'failed'] as const;
+
 export const REMIX_SOURCE_ASSET_STATUSES = [
   'draft',
   'processing',
@@ -24,6 +26,14 @@ export const REMIX_STAGE_STATUSES = [
   'ready_for_review',
   'approved',
   'failed',
+] as const;
+
+export const REMIX_PROCESSING_JOB_STATUSES = [
+  'queued',
+  'running',
+  'succeeded',
+  'failed',
+  'cancelled',
 ] as const;
 
 export const REMIX_EDITED_KEYFRAME_STATUSES = [
@@ -80,7 +90,9 @@ export const REMIX_CREATION_STAGE_IDS = [
 ] as const;
 
 export type RemixSourceAssetStatus = (typeof REMIX_SOURCE_ASSET_STATUSES)[number];
+export type RemixAssetLibrarySection = (typeof REMIX_ASSET_LIBRARY_SECTIONS)[number];
 export type RemixStageStatus = (typeof REMIX_STAGE_STATUSES)[number];
+export type RemixProcessingJobStatus = (typeof REMIX_PROCESSING_JOB_STATUSES)[number];
 export type RemixEditedKeyframeStatus = (typeof REMIX_EDITED_KEYFRAME_STATUSES)[number];
 export type RemixReferenceStrength = (typeof REMIX_REFERENCE_STRENGTHS)[number];
 export type RemixGenerationMode = (typeof REMIX_GENERATION_MODES)[number];
@@ -281,6 +293,18 @@ export interface SourceAssetSummary {
   updatedAt: string;
 }
 
+export interface RemixProcessingJob {
+  id: string;
+  sourceAssetId: string;
+  stepId: RemixAssetProcessingStageId;
+  status: RemixProcessingJobStatus;
+  message?: string | null;
+  error?: string | null;
+  progress?: number | null;
+  startedAt: string;
+  finishedAt?: string | null;
+}
+
 export interface RemixVariantSummary {
   id: string;
   sourceAssetId: string;
@@ -297,6 +321,8 @@ export interface RemixAssetProcessingSnapshot {
   sourceAsset: SourceAsset;
   processingStageStates: Partial<Record<RemixAssetProcessingStageId, RemixStageStatus>>;
   variants?: RemixVariantSummary[];
+  processingJobs?: RemixProcessingJob[];
+  activeProcessingJob?: RemixProcessingJob | null;
 }
 
 export interface RemixCreationWorkspaceSnapshot {

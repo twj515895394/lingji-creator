@@ -8,6 +8,7 @@ import type {
   RemixKeyframeRole,
   RemixQualityCheck,
   RemixReferenceStrength,
+  RemixSourceAssetStatus,
   RemixVariantSummary,
   RetentionMatrix,
 } from '../../../src/sceneforge/remix/types';
@@ -19,6 +20,7 @@ export interface RemixSourceAssetRefInput {
 
 export interface ListSourceAssetsInput {
   projectDir: string;
+  statuses?: RemixSourceAssetStatus | RemixSourceAssetStatus[];
 }
 
 export interface RemixVariantRefInput {
