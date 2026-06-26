@@ -182,14 +182,22 @@
 }
 
 .coverTitle {
-  font-size: var(--font-size-heading-md);
+  font-size: var(--font-size-md);
   font-weight: var(--font-weight-bold);
   color: rgba(255, 248, 235, 0.96);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 220px;
 }
 
 .coverSubtitle {
-  font-size: var(--font-size-md);
-  color: rgba(214, 221, 232, 0.74);
+  font-size: var(--font-size-sm);
+  color: rgba(214, 221, 232, 0.64);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 220px;
 }
 
 .cardTopline {
@@ -346,25 +354,31 @@
 }
 
 .detailRow {
-  display: grid;
-  grid-template-columns: minmax(72px, max-content) minmax(0, 1fr);
-  align-items: start;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
   gap: 12px;
-  font-size: var(--font-size-lg);
-  color: rgba(214, 221, 232, 0.72);
+  font-size: var(--font-size-sm);
+  color: rgba(214, 221, 232, 0.64);
   min-width: 0;
 }
 
 .detailRow strong {
-  color: rgba(255, 248, 235, 0.95);
+  color: rgba(255, 248, 235, 0.92);
+  font-weight: 600;
   text-align: right;
-  overflow-wrap: anywhere;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 172px;
 }
 
 .compactValue {
-  max-width: 240px;
+  max-width: 160px;
   text-align: right;
-  word-break: break-all;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .detailNote {

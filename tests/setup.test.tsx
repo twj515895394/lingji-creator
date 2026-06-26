@@ -29,7 +29,7 @@ describe('Setup', () => {
     expect(html).toContain('导入音频');
     expect(html).toContain('抖音导入');
     expect(html).toContain('本地视频');
-    expect(html).toContain('Remix Mode');
+    expect(html).toContain('Remix 二创');
     expect(html).not.toContain('所有文件均在本地处理');
   });
 
@@ -83,6 +83,6 @@ describe('Setup', () => {
 
     expect(html).toContain('本地草稿');
     expect(html).toContain('demo-project');
-    expect(html).toContain('Remix·资产入库');
+    expect(html).toContain('Remix 二创·资产入库');
   });
 });

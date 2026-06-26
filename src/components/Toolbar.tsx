@@ -31,10 +31,10 @@ const pageTitleMap: Record<Exclude<AppPage, 'editor'>, string> = {
   'auto-run': '一键成稿',
   'sceneforge-setup': '视频内容创作工坊',
   'sceneforge-studio': '视频内容创作工坊',
-  'sceneforge-remix-assets': 'SceneForge Remix Mode',
-  'sceneforge-remix-asset-processing': 'SceneForge Remix Mode',
-  'sceneforge-remix-asset-details': 'SceneForge Remix Mode',
-  'sceneforge-remix-creation': 'SceneForge Remix Mode',
+  'sceneforge-remix-assets': 'Remix 二创',
+  'sceneforge-remix-asset-processing': 'Remix 二创',
+  'sceneforge-remix-asset-details': 'Remix 二创',
+  'sceneforge-remix-creation': 'Remix 二创',
   publish: '视频发布',
 };
 
@@ -47,8 +47,8 @@ const pageStatusMap: Record<Exclude<AppPage, 'editor'>, string> = {
   'sceneforge-setup': '新建工坊项目',
   'sceneforge-studio': '视频内容创作流水线',
   'sceneforge-remix-assets': 'Remix 资产库',
-  'sceneforge-remix-asset-processing': 'Source Asset 处理工作台',
-  'sceneforge-remix-asset-details': 'Source Asset 详情',
+  'sceneforge-remix-asset-processing': '源素材处理工作台',
+  'sceneforge-remix-asset-details': '源素材详情',
   'sceneforge-remix-creation': 'Remix 二创创作工作台',
   publish: '视频发布',
 };

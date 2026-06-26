@@ -536,7 +536,7 @@ export function Setup({
             <div className={styles.quickItemIcon}>
               <Link size={22} strokeWidth={1.5} />
             </div>
-            <span className={styles.quickItemLabel}>Remix Mode</span>
+            <span className={styles.quickItemLabel}>Remix 二创</span>
           </button>
         </div>
 

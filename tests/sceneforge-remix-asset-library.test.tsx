@@ -39,7 +39,12 @@ afterEach(() => {
   }
 });
 
-function buildApiClient(): RemixIpcContract {
+interface TestRemixApiClient extends RemixIpcContract {
+  getLastCreateVariantInput: () => { name: string; concept: string } | null;
+}
+
+function buildApiClient(): TestRemixApiClient {
+  let lastCreateVariantInput: { name: string; concept: string } | null = null;
   let snapshots = {
     'source-processing-001': clone(MOCK_ASSET_PROCESSING_SNAPSHOTS['source-processing-001']),
     'source-library-001': clone(MOCK_ASSET_PROCESSING_SNAPSHOTS['source-library-001']),
@@ -118,7 +123,31 @@ function buildApiClient(): RemixIpcContract {
       if (sourceAsset?.status !== 'published_to_library') {
         throw new Error('这份素材尚未保存入库，不能创建二创版本。请先完成处理并保存入库。');
       }
-      throw new Error('not implemented');
+      lastCreateVariantInput = { name: input.name, concept: input.concept };
+      return {
+        ...clone(MOCK_ASSET_PROCESSING_SNAPSHOTS['source-library-001']),
+        variant: {
+          id: 'variant-created-001',
+          sourceAssetId: input.sourceAssetId,
+          name: input.name,
+          concept: input.concept,
+          referenceStrength: 'strong',
+          defaultGenerationMode: 'keyframes_plus_source_clip',
+          retentionMatrix: clone(MOCK_ASSET_PROCESSING_SNAPSHOTS['source-library-001'].variants?.[0]?.retentionMatrix ?? {
+            plotStructure: 'keep',
+            characterRelationship: 'replace_identity',
+            dialogueMeaning: 'rewrite',
+            dialogueRhythm: 'keep',
+            performanceAction: 'keep',
+            cameraComposition: 'soft_keep',
+            sceneEnvironment: 'replace',
+            visualStyle: 'new_style',
+            memeMechanism: 'enhance',
+          }),
+          currentStage: 'remix_strategy',
+          updatedAt: '2026-06-24T12:00:00.000Z',
+        },
+      } as any;
     },
     listVariantsForSourceAsset: async () => variants,
     validateSourceAssetMedia: async (input) =>
@@ -178,6 +207,7 @@ function buildApiClient(): RemixIpcContract {
     updateEditedKeyframeStatus: async () => { throw new Error('not implemented'); },
     runSeedancePrompts: async () => { throw new Error('not implemented'); },
     exportPromptBundle: async () => { throw new Error('not implemented'); },
+    getLastCreateVariantInput: () => lastCreateVariantInput,
   };
 }
 
@@ -246,6 +276,33 @@ describe('SceneForge Remix asset library', () => {
     expect(container.textContent).toContain('先选已入库资产，再发起二创');
     expect(container.textContent).toContain('基于当前素材创建二创版本');
     expect(container.textContent).toContain('补充导入新原片');
+  });
+
+  it('创建二创时使用中文中性的默认名称与概念', async () => {
+    const apiClient = buildApiClient();
+    const container = await renderLibrary(
+      <RemixAssetLibrary
+        projectDir="/tmp/remix-project"
+        apiClient={apiClient}
+        entryIntent="creation"
+      />,
+    );
+
+    const createButton = Array.from(container.querySelectorAll('button')).find((element) =>
+      element.textContent?.includes('基于当前素材创建二创版本'),
+    );
+    await act(async () => {
+      createButton?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    });
+    await act(async () => {
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    expect(apiClient.getLastCreateVariantInput()).toEqual({
+      name: '天台谈判名场面 二创版',
+      concept: '基于「天台谈判名场面」延展一条新的二创版本。',
+    });
   });
 
   it('处理中分区展示任务卡而不是正式资产 CTA', async () => {

@@ -101,7 +101,7 @@ export function buildRecentProjectIdentityForOpen(
     return {
       projectKind: 'remix',
       remixEntryIntent: options.remixEntryIntent === 'creation' ? 'creation' : 'asset-ingestion',
-      remixRoutePath: null,
+      remixRoutePath: buildRemixPath(options.remixRoute),
     };
   }
   if (projectData.type === 'sceneforge') {
@@ -115,4 +115,4 @@ export function shouldRejectRemixOpenOnProject(projectData: ProjectData): boolea
 }
 
 export const REMIX_OPEN_ON_NON_SCENEFORGE_MESSAGE =
-  'Remix Mode 仅支持 SceneForge 项目，请选择 SceneForge 工程目录。';
+  'Remix 二创仅支持 SceneForge 项目，请选择 SceneForge 工程目录。';

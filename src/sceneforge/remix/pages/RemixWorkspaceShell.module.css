@@ -9,6 +9,10 @@
   color: var(--color-text-primary);
 }
 
+.twoColumnShell {
+  grid-template-columns: 208px minmax(0, 1fr) !important;
+}
+
 .shell > *,
 .libraryShell > * {
   min-width: 0;

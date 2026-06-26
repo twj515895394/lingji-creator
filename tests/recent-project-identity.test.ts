@@ -21,7 +21,7 @@ describe('recent project identity helpers', () => {
         projectKind: 'remix',
         remixEntryIntent: 'asset-ingestion',
       }),
-    ).toBe('Remix·资产入库');
+    ).toBe('Remix 二创·资产入库');
     expect(
       getRecentProjectDisplayLabel({
         path: '/tmp/d',
@@ -30,7 +30,7 @@ describe('recent project identity helpers', () => {
         projectKind: 'remix',
         remixEntryIntent: 'creation',
       }),
-    ).toBe('Remix·二次创作');
+    ).toBe('Remix 二创·二次创作');
   });
 
   it('normalizes identity defaults safely', () => {

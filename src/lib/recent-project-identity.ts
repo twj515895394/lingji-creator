@@ -18,7 +18,7 @@ function normalizeRemixRoutePath(routePath?: string | null): string | null {
 
 export function getRecentProjectDisplayLabel(project: RecentProjectEntry): string {
   if (project.projectKind === 'remix') {
-    return project.remixEntryIntent === 'creation' ? 'Remix·二次创作' : 'Remix·资产入库';
+    return project.remixEntryIntent === 'creation' ? 'Remix 二创·二次创作' : 'Remix 二创·资产入库';
   }
 
   if (project.projectKind === 'sceneforge') {

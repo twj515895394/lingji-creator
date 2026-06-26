@@ -181,8 +181,8 @@ export function RemixAssetLibrary({
       const workspace = await resolveClient().createVariantFromSourceAsset({
         projectDir,
         sourceAssetId,
-        name: `${sourceAsset.title} Remix`,
-        concept: `基于「${sourceAsset.title}」延展一条新的拟人化二创版本。`,
+        name: `${sourceAsset.title} 二创版`,
+        concept: `基于「${sourceAsset.title}」延展一条新的二创版本。`,
       });
       setAssets((current) =>
         current.map((asset) =>

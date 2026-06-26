@@ -436,6 +436,6 @@ describe('Setup SceneForge entry', () => {
     );
 
     expect(html).toContain('视频内容创作工坊');
-    expect(html).toContain('Remix Mode');
+    expect(html).toContain('Remix 二创');
   });
 });

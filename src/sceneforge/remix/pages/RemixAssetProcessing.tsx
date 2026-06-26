@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState, type ReactElement } from 'react';
-import { Badge, Button, Dialog, DialogBody, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '../../../ui';
+import { Badge, Button, Checkbox, Dialog, DialogBody, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '../../../ui';
 import { PanelHeader } from '../../../ui/patterns/PanelHeader';
 import type { RemixIpcContract } from '../../../../electron/sceneforge/remix/remix-ipc-types';
 import { AnnotationEditor } from '../components/AnnotationEditor';
@@ -208,6 +208,7 @@ export function RemixAssetProcessing({
   const [exitGuardMode, setExitGuardMode] = useState<ExitGuardMode | null>(null);
   const [segmentationMode, setSegmentationMode] = useState<'fast' | 'accurate'>('fast');
   const [preserveManualEdits, setPreserveManualEdits] = useState(true);
+  const [granularity, setGranularity] = useState<'fine' | 'balanced' | 'coarse'>('balanced');
 
   useEffect(() => {
     async function loadSnapshot() {
@@ -402,6 +403,13 @@ export function RemixAssetProcessing({
     if (!projectDir) {
       return;
     }
+    const minShotDurationMs =
+      granularity === 'fine'
+        ? 1000
+        : granularity === 'coarse'
+          ? 3000
+          : undefined;
+
     await runAction(
       'segmentation',
       'remix_segmentation',
@@ -411,6 +419,7 @@ export function RemixAssetProcessing({
           sourceAssetId,
           mode: segmentationMode,
           preserveManualEdits,
+          minShotDurationMs,
         }),
       `正在执行 ${getSegmentationModeLabel(segmentationMode)} 切片`,
     );
@@ -460,11 +469,18 @@ export function RemixAssetProcessing({
     if (!asset || !activePreviewSegment) {
       return;
     }
-    const splitMs = Math.max(
-      activePreviewSegment.timeRange.startMs + 600,
-      Math.min(previewCurrentTimeMs, activePreviewSegment.timeRange.endMs - 600),
-    );
-    if (splitMs <= activePreviewSegment.timeRange.startMs || splitMs >= activePreviewSegment.timeRange.endMs) {
+    const startMs = activePreviewSegment.timeRange.startMs;
+    const endMs = activePreviewSegment.timeRange.endMs;
+    const durationMs = activePreviewSegment.timeRange.durationMs;
+
+    let splitMs = previewCurrentTimeMs;
+    if (previewCurrentTimeMs <= startMs + 1000 || previewCurrentTimeMs >= endMs - 1000) {
+      splitMs = Math.round(startMs + durationMs / 2);
+    } else {
+      splitMs = Math.max(startMs + 600, Math.min(previewCurrentTimeMs, endMs - 600));
+    }
+
+    if (splitMs <= startMs || splitMs >= endMs) {
       return;
     }
     const first: SourceSegment = {
@@ -607,7 +623,7 @@ export function RemixAssetProcessing({
   if (!asset || !projectDir) {
     return (
       <div
-        className={shellStyles.shell}
+        className={[shellStyles.shell, shellStyles.twoColumnShell].join(' ')}
         data-testid="remix-asset-processing-page"
         data-remix-route={REMIX_ROUTE_PATTERNS.assetProcessing}
       >
@@ -801,36 +817,68 @@ export function RemixAssetProcessing({
           <div className={panelStyles.chip}>{getStageStatusLabel(stepStatuses.segmentation)}</div>
         </div>
         <div className={panelStyles.copyRow}>
+          <div className={panelStyles.modeToggleGroup}>
+            <button
+              type="button"
+              className={[
+                panelStyles.modeToggleItem,
+                segmentationMode === 'fast' ? panelStyles.modeToggleItemActive : '',
+              ].join(' ')}
+              onClick={() => setSegmentationMode('fast')}
+              disabled={Boolean(pendingActionId)}
+              title="使用快速模型进行粗粒度场景检测，生成较长、较连贯的镜头段"
+            >
+              快速模式
+            </button>
+            <button
+              type="button"
+              className={[
+                panelStyles.modeToggleItem,
+                segmentationMode === 'accurate' ? panelStyles.modeToggleItemActive : '',
+              ].join(' ')}
+              onClick={() => setSegmentationMode('accurate')}
+              disabled={Boolean(pendingActionId)}
+              title="使用高精模型进行帧级场景转换检测，能捕捉更细微的剪辑点"
+            >
+              高精模式
+            </button>
+          </div>
+
+          <div className={panelStyles.granularityGroup} title="控制镜头段的最小切分长度，数值越大，切出的片段越长、越少">
+            <span className={panelStyles.granularityLabel}>最小镜头长度：</span>
+            <select
+              value={granularity}
+              onChange={(e) => setGranularity(e.target.value as any)}
+              className={panelStyles.customSelect}
+              disabled={Boolean(pendingActionId)}
+            >
+              <option value="fine">精细 (最少 1.0s)</option>
+              <option value="balanced">均衡 (默认)</option>
+              <option value="coarse">较粗 (最少 3.0s)</option>
+            </select>
+          </div>
+
           <Button
-            variant={segmentationMode === 'fast' ? 'accent' : 'outline'}
-            onClick={() => setSegmentationMode('fast')}
-            disabled={Boolean(pendingActionId)}
-          >
-            快速模式
-          </Button>
-          <Button
-            variant={segmentationMode === 'accurate' ? 'accent' : 'outline'}
-            onClick={() => setSegmentationMode('accurate')}
-            disabled={Boolean(pendingActionId)}
-          >
-            高精模式
-          </Button>
-          <Button
-            variant="accent"
+            variant="primary"
             disabled={Boolean(pendingActionId)}
             onClick={() => {
               void rerunSegmentation();
             }}
+            title="基于所选模式重新分析视频，这会重置或重新计算镜头边界"
           >
             {pendingActionId === 'segmentation' ? '处理中…' : '运行切片'}
           </Button>
-          <Button
-            variant={preserveManualEdits ? 'outline' : 'ghost'}
-            disabled={Boolean(pendingActionId)}
-            onClick={() => setPreserveManualEdits((current) => !current)}
-          >
-            {preserveManualEdits ? '重跑时保留人工校准' : '重跑时覆盖人工校准'}
-          </Button>
+
+          <span style={{ marginLeft: '12px', display: 'inline-flex', alignItems: 'center' }}>
+            <Checkbox
+              label="重跑时保留人工校准"
+              checked={preserveManualEdits}
+              onChange={setPreserveManualEdits}
+              disabled={Boolean(pendingActionId)}
+              size="sm"
+              title="开启后，手动合并或拆分的段在重跑切片时不会被重置"
+            />
+          </span>
         </div>
         <div className={panelStyles.copyRow}>
           <span className={panelStyles.copyFeedback}>
@@ -839,13 +887,28 @@ export function RemixAssetProcessing({
         </div>
         {activePreviewSegment ? (
           <div className={panelStyles.copyRow}>
-            <Button variant="outline" disabled={Boolean(pendingActionId)} onClick={() => { void mergeActiveSegmentWithNext(); }}>
+            <Button
+              variant="outline"
+              disabled={Boolean(pendingActionId)}
+              onClick={() => { void mergeActiveSegmentWithNext(); }}
+              title="将当前选中的镜头段与其后方紧邻的镜头段合并为一个大段"
+            >
               合并当前段与下一段
             </Button>
-            <Button variant="outline" disabled={Boolean(pendingActionId)} onClick={() => { void splitSegmentAtPlayhead(); }}>
+            <Button
+              variant="outline"
+              disabled={Boolean(pendingActionId)}
+              onClick={() => { void splitSegmentAtPlayhead(); }}
+              title="在当前视频预览所播放的时间刻度处，将当前镜头段拆分为二"
+            >
               在当前播放点拆分
             </Button>
-            <Button variant="outline" disabled={Boolean(pendingActionId)} onClick={() => { void approveActiveSegment(); }}>
+            <Button
+              variant="outline"
+              disabled={Boolean(pendingActionId)}
+              onClick={() => { void approveActiveSegment(); }}
+              title="手动锁定并标记当前镜头段的起止边界为已核对状态"
+            >
               确认当前边界
             </Button>
             <span className={panelStyles.copyFeedback}>
@@ -885,14 +948,14 @@ export function RemixAssetProcessing({
           <div className={panelStyles.panelTitleBlock}>
             <h2 className={panelStyles.panelTitle}>关键帧提取</h2>
             <p className={panelStyles.panelDescription}>
-              每段至少沉淀可引用的首帧、尾帧和必要的中间帧。
+              点击「提取关键帧」将自动为视频中的<strong>所有镜头段</strong>一键提取首帧、中帧与尾帧，无需逐个片段处理。
             </p>
           </div>
           <div className={panelStyles.chip}>{getStageStatusLabel(stepStatuses.keyframes)}</div>
         </div>
         <div className={panelStyles.copyRow}>
           <Button
-            variant="accent"
+            variant="primary"
             disabled={Boolean(pendingActionId)}
             onClick={() => {
               void runAction(
@@ -906,6 +969,7 @@ export function RemixAssetProcessing({
                 '正在提取关键帧',
               );
             }}
+            title="一键开始为所有镜头段分析并生成关键帧图片"
           >
             {pendingActionId === 'keyframes' ? '提取中…' : '提取关键帧'}
           </Button>
@@ -1018,7 +1082,7 @@ export function RemixAssetProcessing({
 
   return (
     <div
-      className={shellStyles.shell}
+      className={[shellStyles.shell, shellStyles.twoColumnShell].join(' ')}
       data-testid="remix-asset-processing-page"
       data-remix-route={REMIX_ROUTE_PATTERNS.assetProcessing}
     >
@@ -1035,51 +1099,39 @@ export function RemixAssetProcessing({
 
       <main className={shellStyles.panel}>
         <div className={shellStyles.panelContent}>
-          <section className={[panelStyles.heroPanel, panelStyles.heroPanelCompact].join(" ")}>
-            <div className={panelStyles.heroCopy}>
-              <div className={panelStyles.heroEyebrow}>素材处理工作台</div>
-              <h1 className={panelStyles.heroTitle}>{asset.title}</h1>
-              <p className={panelStyles.heroDescription}>
-                {workspaceState ? `${getWorkspaceStatusLabel(workspaceState.assetStatus)} · 当前步骤：` : '当前步骤：'}
-                <strong>{REMIX_ASSET_PROCESSING_NAV_ITEMS.find((item) => item.id === activeStepId)?.title ?? "处理"}</strong> · {getStageStatusLabel(stepStatuses[activeStepId])}
-              </p>
-              <div className={panelStyles.heroMetaLine}>
-                <span className={panelStyles.heroMetaItem} title={asset.sourceVideoPath}>
-                  文件：{getSourceAssetFilename(asset)}
-                </span>
-                <span className={panelStyles.heroMetaItem}>
-                  {formatRemixDuration(asset.videoMetadata.durationMs)} · {asset.videoMetadata.width} × {asset.videoMetadata.height}
-                </span>
-                <span className={panelStyles.heroMetaItem}>
-                  {asset.segments.length} 段 · {asset.segments.flatMap((segment) => segment.keyframes).length} 帧
-                </span>
-                <span className={panelStyles.heroMetaItem}>
-                  最近更新 {formatAssetLibraryDate(asset.updatedAt)}
-                </span>
-              </div>
-              {workspaceState ? (
-                <p className={panelStyles.heroDescription}>
-                  已完成 {workspaceState.completedSteps}/{workspaceState.totalSteps}
-                  {workspaceState.blockingReason ? ` · 阻塞：${workspaceState.blockingReason}` : ''}
-                </p>
-              ) : null}
-              {errorMessage ? <p className={panelStyles.heroDescription} data-testid="remix-processing-error">{errorMessage}</p> : null}
-              <div className={panelStyles.copyRow}>
-                <Button
-                  variant="outline"
-                  onClick={handleBackIntent}
-                  data-testid="remix-processing-back"
-                >
-                  返回资产库
-                </Button>
-                <Badge variant={canPublish ? 'success' : 'warning'}>
-                  {canPublish ? '可入库' : hasUnsavedAnnotationChanges ? '待保存' : '待补齐'}
-                </Badge>
-                {isLoading ? <span className={panelStyles.chip}>同步中…</span> : null}
-              </div>
+          <header className={panelStyles.workbenchHeader}>
+            <div className={panelStyles.headerTitleBlock}>
+              <span className={panelStyles.headerEyebrow}>素材处理工作台</span>
+              <span className={panelStyles.headerDivider}>/</span>
+              <h1 className={panelStyles.headerTitle} title={asset.title}>
+                {asset.title}
+              </h1>
+              <Badge variant={canPublish ? 'success' : 'warning'}>
+                {canPublish ? '可入库' : hasUnsavedAnnotationChanges ? '待保存' : '待补齐'}
+              </Badge>
+              {isLoading ? <span className={panelStyles.statusChip}>同步中…</span> : null}
             </div>
-          </section>
 
+            <div className={panelStyles.headerMetaBlock}>
+              <span className={panelStyles.headerMetaText} title={getSourceAssetFilename(asset)}>
+                文件：<span className={panelStyles.headerFilename}>{getSourceAssetFilename(asset)}</span> · {formatRemixDuration(asset.videoMetadata.durationMs)} · {asset.videoMetadata.width}×{asset.videoMetadata.height} · {asset.segments.length}段 · {asset.segments.flatMap((segment) => segment.keyframes).length}帧
+              </span>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={handleBackIntent}
+                data-testid="remix-processing-back"
+              >
+                返回资产库
+              </Button>
+            </div>
+          </header>
+
+          {errorMessage && (
+            <div className={panelStyles.errorMessageBanner} data-testid="remix-processing-error">
+              {errorMessage}
+            </div>
+          )}
 
           <section className={panelStyles.panelCardDense} data-testid="remix-processing-current-task">
             <div className={panelStyles.panelTitle}>
@@ -1101,28 +1153,10 @@ export function RemixAssetProcessing({
 
             {stepPanels[activeStepId]}
           </section>
-        </div>
-      </main>
 
-      <aside className={shellStyles.panel}>
-        <div className={shellStyles.panelContent}>
-          <PanelHeader
-            eyebrow="状态摘要"
-            title="处理摘要"
-            description="只保留当前步骤需要盯的状态和下一步，不在这里复读整页内容。"
-            meta={<Badge variant={canPublish ? 'success' : 'warning'}>{canPublish ? '可发布' : '待补齐'}</Badge>}
-          />
-          <div className={shellStyles.summaryList} data-testid="remix-processing-inspector">
-            {inspectorRows.map((row) => (
-              <div key={row.label} className={shellStyles.summaryRow} title={row.value}>
-                <span className={shellStyles.summaryKey}>{row.label}</span>
-                <strong className={shellStyles.summaryValue}>{row.value}</strong>
-              </div>
-            ))}
-          </div>
-          <details className={shellStyles.technicalDetails}>
+          <details className={shellStyles.technicalDetails} style={{ marginTop: '12px' }}>
             <summary className={shellStyles.technicalSummary}>技术信息</summary>
-            <div className={shellStyles.summaryList}>
+            <div className={shellStyles.summaryList} style={{ marginTop: '8px' }}>
               <div className={shellStyles.summaryRow} title={asset.sourceVideoPath}>
                 <span className={shellStyles.summaryKey}>源文件</span>
                 <strong className={shellStyles.summaryValue}>{formatCompactPath(asset.sourceVideoPath, 48)}</strong>
@@ -1134,7 +1168,7 @@ export function RemixAssetProcessing({
             </div>
           </details>
         </div>
-      </aside>
+      </main>
 
       <Dialog open={exitGuardMode !== null} onOpenChange={(open) => {
         if (!open) {

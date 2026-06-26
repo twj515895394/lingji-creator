@@ -71,4 +71,23 @@ describe('Toolbar', () => {
     expect(html).not.toContain('>编辑<');
     expect(html).not.toContain('>媒体<');
   });
+
+  it('renders localized Remix title and status copy', () => {
+    const html = renderToStaticMarkup(
+      <Toolbar
+        compact={false}
+        page="sceneforge-remix-asset-processing"
+        projectName=""
+        saveStatus="idle"
+        canUndo={false}
+        canRedo={false}
+        onCommand={() => undefined}
+      />,
+    );
+
+    expect(html).toContain('Remix 二创');
+    expect(html).toContain('源素材处理工作台');
+    expect(html).not.toContain('SceneForge Remix Mode');
+    expect(html).not.toContain('Source Asset');
+  });
 });

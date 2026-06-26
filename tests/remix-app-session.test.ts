@@ -51,13 +51,13 @@ describe('remix open project helpers', () => {
   it('builds remix identity when opening with remix route', () => {
     expect(
       buildRecentProjectIdentityForOpen(
-        { remixRoute: { kind: 'asset-library' }, remixEntryIntent: 'asset-ingestion' },
+        { remixRoute: { kind: 'asset-library', section: 'processing' }, remixEntryIntent: 'asset-ingestion' },
         { type: 'sceneforge' } as import('../src/lib/project-persistence').ProjectData,
       ),
     ).toEqual({
       projectKind: 'remix',
       remixEntryIntent: 'asset-ingestion',
-      remixRoutePath: null,
+      remixRoutePath: '/remix/assets?section=processing',
     });
   });
 

@@ -130,9 +130,11 @@ function ProjectCard({
             更新: {formatDate(project.updatedAt ?? project.lastOpenedAt)}
           </span>
         </div>
-        <div className={styles.projectPath} title={project.path}>
-          {getFileNameFromPath(project.path)}
-        </div>
+        {getFileNameFromPath(project.path) !== project.name && (
+          <div className={styles.projectPath} title={project.path}>
+            {getFileNameFromPath(project.path)}
+          </div>
+        )}
       </div>
       <Button.Icon
         size="xs"

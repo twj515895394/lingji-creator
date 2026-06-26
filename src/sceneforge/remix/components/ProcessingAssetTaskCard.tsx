@@ -42,9 +42,9 @@ export function ProcessingAssetTaskCard({
         <SourceAssetThumbnail asset={asset} />
         <div className={styles.coverMeta}>
           <div>
-            <div className={styles.coverTitle}>{asset.title}</div>
+            <div className={styles.coverTitle} title={asset.title}>{asset.title}</div>
             <div className={styles.coverSubtitle}>
-              {formatAssetLibraryDuration(asset.videoMetadata.durationMs)} · {getSourceAssetFilename(asset)}
+              {formatAssetLibraryDuration(asset.videoMetadata.durationMs)} · {asset.videoMetadata.width}×{asset.videoMetadata.height}
             </div>
           </div>
           <Badge variant={REMIX_SOURCE_STATUS_BADGE_VARIANTS[asset.status]}>
