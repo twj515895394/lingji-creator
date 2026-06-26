@@ -1,6 +1,8 @@
+import fs from 'node:fs/promises';
 import path from 'node:path';
 import type { SourceSegment } from '../../../../src/sceneforge/remix/types';
 import { getRemixSourceAssetDir } from '../remix-artifact-paths';
+import { resolveProjectFile } from '../remix-validators';
 import {
   buildSourceAssetSnapshot,
   readStoredSourceAsset,
@@ -8,6 +10,8 @@ import {
   writeStoredSourceAsset,
 } from '../remix-store';
 import { writeSegmentArtifacts } from '../remix-segmentation-service';
+import { SegmentClipService } from './segment-clip-service';
+import type { ExportSegmentClipsResult } from './segment-clip-exporter';
 
 export const SEGMENT_CLIP_MAINTENANCE_MODULE_READY = true;
 
