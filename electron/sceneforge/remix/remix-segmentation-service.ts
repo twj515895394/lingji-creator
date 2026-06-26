@@ -1,5 +1,6 @@
 import fs from 'node:fs/promises';
 import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 import type {
   RemixSegmentBoundaryDetails,
   RemixSegmentationDiagnostics,
@@ -19,6 +20,7 @@ import type { StoredSourceAssetDocument } from './remix-store';
 import { readStoredSourceAsset, writeStoredSourceAsset } from './remix-store';
 import { runShotDetector } from './shot-detection/shot-detector-runner';
 import type { ShotDetectionResult } from './shot-detection/shot-detector-types';
+import { resolveTransNetV2Assets } from './shot-detection/model-path-resolver';
 import {
   SegmentClipService,
   type SegmentClipGenerationSummary,
@@ -46,6 +48,14 @@ interface SegmentationBuildResult {
   lowConfidenceSegmentIds: string[];
   detectionResult: ShotDetectionResult | null;
   fallbackReason: string | null;
+}
+
+function currentModuleDir(): string {
+  return path.dirname(fileURLToPath(import.meta.url));
+}
+
+function processResourcesPath(): string {
+  return (process as NodeJS.Process & { resourcesPath?: string }).resourcesPath ?? process.cwd();
 }
 
 function withCompleteBoundary(segment: SourceSegment): SourceSegment {
@@ -169,7 +179,8 @@ function confidenceFromSources(sources: string[], baseConfidence: number): numbe
     (sources.some((source) => source.includes('adaptive')) ? 0.08 : 0) +
     (sources.some((source) => source.includes('ffmpeg_scene')) ? 0.05 : 0) +
     (sources.some((source) => source.includes('accurate_refiner')) ? 0.1 : 0) +
-    (sources.includes('pyscenedetect_adaptive') ? 0.08 : 0) -
+    (sources.includes('pyscenedetect_adaptive') ? 0.08 : 0) +
+    (sources.includes('transnetv2_single_frame') ? 0.08 : 0) -
     (sources.length === 1 && !isRealDetector ? 0.12 : 0);
   return roundConfidence(boosted);
 }
@@ -293,6 +304,64 @@ function candidatesFromDetectionResult(detectionResult: ShotDetectionResult): Se
   }));
 }
 
+function fallbackSegments(
+  sourceAssetId: string,
+  document: StoredSourceAssetDocument,
+  inputProfile: RemixSegmentationInputProfile,
+  mode: RemixSegmentationMode,
+  minShotDurationMs: number,
+  fallbackReason: string,
+): SegmentationBuildResult {
+  const built = buildSegmentsFromCandidates(
+    sourceAssetId,
+    document.sourceAsset.videoMetadata.durationMs,
+    buildCandidateBoundaries(inputProfile, mode),
+    minShotDurationMs,
+  );
+  return { ...built, detectionResult: null, fallbackReason };
+}
+
+function buildRuntimeResolutionOptions() {
+  return {
+    appPath: process.cwd(),
+    resourcesPath: (process as NodeJS.Process & { resourcesPath?: string }).resourcesPath ?? process.cwd(),
+    cwd: process.cwd(),
+    moduleDir: currentModuleDir(),
+    env: process.env,
+  };
+}
+
+async function runDetectorAndBuildSegments(
+  projectDir: string,
+  sourceAssetId: string,
+  document: StoredSourceAssetDocument,
+  mode: RemixSegmentationMode,
+  minShotDurationMs: number,
+  modelPath?: string | null,
+  modelVendorDir?: string | null,
+): Promise<SegmentationBuildResult> {
+  const detectionResult = await runShotDetector({
+    projectDir,
+    sourceAssetId,
+    videoPath: document.sourceAsset.sourceVideoPath,
+    mode,
+    minShotDurationMs,
+    durationMs: document.sourceAsset.videoMetadata.durationMs,
+    fps: document.sourceAsset.videoMetadata.fps ?? 25,
+    width: document.sourceAsset.videoMetadata.width,
+    height: document.sourceAsset.videoMetadata.height,
+    modelPath,
+    modelVendorDir,
+  });
+  const built = buildSegmentsFromCandidates(
+    sourceAssetId,
+    document.sourceAsset.videoMetadata.durationMs,
+    candidatesFromDetectionResult(detectionResult),
+    minShotDurationMs,
+  );
+  return { ...built, detectionResult, fallbackReason: null };
+}
+
 async function buildSegmentsForMode(
   projectDir: string,
   sourceAssetId: string,
@@ -303,44 +372,57 @@ async function buildSegmentsForMode(
 ): Promise<SegmentationBuildResult> {
   if (mode === 'fast') {
     try {
-      const detectionResult = await runShotDetector({
+      return await runDetectorAndBuildSegments(
         projectDir,
         sourceAssetId,
-        videoPath: document.sourceAsset.sourceVideoPath,
+        document,
         mode,
         minShotDurationMs,
-        durationMs: document.sourceAsset.videoMetadata.durationMs,
-        fps: document.sourceAsset.videoMetadata.fps ?? 25,
-        width: document.sourceAsset.videoMetadata.width,
-        height: document.sourceAsset.videoMetadata.height,
-      });
-      const built = buildSegmentsFromCandidates(
-        sourceAssetId,
-        document.sourceAsset.videoMetadata.durationMs,
-        candidatesFromDetectionResult(detectionResult),
-        minShotDurationMs,
       );
-      return { ...built, detectionResult, fallbackReason: null };
     } catch (error) {
-      const fallbackReason = error instanceof Error ? error.message : String(error);
-      const built = buildSegmentsFromCandidates(
+      return fallbackSegments(
         sourceAssetId,
-        document.sourceAsset.videoMetadata.durationMs,
-        buildCandidateBoundaries(inputProfile, mode),
+        document,
+        inputProfile,
+        mode,
         minShotDurationMs,
+        error instanceof Error ? error.message : String(error),
       );
-      return { ...built, detectionResult: null, fallbackReason };
     }
   }
 
-  const fallbackReason = 'TransNetV2 accurate detector has not been implemented in Phase 1.';
-  const built = buildSegmentsFromCandidates(
-    sourceAssetId,
-    document.sourceAsset.videoMetadata.durationMs,
-    buildCandidateBoundaries(inputProfile, mode),
-    minShotDurationMs,
-  );
-  return { ...built, detectionResult: null, fallbackReason };
+  const transNetV2Assets = resolveTransNetV2Assets(buildRuntimeResolutionOptions());
+  if (!transNetV2Assets.ready) {
+    return fallbackSegments(
+      sourceAssetId,
+      document,
+      inputProfile,
+      mode,
+      minShotDurationMs,
+      `TransNetV2 assets missing: ${transNetV2Assets.missing.join(', ')}${transNetV2Assets.warnings.length > 0 ? `; ${transNetV2Assets.warnings.join('; ')}` : ''}`,
+    );
+  }
+
+  try {
+    return await runDetectorAndBuildSegments(
+      projectDir,
+      sourceAssetId,
+      document,
+      mode,
+      minShotDurationMs,
+      transNetV2Assets.modelPath,
+      transNetV2Assets.vendorDir,
+    );
+  } catch (error) {
+    return fallbackSegments(
+      sourceAssetId,
+      document,
+      inputProfile,
+      mode,
+      minShotDurationMs,
+      error instanceof Error ? error.message : String(error),
+    );
+  }
 }
 
 export async function writeSegmentArtifacts(
@@ -382,6 +464,18 @@ export async function writeSegmentArtifacts(
   return clipSummary;
 }
 
+function detectionNote(mode: RemixSegmentationMode, detectionResult: ShotDetectionResult | null): string {
+  if (detectionResult?.detector === 'pyscenedetect_adaptive') {
+    return 'fast 模式已接入 PySceneDetect AdaptiveDetector 真实镜头检测。';
+  }
+  if (detectionResult?.detector === 'transnetv2') {
+    return 'accurate 模式已接入 TransNetV2 高精镜头检测。';
+  }
+  return mode === 'fast'
+    ? 'fast 模式检测 Worker 不可用，已使用规则候选边界 fallback。'
+    : 'accurate 模式 TransNetV2 不可用，已使用规则候选边界 fallback。';
+}
+
 function buildDiagnostics(
   profile: RemixSegmentationInputProfile,
   mode: RemixSegmentationMode,
@@ -394,11 +488,7 @@ function buildDiagnostics(
 ): RemixSegmentationDiagnostics {
   const usedFallback = Boolean(fallbackReason) || detectionResult?.usedFallback === true;
   const notes = [
-    detectionResult
-      ? 'fast 模式已接入 PySceneDetect AdaptiveDetector 真实镜头检测。'
-      : mode === 'fast'
-        ? 'fast 模式检测 Worker 不可用，已使用规则候选边界 fallback。'
-        : 'accurate 模式仍待接入 TransNetV2，当前使用规则候选边界 fallback。',
+    detectionNote(mode, detectionResult),
     lowConfidenceSegmentIds.length > 0
       ? `检测到 ${lowConfidenceSegmentIds.length} 个低置信度镜头段，建议人工校准。`
       : '当前没有低置信度镜头段。',
