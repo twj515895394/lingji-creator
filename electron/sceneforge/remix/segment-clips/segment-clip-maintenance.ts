@@ -1,7 +1,7 @@
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import type { SourceSegment } from '../../../../src/sceneforge/remix/types';
-import { getRemixSourceAssetDir } from '../remix-artifact-paths';
+import { getRemixSourceAssetDir, getRemixSourceSegmentsDir } from '../remix-artifact-paths';
 import { resolveProjectFile } from '../remix-validators';
 import {
   buildSourceAssetSnapshot,
@@ -68,4 +68,13 @@ export async function regenerateSourceSegmentClips(input: { projectDir: string; 
   await writeStoredSourceAsset(input.projectDir, document);
   const jobsDocument = await readStoredSourceAssetJobs(input.projectDir, input.sourceAssetId);
   return { clipGeneration, snapshot: buildSourceAssetSnapshot(document, jobsDocument.jobs) };
+}
+
+export async function resolveSourceSegmentClipFolder(input: { projectDir: string; sourceAssetId: string; segmentId?: string | null }) {
+  const document = await readStoredSourceAsset(input.projectDir, input.sourceAssetId);
+  const segment = input.segmentId ? document.sourceAsset.segments.find((item) => item.id === input.segmentId) : null;
+  const targetPath = segment
+    ? resolveProjectFile(input.projectDir, segment.sourceClipPath)
+    : resolveProjectFile(input.projectDir, getRemixSourceSegmentsDir(input.sourceAssetId));
+  return { openedPath: segment ? path.dirname(targetPath) : targetPath, targetPath };
 }
