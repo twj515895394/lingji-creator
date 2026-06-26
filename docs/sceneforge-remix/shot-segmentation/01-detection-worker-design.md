@@ -35,6 +35,7 @@ TypeScript
   - SourceSegment 构造
   - diagnostics
   - fallback 编排
+  - 模型路径 / vendor 路径解析
 
 Python
   - PySceneDetect
@@ -82,6 +83,8 @@ export interface ShotDetectionRequest {
   width: number;
   height: number;
   threshold?: number | null;
+  modelPath?: string | null;
+  modelVendorDir?: string | null;
 }
 ```
 
@@ -126,6 +129,10 @@ resources/shot-detectors/
   accurate_transnetv2.py       # TransNetV2 推理
   requirements-fast.txt
   requirements-accurate.txt
+  vendor/
+    transnetv2/                # Hugging Face / PyTorch 模型结构代码
+      __init__.py
+      transnetv2_pytorch.py    # 示例名，实际以来源仓库为准
 ```
 
 ### 4.1 `detect_shots.py`
@@ -158,9 +165,69 @@ sys.exit(1)
 
 ---
 
-## 5. fast：PySceneDetect AdaptiveDetector
+## 5. TransNetV2 模型资产与加载要求
 
-### 5.1 参数
+高精模式不能只准备 `.pth`。它至少需要：
+
+```text
+1. PyTorch 权重文件：*.pth，例如 transnetv2-pytorch-weights.pth
+2. 与权重匹配的模型结构代码：例如 transnetv2_pytorch.py / model.py
+3. Python 依赖：torch、numpy、ffmpeg/opencv 相关依赖
+```
+
+推荐来源：
+
+```text
+https://huggingface.co/magnusdtd/TransNetV2/tree/main
+```
+
+如果该 Hugging Face 仓库提供现成 PyTorch 代码和 `.pth` 权重，优先使用它；不要再从 TensorFlow 权重手动转换。实际接入时不要把权重文件名写死为 `transnetv2-pytorch-weights.pth`，而是：
+
+```text
+1. 优先使用 LINGJI_TRANSNETV2_MODEL_PATH
+2. 再找 resources/models/transnetv2/transnetv2-pytorch-weights.pth
+3. 再扫描 resources/models/transnetv2/*.pth 中唯一文件
+4. 找不到则 accurate fallback 到 fast
+```
+
+推荐目录：
+
+```text
+resources/models/transnetv2/
+  transnetv2-pytorch-weights.pth        # 或实际 .pth 文件
+  model-config.json
+  README.md
+
+resources/shot-detectors/vendor/transnetv2/
+  transnetv2_pytorch.py                 # 或实际模型结构代码
+  __init__.py
+  LICENSE                               # 如果来源仓库提供
+```
+
+Worker 加载流程：
+
+```python
+sys.path.insert(0, vendor_dir)
+from transnetv2_pytorch import TransNetV2
+model = TransNetV2()
+state_dict = torch.load(model_path, map_location=device)
+model.load_state_dict(state_dict)
+model.eval().to(device)
+```
+
+如果 Hugging Face 仓库的模型结构文件名不同，则在 `accurate_transnetv2.py` 里适配，不要直接从 TS 调 Hugging Face 仓库的 CLI；本项目 Worker 仍然输出统一 `ShotDetectionResult JSON`。
+
+详细约定见：
+
+```text
+docs/sceneforge-remix/shot-segmentation/06-model-assets-and-directory-design.md
+```
+
+---
+
+## 6. fast：PySceneDetect AdaptiveDetector
+
+### 6.1 参数
 
 ```python
 AdaptiveDetector(
@@ -179,7 +246,7 @@ balanced  → 1.8s
 coarse    → 3.0s
 ```
 
-### 5.2 输出转换
+### 6.2 输出转换
 
 PySceneDetect 返回 scene list：
 
@@ -225,9 +292,9 @@ fallback：0.55
 
 ---
 
-## 6. accurate：TransNetV2
+## 7. accurate：TransNetV2
 
-### 6.1 输入帧
+### 7.1 输入帧
 
 TransNetV2 输入：
 
@@ -245,7 +312,7 @@ ffmpeg -i input.mp4 \
   pipe:
 ```
 
-### 6.2 设备选择
+### 7.2 设备选择
 
 ```python
 if torch.backends.mps.is_available():
@@ -256,7 +323,7 @@ else:
     device = torch.device("cpu")
 ```
 
-### 6.3 阈值与后处理
+### 7.3 阈值与后处理
 
 第一版策略：
 
@@ -268,7 +335,7 @@ threshold = clip(mean(scores) + std(scores), 0.35, 0.65)
 高置信短镜头 confidence >= 0.90 可保留，但标记 needs_review
 ```
 
-### 6.4 many-hot 扩展
+### 7.4 many-hot 扩展
 
 第二版可融合 many-hot：
 
@@ -280,7 +347,7 @@ single + many_hot 同时高：高置信边界
 
 ---
 
-## 7. 进度与日志
+## 8. 进度与日志
 
 第一版 stdout 必须只输出最终 JSON。stderr 可以输出普通日志。
 
@@ -295,10 +362,11 @@ TS runner 解析后转发给 renderer。
 
 ---
 
-## 8. 验收标准
+## 9. 验收标准
 
 1. `fast` 模式真实调用 PySceneDetect，而非固定步长模拟。
-2. `accurate` 模式能调用 TransNetV2，并输出模型检测 scenes。
-3. `accurate` 缺模型/缺 torch/OOM 时能 fallback 到 fast。
+2. `accurate` 模式能找到 `.pth` 权重和模型结构代码，并调用 TransNetV2 输出 scenes。
+3. `accurate` 缺权重、缺模型结构代码、缺 torch 或 OOM 时能 fallback 到 fast。
 4. Worker stdout 始终是可解析 JSON。
 5. 长视频不会导致 Electron 主进程崩溃；异常能写入 diagnostics。
+6. diagnostics 能区分“缺权重文件”和“缺模型结构代码”。
