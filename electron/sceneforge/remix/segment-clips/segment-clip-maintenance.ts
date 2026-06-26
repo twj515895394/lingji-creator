@@ -36,6 +36,19 @@ export async function loadSourceAssetForClipMaintenance(input: { projectDir: str
   return readStoredSourceAsset(input.projectDir, input.sourceAssetId);
 }
 
+export async function exportSourceSegmentClips(input: { projectDir: string; sourceAssetId: string }): Promise<ExportSegmentClipsResult> {
+  const document = await readStoredSourceAsset(input.projectDir, input.sourceAssetId);
+  if (document.sourceAsset.segments.length === 0) throw new Error('没有可导出的分镜片段，请先运行切片。');
+  const outputDir = resolveProjectFile(input.projectDir, getSourceSegmentClipPackageDir(input.sourceAssetId));
+  await fs.rm(outputDir, { recursive: true, force: true });
+  const exportSegments = document.sourceAsset.segments.map((segment) => ({ ...segment, sourceClipPath: getSourceSegmentPackageClipPath(input.sourceAssetId, segment) }));
+  await new SegmentClipService().generateClips({ projectDir: input.projectDir, sourceVideoPath: document.sourceAsset.sourceVideoPath, sourceAssetId: input.sourceAssetId, segments: exportSegments, mode: 'reencode_accurate', overwrite: true });
+  const items = exportSegments.map((segment) => ({ segmentId: segment.id, fileName: path.posix.basename(segment.sourceClipPath), exportedPath: resolveProjectFile(input.projectDir, segment.sourceClipPath), startMs: segment.timeRange.startMs, endMs: segment.timeRange.endMs, durationMs: segment.timeRange.durationMs }));
+  const manifestPath = path.join(outputDir, 'clips_manifest.json');
+  await fs.writeFile(manifestPath, `${JSON.stringify({ sourceAssetId: input.sourceAssetId, exportedAt: new Date().toISOString(), items }, null, 2)}\n`, 'utf8');
+  return { outputDir, manifestPath, totalCount: document.sourceAsset.segments.length, exportedCount: items.length, items };
+}
+
 export async function regenerateSourceSegmentClips(input: { projectDir: string; sourceAssetId: string }) {
   const document = await readStoredSourceAsset(input.projectDir, input.sourceAssetId);
   const clipGeneration = await writeSegmentArtifacts(
