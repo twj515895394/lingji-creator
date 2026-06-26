@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import importlib
+import os
 import sys
 import time
 from pathlib import Path
@@ -22,6 +23,17 @@ MODEL_MODULE_CANDIDATES = [
 ]
 
 MODEL_CLASS_CANDIDATES = ["TransNetV2", "TransnetV2", "TransNet"]
+DEFAULT_MAX_FRAMES = 20000
+
+
+def max_frames_from_env() -> int:
+    raw = os.environ.get("LINGJI_TRANSNETV2_MAX_FRAMES", "").strip()
+    if not raw:
+        return DEFAULT_MAX_FRAMES
+    try:
+        return max(1, int(raw))
+    except ValueError:
+        return DEFAULT_MAX_FRAMES
 
 
 def select_device(torch: Any):
@@ -87,15 +99,29 @@ def load_model(model_path: str, vendor_dir: str, torch: Any, device: Any):
     return model, module_name, class_name
 
 
-def extract_frames(video_path: str, duration_ms: int) -> tuple[np.ndarray, float, int]:
+def extract_frames(video_path: str, duration_ms: int, max_frames: int) -> tuple[np.ndarray, float, int]:
     capture = cv2.VideoCapture(video_path)
     if not capture.isOpened():
         raise RuntimeError(f"Could not open video: {video_path}")
 
     fps = float(capture.get(cv2.CAP_PROP_FPS) or 25.0)
+    estimated_frame_count = int(capture.get(cv2.CAP_PROP_FRAME_COUNT) or 0)
+    if estimated_frame_count > max_frames:
+        capture.release()
+        raise RuntimeError(
+            f"TransNetV2 accurate mode skipped to avoid OOM: video has about {estimated_frame_count} frames, "
+            f"limit is {max_frames}. Set LINGJI_TRANSNETV2_MAX_FRAMES to override or use fast mode."
+        )
+
     frames: list[np.ndarray] = []
     success, frame = capture.read()
     while success:
+        if len(frames) >= max_frames:
+            capture.release()
+            raise RuntimeError(
+                f"TransNetV2 accurate mode skipped to avoid OOM: extracted frames exceeded limit {max_frames}. "
+                "Set LINGJI_TRANSNETV2_MAX_FRAMES to override or use fast mode."
+            )
         resized = cv2.resize(frame, (48, 27), interpolation=cv2.INTER_LINEAR)
         rgb = cv2.cvtColor(resized, cv2.COLOR_BGR2RGB)
         frames.append(rgb)
@@ -200,7 +226,8 @@ def run_accurate_detection(request: dict[str, Any]) -> dict[str, Any]:
 
     duration_ms = int(request.get("durationMs") or 0)
     min_shot_duration_ms = int(request.get("minShotDurationMs") or 1200)
-    frames, fps, frame_count = extract_frames(str(request["videoPath"]), duration_ms)
+    max_frames = int(request.get("maxFrames") or max_frames_from_env())
+    frames, fps, frame_count = extract_frames(str(request["videoPath"]), duration_ms, max_frames)
     device = select_device(torch)
     model, module_name, class_name = load_model(str(model_path), str(vendor_dir), torch, device)
 
@@ -230,6 +257,7 @@ def run_accurate_detection(request: dict[str, Any]) -> dict[str, Any]:
             "modelDevice": str(device),
             "rawBoundaryCount": len(boundaries),
             "filteredBoundaryCount": len(boundaries),
+            "maxFrames": max_frames,
         },
         "notes": [
             f"accurate 模式已调用 TransNetV2：{module_name}.{class_name}",
