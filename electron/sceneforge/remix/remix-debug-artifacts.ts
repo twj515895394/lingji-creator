@@ -10,6 +10,12 @@ function progressStageForReport(fileName: string): string {
   return 'debug';
 }
 
+function warnDebugArtifactFailure(action: string, error: unknown): void {
+  console.warn(
+    `[SceneForge Remix] ${action} failed: ${error instanceof Error ? error.message : String(error)}`,
+  );
+}
+
 async function appendProgressEventForReport(filePath: string): Promise<void> {
   const fileName = path.basename(filePath);
   const event = {
@@ -19,11 +25,15 @@ async function appendProgressEventForReport(filePath: string): Promise<void> {
     reportPath: filePath,
     timestamp: new Date().toISOString(),
   };
-  await fs.appendFile(
-    path.join(path.dirname(filePath), 'progress_events.jsonl'),
-    `${JSON.stringify(event)}\n`,
-    'utf8',
-  );
+  try {
+    await fs.appendFile(
+      path.join(path.dirname(filePath), 'progress_events.jsonl'),
+      `${JSON.stringify(event)}\n`,
+      'utf8',
+    );
+  } catch (error) {
+    warnDebugArtifactFailure('append progress event', error);
+  }
 }
 
 export async function writeRemixDebugJson(input: {
@@ -32,9 +42,13 @@ export async function writeRemixDebugJson(input: {
   payload: unknown;
 }): Promise<string> {
   const filePath = resolveProjectFile(input.projectDir, input.relativePath);
-  await fs.mkdir(path.dirname(filePath), { recursive: true });
-  await fs.writeFile(filePath, `${JSON.stringify(input.payload, null, 2)}\n`, 'utf8');
-  await appendProgressEventForReport(filePath);
+  try {
+    await fs.mkdir(path.dirname(filePath), { recursive: true });
+    await fs.writeFile(filePath, `${JSON.stringify(input.payload, null, 2)}\n`, 'utf8');
+    await appendProgressEventForReport(filePath);
+  } catch (error) {
+    warnDebugArtifactFailure(`write debug artifact ${input.relativePath}`, error);
+  }
   return filePath;
 }
 
