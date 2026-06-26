@@ -25,6 +25,7 @@ import type {
   UpdateSourceAssetMetadataInput,
   UpdateEditedKeyframeStatusInput,
   UpdateVariantConfigInput,
+  SegmentKeyframeActionInput,
 } from './remix-ipc-types';
 import { RemixKeyframeService } from './remix-keyframe-service';
 import {
@@ -250,6 +251,32 @@ export class RemixService {
       }),
       '关键帧任务',
     );
+  }
+
+  async addSegmentMiddleKeyframe(input: SegmentKeyframeActionInput) {
+    const document = await this.keyframeService.addSegmentMiddleKeyframe(
+      input.projectDir,
+      input.sourceAssetId,
+      input.segmentId,
+    );
+    await this.mediaValidationService.validate(input.projectDir, document);
+    const jobsDocument = await readStoredSourceAssetJobs(input.projectDir, input.sourceAssetId);
+    const snapshot = buildSourceAssetSnapshot(document, jobsDocument.jobs);
+    snapshot.variants = await this.variantService.listForSourceAsset(input.projectDir, input.sourceAssetId);
+    return snapshot;
+  }
+
+  async deleteSegmentMiddleKeyframe(input: SegmentKeyframeActionInput) {
+    const document = await this.keyframeService.deleteSegmentMiddleKeyframe(
+      input.projectDir,
+      input.sourceAssetId,
+      input.segmentId,
+    );
+    await this.mediaValidationService.validate(input.projectDir, document);
+    const jobsDocument = await readStoredSourceAssetJobs(input.projectDir, input.sourceAssetId);
+    const snapshot = buildSourceAssetSnapshot(document, jobsDocument.jobs);
+    snapshot.variants = await this.variantService.listForSourceAsset(input.projectDir, input.sourceAssetId);
+    return snapshot;
   }
 
   async runSourceUnderstanding(

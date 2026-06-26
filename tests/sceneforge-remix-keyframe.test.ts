@@ -39,4 +39,59 @@ describe('SceneForge Remix keyframe service', () => {
       fs.stat(path.join(projectDir, segmented.sourceAsset.segments[0].keyframes[0]?.imagePath ?? '')),
     ).resolves.toBeTruthy();
   });
+
+  it('allows manual adding and deleting of a middle keyframe', async () => {
+    const service = new RemixService({
+      readDurationMs: async () => 4000,
+    });
+    const imported = await service.createSourceAssetFromImport({
+      projectDir,
+      sourceVideoPath: path.join(projectDir, 'source.mp4'),
+    });
+    const segmented = await service.runSourceSegmentation({
+      projectDir,
+      sourceAssetId: imported.sourceAsset.id,
+    });
+
+    const keyframed = await service.runSourceKeyframes({
+      projectDir,
+      sourceAssetId: imported.sourceAsset.id,
+      minDurationForMiddleFrameSec: 8,
+    });
+
+    const segment = keyframed.sourceAsset.segments[0];
+    expect(segment.keyframes.length).toBe(2);
+    expect(segment.keyframes.map((k) => k.frameRole)).toEqual(['first', 'last']);
+
+    // 1. Manually add middle keyframe
+    const addedMiddle = await service.addSegmentMiddleKeyframe({
+      projectDir,
+      sourceAssetId: imported.sourceAsset.id,
+      segmentId: segment.id,
+    });
+
+    const updatedSegment1 = addedMiddle.sourceAsset.segments[0];
+    expect(updatedSegment1.keyframes.length).toBe(3);
+    expect(updatedSegment1.keyframes.map((k) => k.frameRole)).toEqual(['first', 'middle', 'last']);
+
+    const middleKf = updatedSegment1.keyframes.find((k) => k.frameRole === 'middle')!;
+    await expect(
+      fs.stat(path.join(projectDir, middleKf.imagePath)),
+    ).resolves.toBeTruthy();
+
+    // 2. Delete middle keyframe
+    const deletedMiddle = await service.deleteSegmentMiddleKeyframe({
+      projectDir,
+      sourceAssetId: imported.sourceAsset.id,
+      segmentId: segment.id,
+    });
+
+    const updatedSegment2 = deletedMiddle.sourceAsset.segments[0];
+    expect(updatedSegment2.keyframes.length).toBe(2);
+    expect(updatedSegment2.keyframes.map((k) => k.frameRole)).toEqual(['first', 'last']);
+
+    await expect(
+      fs.stat(path.join(projectDir, middleKf.imagePath)),
+    ).rejects.toThrow();
+  });
 });

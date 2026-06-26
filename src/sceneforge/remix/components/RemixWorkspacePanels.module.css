@@ -1094,3 +1094,80 @@
   font-size: var(--font-size-xs);
   text-align: center;
 }
+
+.imageContainer {
+  position: relative;
+  width: 100%;
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.deleteButton {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  background: rgba(220, 38, 38, 0.85);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  color: #fff;
+  cursor: pointer;
+  transition: background 150ms ease, transform 150ms ease;
+  z-index: 10;
+  padding: 0;
+}
+
+.deleteButton:hover {
+  background: rgb(220, 38, 38);
+  transform: scale(1.08);
+}
+
+.deleteButton:active {
+  transform: scale(0.95);
+}
+
+.galleryCardPlaceholder {
+  border: 1px dashed rgba(255, 255, 255, 0.15) !important;
+  background: rgba(255, 255, 255, 0.01) !important;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  align-items: stretch;
+  transition: border-color 150ms ease, background-color 150ms ease;
+  min-height: 114px;
+}
+
+.galleryCardPlaceholder:hover {
+  border-color: rgba(214, 169, 95, 0.4) !important;
+  background: rgba(214, 169, 95, 0.03) !important;
+}
+
+.placeholderIconContainer {
+  height: 80px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  border-radius: 8px;
+  border: 1px dashed rgba(255, 255, 255, 0.08);
+  background: rgba(0, 0, 0, 0.15);
+}
+
+.placeholderPlusIcon {
+  color: rgba(255, 255, 255, 0.4);
+  transition: color 150ms ease;
+}
+
+.galleryCardPlaceholder:hover .placeholderPlusIcon {
+  color: #d6a95f;
+}
+
+.placeholderText {
+  font-size: 11px;
+  color: rgba(255, 255, 255, 0.4);
+}

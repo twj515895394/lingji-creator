@@ -568,6 +568,40 @@ export function RemixAssetProcessing({
     await applyManualSegmentUpdate(nextSegments, 'manual_adjust');
   }
 
+  async function handleAddMiddleKeyframe(segmentId: string) {
+    if (!projectDir) {
+      return;
+    }
+    await runAction(
+      `add-middle-frame-${segmentId}`,
+      null,
+      () =>
+        resolveClient().addSegmentMiddleKeyframe({
+          projectDir,
+          sourceAssetId,
+          segmentId,
+        }),
+      '正在手动提取中间帧',
+    );
+  }
+
+  async function handleDeleteMiddleKeyframe(segmentId: string) {
+    if (!projectDir) {
+      return;
+    }
+    await runAction(
+      `delete-middle-frame-${segmentId}`,
+      null,
+      () =>
+        resolveClient().deleteSegmentMiddleKeyframe({
+          projectDir,
+          sourceAssetId,
+          segmentId,
+        }),
+      '正在删除中间帧',
+    );
+  }
+
   function handleBackIntent() {
     if (!asset) {
       return;
@@ -1004,7 +1038,13 @@ export function RemixAssetProcessing({
             {pendingActionId === 'keyframes' ? '提取中…' : '提取关键帧'}
           </Button>
         </div>
-        <KeyframeGallery asset={asset} projectDir={projectDir} />
+        <KeyframeGallery
+          asset={asset}
+          projectDir={projectDir}
+          onAddMiddleFrame={handleAddMiddleKeyframe}
+          onDeleteMiddleFrame={handleDeleteMiddleKeyframe}
+          disabled={Boolean(pendingActionId)}
+        />
       </section>
     ),
     understanding: (

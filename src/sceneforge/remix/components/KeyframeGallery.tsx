@@ -1,3 +1,4 @@
+import { Plus, Trash2 } from 'lucide-react';
 import type { SourceAsset } from '../types';
 import {
   formatRemixTimestamp,
@@ -11,9 +12,18 @@ import styles from './RemixWorkspacePanels.module.css';
 interface KeyframeGalleryProps {
   asset: SourceAsset;
   projectDir?: string | null;
+  onAddMiddleFrame?: (segmentId: string) => Promise<void>;
+  onDeleteMiddleFrame?: (segmentId: string) => Promise<void>;
+  disabled?: boolean;
 }
 
-export function KeyframeGallery({ asset, projectDir }: KeyframeGalleryProps) {
+export function KeyframeGallery({
+  asset,
+  projectDir,
+  onAddMiddleFrame,
+  onDeleteMiddleFrame,
+  disabled,
+}: KeyframeGalleryProps) {
   if (asset.segments.length === 0) {
     return (
       <div className={styles.emptyHint} data-testid="remix-keyframe-gallery">
@@ -25,37 +35,89 @@ export function KeyframeGallery({ asset, projectDir }: KeyframeGalleryProps) {
 
   return (
     <div className={styles.keyframeSegmentsList} data-testid="remix-keyframe-gallery">
-      {asset.segments.map((segment) => (
-        <section key={segment.id} className={styles.keyframeSegmentSection}>
-          <div className={styles.keyframeSegmentHeader}>
-            <span className={styles.keyframeSegmentBadge}>#{segment.index}</span>
-            <span className={styles.keyframeSegmentTitle}>{segment.title || `镜头段 ${segment.index}`}</span>
-            <span className={styles.keyframeSegmentDuration}>
-              {formatRemixDuration(segment.timeRange.durationMs)} · {formatRemixTimeRange(segment)}
-            </span>
-          </div>
+      {asset.segments.map((segment) => {
+        const first = segment.keyframes.find((f) => f.frameRole === 'first');
+        const middle = segment.keyframes.find((f) => f.frameRole === 'middle');
+        const last = segment.keyframes.find((f) => f.frameRole === 'last');
 
-          {segment.keyframes.length === 0 ? (
-            <div className={styles.keyframeSegmentEmpty}>
-              本段暂无关键帧，请点击上方「提取关键帧」进行一键提取。
+        return (
+          <section key={segment.id} className={styles.keyframeSegmentSection}>
+            <div className={styles.keyframeSegmentHeader}>
+              <span className={styles.keyframeSegmentBadge}>#{segment.index}</span>
+              <span className={styles.keyframeSegmentTitle}>{segment.title || `镜头段 ${segment.index}`}</span>
+              <span className={styles.keyframeSegmentDuration}>
+                {formatRemixDuration(segment.timeRange.durationMs)} · {formatRemixTimeRange(segment)}
+              </span>
             </div>
-          ) : (
-            <div className={styles.galleryGrid}>
-              {segment.keyframes.map((frame) => (
-                <article key={frame.id} className={styles.galleryCard}>
-                  <RemixFrameImage imagePath={frame.imagePath} alt={frame.id} projectDir={projectDir} />
-                  <div className={styles.galleryTitle}>
-                    {getKeyframeRoleLabel(frame.frameRole)}
-                  </div>
-                  <div className={styles.galleryMeta}>
-                    {formatRemixTimestamp(frame.timestampMs)}
-                  </div>
-                </article>
-              ))}
-            </div>
-          )}
-        </section>
-      ))}
+
+            {segment.keyframes.length === 0 ? (
+              <div className={styles.keyframeSegmentEmpty}>
+                本段暂无关键帧，请点击上方「提取关键帧」进行一键提取。
+              </div>
+            ) : (
+              <div className={styles.galleryGrid}>
+                {/* First Keyframe */}
+                {first && (
+                  <article key={first.id} className={styles.galleryCard}>
+                    <div className={styles.imageContainer}>
+                      <RemixFrameImage imagePath={first.imagePath} alt={first.id} projectDir={projectDir} />
+                    </div>
+                    <div className={styles.galleryTitle}>{getKeyframeRoleLabel('first')}</div>
+                    <div className={styles.galleryMeta}>{formatRemixTimestamp(first.timestampMs)}</div>
+                  </article>
+                )}
+
+                {/* Middle Keyframe / Add Placeholder */}
+                {middle ? (
+                  <article key={middle.id} className={styles.galleryCard}>
+                    <div className={styles.imageContainer}>
+                      <RemixFrameImage imagePath={middle.imagePath} alt={middle.id} projectDir={projectDir} />
+                      {!disabled && onDeleteMiddleFrame && (
+                        <button
+                          type="button"
+                          className={styles.deleteButton}
+                          onClick={() => onDeleteMiddleFrame(segment.id)}
+                          title="删除中间帧"
+                        >
+                          <Trash2 size={14} />
+                        </button>
+                      )}
+                    </div>
+                    <div className={styles.galleryTitle}>{getKeyframeRoleLabel('middle')}</div>
+                    <div className={styles.galleryMeta}>{formatRemixTimestamp(middle.timestampMs)}</div>
+                  </article>
+                ) : (
+                  <article
+                    key={`${segment.id}-middle-placeholder`}
+                    className={[styles.galleryCard, styles.galleryCardPlaceholder].join(' ')}
+                    onClick={() => !disabled && onAddMiddleFrame?.(segment.id)}
+                    style={{ cursor: disabled ? 'not-allowed' : 'pointer' }}
+                    title="手动提取中间帧"
+                  >
+                    <div className={styles.placeholderIconContainer}>
+                      <Plus size={20} className={styles.placeholderPlusIcon} />
+                      <span className={styles.placeholderText}>添加中间帧</span>
+                    </div>
+                    <div className={styles.galleryTitle}>{getKeyframeRoleLabel('middle')}</div>
+                    <div className={styles.galleryMeta}>--:--</div>
+                  </article>
+                )}
+
+                {/* Last Keyframe */}
+                {last && (
+                  <article key={last.id} className={styles.galleryCard}>
+                    <div className={styles.imageContainer}>
+                      <RemixFrameImage imagePath={last.imagePath} alt={last.id} projectDir={projectDir} />
+                    </div>
+                    <div className={styles.galleryTitle}>{getKeyframeRoleLabel('last')}</div>
+                    <div className={styles.galleryMeta}>{formatRemixTimestamp(last.timestampMs)}</div>
+                  </article>
+                )}
+              </div>
+            )}
+          </section>
+        );
+      })}
     </div>
   );
 }

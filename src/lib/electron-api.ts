@@ -70,6 +70,7 @@ import type {
   UpdateSourceAssetMetadataInput,
   UpdateEditedKeyframeStatusInput,
   UpdateVariantConfigInput,
+  SegmentKeyframeActionInput,
 } from '../../electron/sceneforge/remix/remix-ipc-types';
 import type {
   RemixAssetLibrarySnapshot,
@@ -98,6 +99,7 @@ export type {
   RunSourceAssetStageInput,
   UpdateEditedKeyframeStatusInput,
   UpdateVariantConfigInput,
+  SegmentKeyframeActionInput,
   RemixAssetLibrarySnapshot,
   RemixAssetProcessingSnapshot,
   RemixCreationWorkspaceSnapshot,
@@ -482,6 +484,12 @@ export interface ElectronAPI {
     ) => Promise<RemixAssetProcessingSnapshot>;
     runSourceKeyframes: (
       input: RunSourceAssetStageInput,
+    ) => Promise<RemixAssetProcessingSnapshot>;
+    addSegmentMiddleKeyframe: (
+      input: SegmentKeyframeActionInput,
+    ) => Promise<RemixAssetProcessingSnapshot>;
+    deleteSegmentMiddleKeyframe: (
+      input: SegmentKeyframeActionInput,
     ) => Promise<RemixAssetProcessingSnapshot>;
     runSourceUnderstanding: (
       input: RunSourceAssetStageInput,

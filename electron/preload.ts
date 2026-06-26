@@ -33,6 +33,7 @@ import type {
   UpdateSourceAssetMetadataInput,
   UpdateEditedKeyframeStatusInput,
   UpdateVariantConfigInput,
+  SegmentKeyframeActionInput,
 } from './sceneforge/remix/remix-ipc-types';
 
 type PipelineTaskUpdate = PipelineTask & { bridgeId: string };
@@ -224,6 +225,10 @@ contextBridge.exposeInMainWorld('electronAPI', {
       ipcRenderer.invoke('sceneForgeRemix:runSourceSegmentation', input),
     runSourceKeyframes: (input: RunSourceAssetStageInput) =>
       ipcRenderer.invoke('sceneForgeRemix:runSourceKeyframes', input),
+    addSegmentMiddleKeyframe: (input: SegmentKeyframeActionInput) =>
+      ipcRenderer.invoke('sceneForgeRemix:addSegmentMiddleKeyframe', input),
+    deleteSegmentMiddleKeyframe: (input: SegmentKeyframeActionInput) =>
+      ipcRenderer.invoke('sceneForgeRemix:deleteSegmentMiddleKeyframe', input),
     runSourceUnderstanding: (input: RunSourceAssetStageInput) =>
       ipcRenderer.invoke('sceneForgeRemix:runSourceUnderstanding', input),
     updateSourceSegments: (input: UpdateSourceSegmentsInput) =>

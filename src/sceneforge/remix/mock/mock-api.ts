@@ -17,6 +17,7 @@ import type {
   UpdateEditedKeyframeStatusInput,
   UpdateVariantConfigInput,
   RenameVariantInput,
+  SegmentKeyframeActionInput,
 } from '../../../../electron/sceneforge/remix/remix-ipc-types';
 import type {
   EditedKeyframe,
@@ -202,6 +203,31 @@ export const remixMockApi: RemixIpcContract = {
     setProcessingStage(snapshot, 'remix_segmentation', 'approved');
     setProcessingStage(snapshot, 'remix_keyframes', 'approved');
     setProcessingStage(snapshot, 'remix_understanding', 'ready_for_review');
+    return snapshot;
+  },
+
+  async addSegmentMiddleKeyframe(input: SegmentKeyframeActionInput) {
+    const snapshot = findProcessingSnapshot(input.sourceAssetId);
+    const segment = snapshot.sourceAsset.segments.find((s) => s.id === input.segmentId);
+    if (segment && !segment.keyframes.some((kf) => kf.frameRole === 'middle')) {
+      segment.keyframes.splice(1, 0, {
+        id: `${input.sourceAssetId}-${input.segmentId}-middle`,
+        sourceAssetId: input.sourceAssetId,
+        segmentId: input.segmentId,
+        frameRole: 'middle',
+        timestampMs: Math.round(segment.timeRange.startMs + (segment.timeRange.endMs - segment.timeRange.startMs) / 2),
+        imagePath: `sceneforge/remix/source-assets/${input.sourceAssetId}/source_segments/${input.segmentId}/middle_frame.png`,
+      });
+    }
+    return snapshot;
+  },
+
+  async deleteSegmentMiddleKeyframe(input: SegmentKeyframeActionInput) {
+    const snapshot = findProcessingSnapshot(input.sourceAssetId);
+    const segment = snapshot.sourceAsset.segments.find((s) => s.id === input.segmentId);
+    if (segment) {
+      segment.keyframes = segment.keyframes.filter((kf) => kf.frameRole !== 'middle');
+    }
     return snapshot;
   },
 

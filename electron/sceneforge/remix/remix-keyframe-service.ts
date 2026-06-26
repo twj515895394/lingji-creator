@@ -372,4 +372,107 @@ export class RemixKeyframeService {
     await writeStoredSourceAsset(projectDir, document);
     return document;
   }
+
+  async addSegmentMiddleKeyframe(
+    projectDir: string,
+    sourceAssetId: string,
+    segmentId: string,
+  ): Promise<StoredSourceAssetDocument> {
+    const document = await readStoredSourceAsset(projectDir, sourceAssetId);
+    const segment = document.sourceAsset.segments.find((s) => s.id === segmentId);
+    if (!segment) {
+      throw new Error(`未找到指定的镜头段：${segmentId}`);
+    }
+
+    const hasMiddle = segment.keyframes.some((kf) => kf.frameRole === 'middle');
+    if (hasMiddle) {
+      return document;
+    }
+
+    const startMs = segment.timeRange.startMs;
+    const endMs = segment.timeRange.endMs;
+    const timestampMs = timestampForRole(startMs, endMs, 'middle');
+    const imagePath = getRemixSegmentKeyframePath(sourceAssetId, segmentId, 'middle');
+    const outputPath = resolveProjectFile(projectDir, imagePath);
+
+    const frameInput = await resolveFrameInput(
+      projectDir,
+      document.sourceAsset.sourceVideoPath,
+      segment,
+      timestampMs,
+    );
+
+    const ffmpegPath = resolveFfmpeg();
+    await extractFrame({
+      ffmpegPath,
+      inputPath: frameInput.inputPath,
+      seekMs: frameInput.seekMs,
+      outputPath,
+      inputSource: frameInput.source,
+    });
+
+    const newKeyframe: SourceKeyframe = {
+      id: `${sourceAssetId}-${segmentId}-middle`,
+      sourceAssetId,
+      segmentId,
+      frameRole: 'middle',
+      timestampMs,
+      imagePath,
+    };
+
+    const firstKf = segment.keyframes.find((kf) => kf.frameRole === 'first');
+    const lastKf = segment.keyframes.find((kf) => kf.frameRole === 'last');
+    segment.keyframes = [
+      firstKf || segment.keyframes[0],
+      newKeyframe,
+      lastKf || segment.keyframes[segment.keyframes.length - 1],
+    ].filter(Boolean) as SourceKeyframe[];
+
+    await fs.writeFile(
+      resolveProjectFile(projectDir, getRemixSegmentManifestPath(sourceAssetId, segment.id)),
+      `${JSON.stringify(segment, null, 2)}\n`,
+      'utf8',
+    );
+
+    document.sourceAsset.updatedAt = new Date().toISOString();
+    await writeStoredSourceAsset(projectDir, document);
+    return document;
+  }
+
+  async deleteSegmentMiddleKeyframe(
+    projectDir: string,
+    sourceAssetId: string,
+    segmentId: string,
+  ): Promise<StoredSourceAssetDocument> {
+    const document = await readStoredSourceAsset(projectDir, sourceAssetId);
+    const segment = document.sourceAsset.segments.find((s) => s.id === segmentId);
+    if (!segment) {
+      throw new Error(`未找到指定的镜头段：${segmentId}`);
+    }
+
+    const middleIndex = segment.keyframes.findIndex((kf) => kf.frameRole === 'middle');
+    if (middleIndex === -1) {
+      return document;
+    }
+
+    const [middleKf] = segment.keyframes.splice(middleIndex, 1);
+    const outputPath = resolveProjectFile(projectDir, middleKf.imagePath);
+
+    try {
+      await fs.rm(outputPath, { force: true });
+    } catch (error) {
+      console.warn(`[SceneForge Remix] Failed to delete middle keyframe file: ${outputPath}`, error);
+    }
+
+    await fs.writeFile(
+      resolveProjectFile(projectDir, getRemixSegmentManifestPath(sourceAssetId, segment.id)),
+      `${JSON.stringify(segment, null, 2)}\n`,
+      'utf8',
+    );
+
+    document.sourceAsset.updatedAt = new Date().toISOString();
+    await writeStoredSourceAsset(projectDir, document);
+    return document;
+  }
 }
+

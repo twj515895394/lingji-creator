@@ -17,6 +17,7 @@ import type {
   UpdateSourceAssetMetadataInput,
   UpdateEditedKeyframeStatusInput,
   UpdateVariantConfigInput,
+  SegmentKeyframeActionInput,
 } from './remix-ipc-types';
 import { RemixService } from './remix-service';
 import { registerSceneForgeRemixSegmentClipIpc } from './segment-clips/segment-clip-ipc';
@@ -69,6 +70,20 @@ export function registerSceneForgeRemixIpc(): void {
     'sceneForgeRemix:runSourceKeyframes',
     async (_event, input: RunSourceAssetStageInput) => {
       return service.runSourceKeyframes(input);
+    },
+  );
+
+  ipcMain.handle(
+    'sceneForgeRemix:addSegmentMiddleKeyframe',
+    async (_event, input: SegmentKeyframeActionInput) => {
+      return service.addSegmentMiddleKeyframe(input);
+    },
+  );
+
+  ipcMain.handle(
+    'sceneForgeRemix:deleteSegmentMiddleKeyframe',
+    async (_event, input: SegmentKeyframeActionInput) => {
+      return service.deleteSegmentMiddleKeyframe(input);
     },
   );
 

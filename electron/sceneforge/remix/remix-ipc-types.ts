@@ -53,6 +53,10 @@ export interface RunSourceSegmentationInput extends RemixSourceAssetRefInput {
   minShotDurationMs?: number;
 }
 
+export interface SegmentKeyframeActionInput extends RemixSourceAssetRefInput {
+  segmentId: string;
+}
+
 export interface UpdateSourceSegmentsInput extends RemixSourceAssetRefInput {
   segments: SourceSegment[];
   reason: 'manual_adjust' | 'merge' | 'split' | 'rerun';
@@ -130,6 +134,8 @@ export interface RemixIpcContract {
     input: RunSourceSegmentationInput,
   ): Promise<RemixAssetProcessingSnapshot>;
   runSourceKeyframes(input: RunSourceAssetStageInput): Promise<RemixAssetProcessingSnapshot>;
+  addSegmentMiddleKeyframe(input: SegmentKeyframeActionInput): Promise<RemixAssetProcessingSnapshot>;
+  deleteSegmentMiddleKeyframe(input: SegmentKeyframeActionInput): Promise<RemixAssetProcessingSnapshot>;
   runSourceUnderstanding(
     input: RunSourceAssetStageInput,
   ): Promise<RemixAssetProcessingSnapshot>;
