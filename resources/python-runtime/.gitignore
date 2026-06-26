@@ -1,0 +1,5 @@
+# Keep docs/placeholders in Git, but do not commit local Python runtime binaries by accident.
+*
+!README.md
+!.gitkeep
+!.gitignore
