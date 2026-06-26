@@ -1,0 +1,11 @@
+{
+  "name": "TransNetV2",
+  "implementation": "pytorch",
+  "source": "https://huggingface.co/magnusdtd/TransNetV2/tree/main",
+  "weightsFile": "transnetv2-pytorch-weights.pth",
+  "inputShape": [27, 48, 3],
+  "inputDtype": "uint8",
+  "framework": "torch",
+  "license": "confirm-from-source-repository",
+  "sha256": "fill-after-download"
+}
