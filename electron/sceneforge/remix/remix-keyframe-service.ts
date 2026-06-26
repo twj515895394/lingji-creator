@@ -11,6 +11,7 @@ import {
   getRemixSegmentManifestPath,
 } from './remix-artifact-paths';
 import { writeRemixDebugJson, withDebugReportMeta } from './remix-debug-artifacts';
+import { appendRemixProgressEvent } from './remix-progress-events';
 import { assertSourceAssetStageReady, resolveProjectFile } from './remix-validators';
 import type { StoredSourceAssetDocument } from './remix-store';
 import { readStoredSourceAsset, writeStoredSourceAsset } from './remix-store';
@@ -49,6 +50,33 @@ async function fileExists(filePath: string): Promise<boolean> {
     return true;
   } catch {
     return false;
+  }
+}
+
+async function appendKeyframeProgress(input: {
+  projectDir: string;
+  sourceAssetId: string;
+  status: 'started' | 'running' | 'succeeded' | 'failed';
+  message: string;
+  progress?: number;
+  details?: Record<string, unknown>;
+}) {
+  try {
+    await appendRemixProgressEvent({
+      projectDir: input.projectDir,
+      sourceAssetId: input.sourceAssetId,
+      event: {
+        stage: 'keyframes',
+        status: input.status,
+        message: input.message,
+        progress: input.progress,
+        details: input.details,
+      },
+    });
+  } catch (error) {
+    console.warn(
+      `[SceneForge Remix] append keyframe progress failed: ${error instanceof Error ? error.message : String(error)}`,
+    );
   }
 }
 
@@ -175,6 +203,16 @@ export class RemixKeyframeService {
     assertSourceAssetStageReady(document, 'remix_segmentation');
     const ffmpegPath = resolveFfmpeg();
     const reportItems: KeyframeExtractionReportItem[] = [];
+    const totalKeyframes = document.sourceAsset.segments.length * KEYFRAME_ROLES.length;
+    let processedKeyframes = 0;
+    await appendKeyframeProgress({
+      projectDir,
+      sourceAssetId,
+      status: 'started',
+      message: `开始抽取 ${totalKeyframes} 张关键帧。`,
+      progress: 0,
+      details: { ffmpegPath, segmentCount: document.sourceAsset.segments.length },
+    });
 
     for (const segment of document.sourceAsset.segments) {
       segment.keyframes = buildKeyframesForSegment(
@@ -192,6 +230,14 @@ export class RemixKeyframeService {
           segment,
           keyframe.timestampMs,
         );
+        await appendKeyframeProgress({
+          projectDir,
+          sourceAssetId,
+          status: 'running',
+          message: `正在抽取 ${segment.id}/${keyframe.frameRole} 关键帧。`,
+          progress: totalKeyframes > 0 ? processedKeyframes / totalKeyframes : 1,
+          details: { segmentId: segment.id, frameRole: keyframe.frameRole, inputSource: frameInput.source },
+        });
         try {
           await extractFrame({
             ffmpegPath,
@@ -209,6 +255,15 @@ export class RemixKeyframeService {
             outputPath,
             status: 'ready',
           });
+          processedKeyframes += 1;
+          await appendKeyframeProgress({
+            projectDir,
+            sourceAssetId,
+            status: 'succeeded',
+            message: `${segment.id}/${keyframe.frameRole} 关键帧已抽取。`,
+            progress: totalKeyframes > 0 ? processedKeyframes / totalKeyframes : 1,
+            details: { segmentId: segment.id, frameRole: keyframe.frameRole, outputPath },
+          });
         } catch (error) {
           const errorMessage = error instanceof Error ? error.message : String(error);
           reportItems.push({
@@ -221,6 +276,14 @@ export class RemixKeyframeService {
             outputPath,
             status: 'failed',
             error: errorMessage,
+          });
+          await appendKeyframeProgress({
+            projectDir,
+            sourceAssetId,
+            status: 'failed',
+            message: `${segment.id}/${keyframe.frameRole} 关键帧抽取失败。`,
+            progress: totalKeyframes > 0 ? processedKeyframes / totalKeyframes : 1,
+            details: { segmentId: segment.id, frameRole: keyframe.frameRole, error: errorMessage },
           });
           await writeKeyframeReport({
             projectDir,
@@ -254,6 +317,14 @@ export class RemixKeyframeService {
       status: 'ready',
     });
 
+    await appendKeyframeProgress({
+      projectDir,
+      sourceAssetId,
+      status: 'succeeded',
+      message: `已完成 ${processedKeyframes}/${totalKeyframes} 张关键帧抽取。`,
+      progress: 1,
+      details: { keyframeCount: processedKeyframes },
+    });
     document.sourceAsset.updatedAt = new Date().toISOString();
     document.processingStageStates.remix_keyframes = 'approved';
     document.processingStageStates.remix_understanding = 'ready_for_review';
