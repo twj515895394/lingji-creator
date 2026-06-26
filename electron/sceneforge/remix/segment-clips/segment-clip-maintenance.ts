@@ -1,7 +1,12 @@
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import type { SourceSegment } from '../../../../src/sceneforge/remix/types';
-import { getRemixSourceAssetDir, getRemixSourceSegmentsDir } from '../remix-artifact-paths';
+import {
+  getRemixClipGenerationReportPath,
+  getRemixSourceAssetDir,
+  getRemixSourceSegmentsDir,
+} from '../remix-artifact-paths';
+import { writeRemixDebugJson, withDebugReportMeta } from '../remix-debug-artifacts';
 import { resolveProjectFile } from '../remix-validators';
 import {
   buildSourceAssetSnapshot,
@@ -9,7 +14,6 @@ import {
   readStoredSourceAssetJobs,
   writeStoredSourceAsset,
 } from '../remix-store';
-import { writeSegmentArtifacts } from '../remix-segmentation-service';
 import { SegmentClipService } from './segment-clip-service';
 import type { ExportSegmentClipsResult } from './segment-clip-exporter';
 
@@ -51,12 +55,25 @@ export async function exportSourceSegmentClips(input: { projectDir: string; sour
 
 export async function regenerateSourceSegmentClips(input: { projectDir: string; sourceAssetId: string }) {
   const document = await readStoredSourceAsset(input.projectDir, input.sourceAssetId);
-  const clipGeneration = await writeSegmentArtifacts(
-    input.projectDir,
-    document.sourceAsset.sourceVideoPath,
-    input.sourceAssetId,
-    document.sourceAsset.segments,
-  );
+  const clipGeneration = await new SegmentClipService().generateClips({
+    projectDir: input.projectDir,
+    sourceVideoPath: document.sourceAsset.sourceVideoPath,
+    sourceAssetId: input.sourceAssetId,
+    segments: document.sourceAsset.segments,
+    mode: 'reencode_accurate',
+    overwrite: true,
+  });
+  await writeRemixDebugJson({
+    projectDir: input.projectDir,
+    relativePath: getRemixClipGenerationReportPath(input.sourceAssetId),
+    payload: withDebugReportMeta({
+      sourceAssetId: input.sourceAssetId,
+      sourceVideoPath: document.sourceAsset.sourceVideoPath,
+      segmentCount: document.sourceAsset.segments.length,
+      clipGeneration,
+      regenerateOnly: true,
+    }),
+  });
   document.sourceAsset.updatedAt = new Date().toISOString();
   document.sourceAsset.segmentationDiagnostics = document.sourceAsset.segmentationDiagnostics
     ? {
