@@ -5,7 +5,12 @@ import { promisify } from 'node:util';
 import { fileURLToPath } from 'node:url';
 import type { RemixKeyframeRole, SourceKeyframe, SourceSegment } from '../../../src/sceneforge/remix/types';
 import { resolveFfmpegPath } from '../../runtime-binaries';
-import { getRemixSegmentKeyframePath, getRemixSegmentManifestPath } from './remix-artifact-paths';
+import {
+  getRemixKeyframeReportPath,
+  getRemixSegmentKeyframePath,
+  getRemixSegmentManifestPath,
+} from './remix-artifact-paths';
+import { writeRemixDebugJson, withDebugReportMeta } from './remix-debug-artifacts';
 import { assertSourceAssetStageReady, resolveProjectFile } from './remix-validators';
 import type { StoredSourceAssetDocument } from './remix-store';
 import { readStoredSourceAsset, writeStoredSourceAsset } from './remix-store';
@@ -13,6 +18,17 @@ import { readStoredSourceAsset, writeStoredSourceAsset } from './remix-store';
 const execFileAsync = promisify(execFile);
 const KEYFRAME_ROLES: RemixKeyframeRole[] = ['first', 'middle', 'last'];
 const DEFAULT_TIMEOUT_MS = 90 * 1000;
+
+interface KeyframeExtractionReportItem {
+  segmentId: string;
+  frameRole: RemixKeyframeRole;
+  timestampMs: number;
+  inputSource: 'clip' | 'source';
+  inputPath: string;
+  seekMs: number;
+  outputPath: string;
+  status: 'ready';
+}
 
 function currentModuleDir(): string {
   return path.dirname(fileURLToPath(import.meta.url));
@@ -133,6 +149,7 @@ export class RemixKeyframeService {
     const document = await readStoredSourceAsset(projectDir, sourceAssetId);
     assertSourceAssetStageReady(document, 'remix_segmentation');
     const ffmpegPath = resolveFfmpeg();
+    const reportItems: KeyframeExtractionReportItem[] = [];
 
     for (const segment of document.sourceAsset.segments) {
       segment.keyframes = buildKeyframesForSegment(
@@ -157,6 +174,16 @@ export class RemixKeyframeService {
             seekMs: frameInput.seekMs,
             outputPath,
           });
+          reportItems.push({
+            segmentId: segment.id,
+            frameRole: keyframe.frameRole,
+            timestampMs: keyframe.timestampMs,
+            inputSource: frameInput.source,
+            inputPath: frameInput.inputPath,
+            seekMs: frameInput.seekMs,
+            outputPath,
+            status: 'ready',
+          });
         } catch (error) {
           throw new Error(
             `关键帧抽取失败：${segment.id}/${keyframe.frameRole} (${frameInput.source}) - ${error instanceof Error ? error.message : String(error)}`,
@@ -170,6 +197,19 @@ export class RemixKeyframeService {
         'utf8',
       );
     }
+
+    await writeRemixDebugJson({
+      projectDir,
+      relativePath: getRemixKeyframeReportPath(sourceAssetId),
+      payload: withDebugReportMeta({
+        sourceAssetId,
+        sourceVideoPath: document.sourceAsset.sourceVideoPath,
+        ffmpegPath,
+        segmentCount: document.sourceAsset.segments.length,
+        keyframeCount: reportItems.length,
+        items: reportItems,
+      }),
+    });
 
     document.sourceAsset.updatedAt = new Date().toISOString();
     document.processingStageStates.remix_keyframes = 'approved';
