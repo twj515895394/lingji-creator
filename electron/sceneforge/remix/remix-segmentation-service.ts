@@ -10,11 +10,15 @@ import type {
   SourceSegment,
 } from '../../../src/sceneforge/remix/types';
 import {
+  getRemixClipGenerationReportPath,
+  getRemixRuntimeDiagnosticsPath,
   getRemixSegmentClipPath,
   getRemixSegmentManifestIndexPath,
   getRemixSegmentManifestPath,
+  getRemixShotDetectionReportPath,
   getRemixSourceSegmentsDir,
 } from './remix-artifact-paths';
+import { writeRemixDebugJson, withDebugReportMeta } from './remix-debug-artifacts';
 import { assertFileExists, resolveProjectFile } from './remix-validators';
 import type { StoredSourceAssetDocument } from './remix-store';
 import { readStoredSourceAsset, writeStoredSourceAsset } from './remix-store';
@@ -455,6 +459,17 @@ export async function writeSegmentArtifacts(
     overwrite: true,
   });
 
+  await writeRemixDebugJson({
+    projectDir,
+    relativePath: getRemixClipGenerationReportPath(sourceAssetId),
+    payload: withDebugReportMeta({
+      sourceAssetId,
+      sourceVideoPath,
+      segmentCount: segments.length,
+      clipGeneration: clipSummary,
+    }),
+  });
+
   await fs.writeFile(
     resolveProjectFile(projectDir, getRemixSegmentManifestIndexPath(sourceAssetId)),
     `${JSON.stringify({ segmentIds: segments.map((segment) => segment.id) }, null, 2)}\n`,
@@ -520,6 +535,22 @@ function buildDiagnostics(
         }
       : null,
   };
+}
+
+function buildRuntimeDiagnosticsPayload(sourceAssetId: string) {
+  const runtimeOptions = buildRuntimeResolutionOptions();
+  const transNetV2Assets = resolveTransNetV2Assets(runtimeOptions);
+  return withDebugReportMeta({
+    sourceAssetId,
+    cwd: process.cwd(),
+    resourcesPath: runtimeOptions.resourcesPath,
+    env: {
+      hasLingjiShotPython: Boolean(process.env.LINGJI_SHOT_PYTHON),
+      hasTransNetV2ModelPath: Boolean(process.env.LINGJI_TRANSNETV2_MODEL_PATH),
+      hasTransNetV2VendorDir: Boolean(process.env.LINGJI_TRANSNETV2_VENDOR_DIR),
+    },
+    transNetV2Assets,
+  });
 }
 
 export class RemixSegmentationService {
@@ -608,6 +639,28 @@ export class RemixSegmentationService {
       buildResult.fallbackReason,
       clipSummary,
     );
+
+    await writeRemixDebugJson({
+      projectDir,
+      relativePath: getRemixShotDetectionReportPath(sourceAssetId),
+      payload: withDebugReportMeta({
+        sourceAssetId,
+        mode,
+        minShotDurationMs,
+        inputProfile,
+        usedManualOverride: Boolean(preservedSegments),
+        lowConfidenceSegmentIds: buildResult.lowConfidenceSegmentIds,
+        fallbackReason: buildResult.fallbackReason,
+        detectionResult: buildResult.detectionResult,
+        segmentCount: buildResult.segments.length,
+      }),
+    });
+    await writeRemixDebugJson({
+      projectDir,
+      relativePath: getRemixRuntimeDiagnosticsPath(sourceAssetId),
+      payload: buildRuntimeDiagnosticsPayload(sourceAssetId),
+    });
+
     if (!preservedSegments) {
       document.sourceAsset.manualSegmentationOverride = null;
     }
