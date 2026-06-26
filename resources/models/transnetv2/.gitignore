@@ -1,0 +1,8 @@
+# Keep model documentation/config in Git, but avoid committing large local weights.
+*.pth
+*.pt
+*.ckpt
+*.onnx
+!model-config.example.json
+!README.md
+!.gitignore
