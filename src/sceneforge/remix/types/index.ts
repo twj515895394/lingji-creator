@@ -394,4 +394,49 @@ export interface SourceAssetSummary {
   durationMs: number;
   segmentCount: number;
   keyframeCount: number;
+  variantCount: number;
+  updatedAt: string;
 }
+
+export interface RemixProcessingJob {
+  id: string;
+  sourceAssetId: string;
+  stepId: RemixAssetProcessingStageId;
+  status: RemixProcessingJobStatus;
+  message?: string | null;
+  error?: string | null;
+  progress?: number | null;
+  startedAt: string;
+  finishedAt?: string | null;
+}
+
+export interface RemixVariantSummary {
+  id: string;
+  sourceAssetId: string;
+  name: string;
+  currentStage: RemixCreationStageId | null;
+  updatedAt: string;
+}
+
+export interface RemixAssetLibrarySnapshot {
+  sourceAssets: SourceAssetSummary[];
+}
+
+export interface RemixAssetProcessingSnapshot {
+  sourceAsset: SourceAsset;
+  processingStageStates: Partial<Record<RemixAssetProcessingStageId, RemixStageStatus>>;
+  variants?: RemixVariantSummary[];
+  processingJobs?: RemixProcessingJob[];
+  activeProcessingJob?: RemixProcessingJob | null;
+}
+
+export interface RemixCreationWorkspaceSnapshot {
+  sourceAsset: SourceAssetSummary;
+  sourceAssetDetails?: SourceAsset | null;
+  variant: RemixVariant;
+  keyframeEditPrompts: KeyframeEditPrompt[];
+  editedKeyframes: EditedKeyframe[];
+  seedancePrompts: SeedancePrompt[];
+  creationStageStates: Partial<Record<RemixCreationStageId, RemixStageStatus>>;
+}
+

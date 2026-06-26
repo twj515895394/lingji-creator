@@ -239,3 +239,20 @@ export function getRemixVariantSeedancePromptJsonPath(
     `${segmentId}.json`,
   );
 }
+
+export function getRemixVariantAudioPlanPath(variantId: string): string {
+  return joinRemixPath(getRemixVariantDir(variantId), SEEDANCE_PROMPTS_DIR, 'audio_plan.json');
+}
+
+export function getRemixVariantPromptBundleDir(variantId: string): string {
+  return joinRemixPath(getRemixVariantDir(variantId), PROMPT_BUNDLE_DIR);
+}
+
+export function getRemixVariantPromptBundleManifestPath(variantId: string): string {
+  return joinRemixPath(getRemixVariantPromptBundleDir(variantId), 'bundle_manifest.json');
+}
+
+export function getRemixVariantPromptBundlePath(variantId: string): string {
+  return joinRemixPath(getRemixVariantDir(variantId), 'prompt_bundle.zip');
+}
+

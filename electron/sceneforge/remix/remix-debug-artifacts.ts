@@ -16,7 +16,7 @@ function progressStageForReport(fileName: string): RemixProgressStage | 'debug' 
 }
 
 function sourceAssetIdFromRelativePath(relativePath: string): string | null {
-  const normalized = relativePath.replaceAll('\\', '/');
+  const normalized = relativePath.replace(/\\/g, '/');
   const match = normalized.match(/source-assets\/([^/]+)\/debug\//);
   return match?.[1] ?? null;
 }
