@@ -1,4 +1,5 @@
 import fs from 'node:fs/promises';
+import os from 'node:os';
 import path from 'node:path';
 import { resolveProjectFile } from './remix-validators';
 import {
@@ -24,6 +25,31 @@ function warnDebugArtifactFailure(action: string, error: unknown): void {
   console.warn(
     `[SceneForge Remix] ${action} failed: ${error instanceof Error ? error.message : String(error)}`,
   );
+}
+
+function redactLocalPath(value: string): string {
+  const homeDir = os.homedir();
+  if (homeDir && value.startsWith(homeDir)) {
+    return value.replace(homeDir, '~');
+  }
+  return value;
+}
+
+function redactRuntimeDiagnosticsPayload(payload: unknown): unknown {
+  if (typeof payload === 'string') return redactLocalPath(payload);
+  if (Array.isArray(payload)) return payload.map((item) => redactRuntimeDiagnosticsPayload(item));
+  if (payload && typeof payload === 'object') {
+    return Object.fromEntries(
+      Object.entries(payload).map(([key, value]) => [key, redactRuntimeDiagnosticsPayload(value)]),
+    );
+  }
+  return payload;
+}
+
+function normalizePayloadForReport(relativePath: string, payload: unknown): unknown {
+  return relativePath.endsWith('runtime_diagnostics.json')
+    ? redactRuntimeDiagnosticsPayload(payload)
+    : payload;
 }
 
 async function appendProgressEventForReport(input: {
@@ -62,7 +88,11 @@ export async function writeRemixDebugJson(input: {
   const filePath = resolveProjectFile(input.projectDir, input.relativePath);
   try {
     await fs.mkdir(path.dirname(filePath), { recursive: true });
-    await fs.writeFile(filePath, `${JSON.stringify(input.payload, null, 2)}\n`, 'utf8');
+    await fs.writeFile(
+      filePath,
+      `${JSON.stringify(normalizePayloadForReport(input.relativePath, input.payload), null, 2)}\n`,
+      'utf8',
+    );
     await appendProgressEventForReport({
       projectDir: input.projectDir,
       relativePath: input.relativePath,
