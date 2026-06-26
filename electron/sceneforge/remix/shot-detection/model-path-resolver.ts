@@ -65,6 +65,16 @@ function envPath(value: string | undefined): string | null {
   return trimmed ? trimmed : null;
 }
 
+function userDataDirFromOptions(options: TransNetV2AssetResolutionOptions): string | null {
+  const env = options.env ?? process.env;
+  return (
+    options.userDataDir ??
+    envPath(env.LINGJI_TRANSNETV2_USER_DATA_DIR) ??
+    envPath(env.LINGJI_USER_DATA_DIR) ??
+    null
+  );
+}
+
 function readDirectory(dirPath: string, readDir: (candidate: string) => string[]): string[] {
   try {
     return readDir(dirPath);
@@ -127,8 +137,9 @@ export function resolveTransNetV2ModelPath(
     if (scannedPath) return { modelPath: scannedPath, source: 'resources_scan' };
   }
 
-  if (options.userDataDir) {
-    const userModelDir = path.join(options.userDataDir, 'models', 'transnetv2');
+  const userDataDir = userDataDirFromOptions(options);
+  if (userDataDir) {
+    const userModelDir = path.join(userDataDir, 'models', 'transnetv2');
     const defaultUserPath = path.join(userModelDir, DEFAULT_WEIGHTS_FILE);
     if (hasPath(defaultUserPath)) return { modelPath: defaultUserPath, source: 'user_data_default' };
     const scannedUserPath = findUniquePth(userModelDir, options, warnings);
