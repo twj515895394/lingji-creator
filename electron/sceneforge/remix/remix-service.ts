@@ -47,7 +47,7 @@ import { RemixSegmentationService, writeSegmentArtifacts } from './remix-segment
 import { RemixSourceAssetService, type RemixSourceAssetServiceOptions } from './remix-source-asset-service';
 import { RemixAudioExtractionService } from './remix-audio-extraction-service';
 import { RemixTranscriptService } from './remix-transcript-service';
-import { RemixUnderstandingService } from './remix-understanding-service';
+import { RemixUnderstandingService, type RemixUnderstandingServiceOptions } from './remix-understanding-service';
 import { RemixVariantService } from './remix-variant-service';
 import { RemixStrategyService } from './remix-strategy-service';
 import { RemixDesignService } from './remix-design-service';
@@ -59,6 +59,8 @@ import { assertPublishReady } from './remix-validators';
 
 export interface RemixServiceOptions extends RemixSourceAssetServiceOptions {
   transcriptService?: RemixTranscriptService;
+  understandingService?: RemixUnderstandingService;
+  understandingServiceOptions?: RemixUnderstandingServiceOptions;
 }
 
 export class RemixService {
@@ -95,7 +97,7 @@ export class RemixService {
     this.mediaValidationService = new RemixMediaValidationService(options);
     this.audioExtractionService = new RemixAudioExtractionService();
     this.transcriptService = options.transcriptService ?? new RemixTranscriptService();
-    this.understandingService = new RemixUnderstandingService();
+    this.understandingService = options.understandingService ?? new RemixUnderstandingService(options.understandingServiceOptions);
     this.variantService = new RemixVariantService(options);
     this.strategyService = new RemixStrategyService();
     this.designService = new RemixDesignService();
@@ -308,6 +310,19 @@ export class RemixService {
       'remix_transcript',
       () => this.transcriptService.run(input.projectDir, input.sourceAssetId),
       '台词识别任务',
+    );
+  }
+
+
+  async rerunSegmentUnderstanding(input: SegmentKeyframeActionInput) {
+    return this.runProcessingStage(
+      input,
+      'remix_understanding',
+      () =>
+        this.understandingService.run(input.projectDir, input.sourceAssetId, {
+          segmentIds: [input.segmentId],
+        }),
+      '单段原片理解任务',
     );
   }
 

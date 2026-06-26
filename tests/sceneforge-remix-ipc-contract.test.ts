@@ -3,6 +3,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { readFileSync } from 'node:fs';
+import type { AISettings } from '../src/types/ai';
 import { RemixService } from '../electron/sceneforge/remix/remix-service';
 
 let projectDir: string;
@@ -52,6 +53,21 @@ describe('SceneForge Remix IPC contract', () => {
     const service = new RemixService({
       readDurationMs: async () => 12800,
       now: () => new Date('2026-06-23T12:00:00.000Z'),
+      understandingServiceOptions: {
+        loadAISettings: async () => ({ provider: 'openai' } as AISettings),
+        generateSegmentUnderstanding: async (_settings, context) => ({
+          visual: { mainAction: '人物抬头' },
+          camera: { shotSize: '中近景', movement: '固定镜头' },
+          story: { plotFunction: '铺垫' },
+          videoPrompt: {
+            positivePrompt: `固定镜头，${context.segment.id} 缓慢抬头。`,
+            negativePrompt: '避免卡通。',
+            motionPrompt: '缓慢抬头。',
+            cameraPrompt: '平视固定镜头。',
+            dialoguePrompt: '语气迟疑。',
+          },
+        }),
+      },
     });
 
     const imported = await service.createSourceAssetFromImport({

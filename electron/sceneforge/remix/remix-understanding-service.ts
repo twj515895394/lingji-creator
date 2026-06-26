@@ -1,14 +1,93 @@
 import fs from 'node:fs/promises';
 import path from 'node:path';
+import type { AISettings } from '../../../src/types/ai';
+import { generateStructuredData } from '../../../src/lib/llm';
+import type { SourceSegment } from '../../../src/sceneforge/remix/types';
 import {
+  getRemixSegmentManifestPath,
+  getRemixSegmentUnderstandingJsonPath,
+} from './remix-artifact-paths';
+import {
+  REMIX_UNDERSTANDING_ROLLUP_KIND,
   buildRemixUnderstandingInputFingerprint,
-  REMIX_UNDERSTANDING_PLACEHOLDER_KIND,
 } from './remix-understanding-gate';
 import { assertSourceAssetStageReady, resolveProjectFile } from './remix-validators';
 import type { StoredSourceAssetDocument } from './remix-store';
 import { readStoredSourceAsset, writeStoredSourceAsset } from './remix-store';
+import type { RemixSegmentTranscriptDocument } from './remix-transcript-types';
+import {
+  REMIX_SEGMENT_UNDERSTANDING_SYSTEM_PROMPT,
+  normalizeSegmentUnderstandingPayload,
+  toGateSegmentUnderstandingItem,
+  validateSegmentUnderstandingDocument,
+  type RemixSegmentUnderstandingDocument,
+} from './remix-segment-understanding-schema';
 
-function buildSourceOverviewMarkdown(document: StoredSourceAssetDocument): string {
+export interface RemixUnderstandingServiceOptions {
+  loadAISettings?: () => Promise<AISettings | null>;
+  generateStructuredData?: typeof generateStructuredData;
+  generateSegmentUnderstanding?: (
+    settings: AISettings,
+    context: RemixSegmentGenerationContext,
+  ) => Promise<Record<string, unknown>>;
+}
+
+export interface RemixSegmentGenerationContext {
+  sourceAssetId: string;
+  segment: SourceSegment;
+  transcript?: RemixSegmentTranscriptDocument | null;
+  neighborSummaries: {
+    previous?: string;
+    next?: string;
+  };
+}
+
+function buildSegmentUserPrompt(context: RemixSegmentGenerationContext): string {
+  const { segment, transcript, neighborSummaries } = context;
+  const keyframeLines = segment.keyframes.map(
+    (frame) => `- ${frame.frameRole}: ${frame.imagePath} @ ${frame.timestampMs}ms`,
+  );
+  return [
+    `片段 ID: ${segment.id}`,
+    `标题: ${segment.title}`,
+    `时间范围: ${segment.timeRange.startMs}ms - ${segment.timeRange.endMs}ms`,
+    `边界类型: ${segment.boundaryType}`,
+    '',
+    '关键帧:',
+    ...(keyframeLines.length ? keyframeLines : ['- （无关键帧路径）']),
+    '',
+    '分段台词:',
+    transcript?.plainText?.trim() || '（无台词）',
+    '',
+    '相邻片段摘要:',
+    `- 前一段: ${neighborSummaries.previous ?? '无'}`,
+    `- 后一段: ${neighborSummaries.next ?? '无'}`,
+    '',
+    '请输出单个片段的结构化理解 JSON。',
+  ].join('\n');
+}
+
+function buildSegmentAnalysisMarkdown(segments: RemixSegmentUnderstandingDocument[]): string {
+  return [
+    '# Segment Analysis',
+    '',
+    ...segments.flatMap((segment) => [
+      `## ${segment.title}`,
+      `- 片段 ID：${segment.segmentId}`,
+      `- 画面动作：${segment.visual.mainAction}`,
+      `- 镜头：${segment.camera.shotSize} / ${segment.camera.movement}`,
+      `- 台词摘要：${segment.audio.speechSummary}`,
+      `- 剧情功能：${segment.story.plotFunction}`,
+      `- 正向提示词：${segment.videoPrompt.positivePrompt}`,
+      '',
+    ]),
+  ].join('\n');
+}
+
+function buildSourceOverviewMarkdown(
+  document: StoredSourceAssetDocument,
+  segments: RemixSegmentUnderstandingDocument[],
+): string {
   const asset = document.sourceAsset;
   return [
     '# Source Overview',
@@ -16,93 +95,280 @@ function buildSourceOverviewMarkdown(document: StoredSourceAssetDocument): strin
     `- 标题：${asset.title}`,
     `- Source Asset：${asset.id}`,
     `- 镜头分段：${asset.segments.length}`,
+    `- 已理解片段：${segments.length}`,
     `- 总时长：${Math.round(asset.videoMetadata.durationMs / 1000)} 秒`,
     '',
     '## 处理结论',
     '',
-    '这份原片已经完成切片与关键帧抽取，可以作为 Remix Variant 的引用底稿。',
+    '原片已完成片段级结构化理解，可进入人工校对与二创引用。',
   ].join('\n');
 }
 
-function buildSegmentAnalysisMarkdown(document: StoredSourceAssetDocument): string {
-  return [
-    '# Segment Analysis',
-    '',
-    ...document.sourceAsset.segments.flatMap((segment) => [
-      `## ${segment.title}`,
-      `- 时间范围：${segment.timeRange.startMs}ms - ${segment.timeRange.endMs}ms`,
-      `- 边界类型：${segment.boundaryType}`,
-      `- 关键帧数量：${segment.keyframes.length}`,
-      '- 备注：保留当前段的表演节奏和动作转折。',
-      '',
-    ]),
-  ].join('\n');
+async function readSegmentTranscript(
+  projectDir: string,
+  segment: SourceSegment,
+): Promise<RemixSegmentTranscriptDocument | null> {
+  if (!segment.segmentTranscriptJsonPath?.trim()) {
+    return null;
+  }
+  try {
+    const raw = await fs.readFile(
+      resolveProjectFile(projectDir, segment.segmentTranscriptJsonPath),
+      'utf8',
+    );
+    return JSON.parse(raw) as RemixSegmentTranscriptDocument;
+  } catch {
+    return null;
+  }
+}
+
+
+async function readExistingSegmentUnderstanding(
+  projectDir: string,
+  segment: SourceSegment,
+): Promise<RemixSegmentUnderstandingDocument | null> {
+  const relPath =
+    segment.analysisJsonPath?.trim() ||
+    getRemixSegmentUnderstandingJsonPath(segment.sourceAssetId, segment.id);
+  try {
+    const raw = await fs.readFile(resolveProjectFile(projectDir, relPath), 'utf8');
+    const parsed = JSON.parse(raw) as RemixSegmentUnderstandingDocument;
+    if (parsed.schema !== 'sceneforge-remix-segment-understanding') {
+      return null;
+    }
+    return parsed;
+  } catch {
+    return null;
+  }
 }
 
 export class RemixUnderstandingService {
-  async run(projectDir: string, sourceAssetId: string): Promise<StoredSourceAssetDocument> {
-    const document = await readStoredSourceAsset(projectDir, sourceAssetId);
-    assertSourceAssetStageReady(document, 'remix_keyframes');
+  private readonly loadAISettings: () => Promise<AISettings | null>;
 
-    const overviewMarkdown = buildSourceOverviewMarkdown(document);
-    const segmentAnalysisMarkdown = buildSegmentAnalysisMarkdown(document);
-    const overviewMarkdownPath = resolveProjectFile(projectDir, document.sourceAsset.sourceOverviewMarkdownPath ?? '');
-    const segmentAnalysisMarkdownPath = resolveProjectFile(projectDir, document.sourceAsset.segmentAnalysisMarkdownPath ?? '');
-    const overviewJsonPath = resolveProjectFile(projectDir, document.sourceAsset.sourceOverviewJsonPath ?? '');
-    const segmentAnalysisJsonPath = resolveProjectFile(projectDir, document.sourceAsset.segmentAnalysisJsonPath ?? '');
+  private readonly generateStructured: typeof generateStructuredData;
 
-    await fs.mkdir(path.dirname(overviewMarkdownPath), { recursive: true });
-    await fs.mkdir(path.dirname(segmentAnalysisMarkdownPath), { recursive: true });
+  private readonly generateSegmentUnderstanding?: RemixUnderstandingServiceOptions['generateSegmentUnderstanding'];
 
-    await fs.writeFile(
-      overviewMarkdownPath,
-      overviewMarkdown,
-      'utf8',
+  constructor(options: RemixUnderstandingServiceOptions = {}) {
+    this.loadAISettings = options.loadAISettings ?? (async () => null);
+    this.generateStructured = options.generateStructuredData ?? generateStructuredData;
+    this.generateSegmentUnderstanding = options.generateSegmentUnderstanding;
+  }
+
+  private async generateForSegment(
+    settings: AISettings,
+    context: RemixSegmentGenerationContext,
+  ): Promise<Record<string, unknown>> {
+    if (this.generateSegmentUnderstanding) {
+      return this.generateSegmentUnderstanding(settings, context);
+    }
+    return this.generateStructured(
+      settings,
+      REMIX_SEGMENT_UNDERSTANDING_SYSTEM_PROMPT,
+      buildSegmentUserPrompt(context),
+      undefined,
+      { label: `remix-segment-understanding:${context.segment.id}` },
     );
+  }
+
+  async generateSegment(
+    projectDir: string,
+    document: StoredSourceAssetDocument,
+    segmentId: string,
+    settings: AISettings,
+  ): Promise<RemixSegmentUnderstandingDocument> {
+    const segment = document.sourceAsset.segments.find((item) => item.id === segmentId);
+    if (!segment) {
+      throw new Error(`未找到片段：${segmentId}`);
+    }
+    const index = document.sourceAsset.segments.findIndex((item) => item.id === segmentId);
+    const previous = index > 0 ? document.sourceAsset.segments[index - 1] : undefined;
+    const next =
+      index >= 0 && index < document.sourceAsset.segments.length - 1
+        ? document.sourceAsset.segments[index + 1]
+        : undefined;
+    const transcript = await readSegmentTranscript(projectDir, segment);
+    const generatedAt = new Date().toISOString();
+    const payload = await this.generateForSegment(settings, {
+      sourceAssetId: document.sourceAsset.id,
+      segment,
+      transcript,
+      neighborSummaries: {
+        previous: previous?.title,
+        next: next?.title,
+      },
+    });
+    const understanding = normalizeSegmentUnderstandingPayload(payload, {
+      segment,
+      sourceAssetId: document.sourceAsset.id,
+      transcript,
+      keyframes: segment.keyframes,
+      generatedAt,
+    });
+    const errors = validateSegmentUnderstandingDocument(understanding);
+    if (errors.length > 0) {
+      throw new Error(errors[0]);
+    }
+    return understanding;
+  }
+
+  private async writeSegmentUnderstanding(
+    projectDir: string,
+    sourceAssetId: string,
+    segment: SourceSegment,
+    understanding: RemixSegmentUnderstandingDocument,
+  ): Promise<string> {
+    const relPath = getRemixSegmentUnderstandingJsonPath(sourceAssetId, segment.id);
+    const absPath = resolveProjectFile(projectDir, relPath);
+    await fs.mkdir(path.dirname(absPath), { recursive: true });
+    await fs.writeFile(absPath, `${JSON.stringify(understanding, null, 2)}\n`, 'utf8');
+    segment.analysisJsonPath = relPath;
     await fs.writeFile(
-      segmentAnalysisMarkdownPath,
-      segmentAnalysisMarkdown,
-      'utf8',
-    );
-    const inputHash = buildRemixUnderstandingInputFingerprint(document);
-    await fs.writeFile(
-      overviewJsonPath,
+      resolveProjectFile(projectDir, getRemixSegmentManifestPath(sourceAssetId, segment.id)),
       `${JSON.stringify(
         {
-          artifactKind: REMIX_UNDERSTANDING_PLACEHOLDER_KIND,
-          artifactStatus: 'placeholder',
-          title: document.sourceAsset.title,
-          sourceAssetId: document.sourceAsset.id,
-          segmentCount: document.sourceAsset.segments.length,
-          durationMs: document.sourceAsset.videoMetadata.durationMs,
-          inputHash,
+          segmentId: segment.id,
+          sourceAssetId,
+          understandingJsonPath: relPath,
+          segmentTranscriptJsonPath: segment.segmentTranscriptJsonPath ?? null,
+          keyframeCount: segment.keyframes.length,
         },
         null,
         2,
       )}\n`,
       'utf8',
     );
+    return relPath;
+  }
+
+  async run(
+    projectDir: string,
+    sourceAssetId: string,
+    options: { segmentIds?: string[] } = {},
+  ): Promise<StoredSourceAssetDocument> {
+    const document = await readStoredSourceAsset(projectDir, sourceAssetId);
+    assertSourceAssetStageReady(document, 'remix_keyframes');
+
+    const settings = await this.loadAISettings();
+    if (!settings) {
+      throw new Error('未配置 LLM，无法生成片段理解。请在应用设置中配置 AI 后再试。');
+    }
+
+    const targetIds =
+      options.segmentIds?.length
+        ? options.segmentIds
+        : document.sourceAsset.segments.map((segment) => segment.id);
+
+    const generated: RemixSegmentUnderstandingDocument[] = [];
+    const failures: Array<{ segmentId: string; error: string }> = [];
+
+    for (const segmentId of targetIds) {
+      try {
+        const understanding = await this.generateSegment(projectDir, document, segmentId, settings);
+        await this.writeSegmentUnderstanding(
+          projectDir,
+          sourceAssetId,
+          document.sourceAsset.segments.find((item) => item.id === segmentId)!,
+          understanding,
+        );
+        generated.push(understanding);
+      } catch (error) {
+        failures.push({
+          segmentId,
+          error: error instanceof Error ? error.message : '片段理解失败',
+        });
+      }
+    }
+
+    if (generated.length === 0) {
+      throw new Error(failures[0]?.error ?? '所有片段理解均失败。');
+    }
+
+    const overviewMarkdownPath = resolveProjectFile(
+      projectDir,
+      document.sourceAsset.sourceOverviewMarkdownPath ?? '',
+    );
+    const segmentAnalysisMarkdownPath = resolveProjectFile(
+      projectDir,
+      document.sourceAsset.segmentAnalysisMarkdownPath ?? '',
+    );
+    const overviewJsonPath = resolveProjectFile(
+      projectDir,
+      document.sourceAsset.sourceOverviewJsonPath ?? '',
+    );
+    const segmentAnalysisJsonPath = resolveProjectFile(
+      projectDir,
+      document.sourceAsset.segmentAnalysisJsonPath ?? '',
+    );
+
+    await fs.mkdir(path.dirname(overviewMarkdownPath), { recursive: true });
+    await fs.mkdir(path.dirname(segmentAnalysisMarkdownPath), { recursive: true });
+
+    const allById = new Map<string, RemixSegmentUnderstandingDocument>();
+    for (const item of generated) {
+      allById.set(item.segmentId, item);
+    }
+    for (const segment of document.sourceAsset.segments) {
+      if (allById.has(segment.id)) {
+        continue;
+      }
+      const existing = await readExistingSegmentUnderstanding(projectDir, segment);
+      if (existing) {
+        allById.set(segment.id, existing);
+      }
+    }
+
+    const orderedDocuments = document.sourceAsset.segments
+      .map((segment) => allById.get(segment.id))
+      .filter((item): item is RemixSegmentUnderstandingDocument => Boolean(item));
+    const orderedGateItems = orderedDocuments.map((doc) => toGateSegmentUnderstandingItem(doc));
+    const missingSegmentIds = document.sourceAsset.segments
+      .filter((segment) => !allById.has(segment.id))
+      .map((segment) => segment.id);
+    if (missingSegmentIds.length > 0) {
+      failures.push(
+        ...missingSegmentIds.map((segmentId) => ({
+          segmentId,
+          error: '片段理解缺失',
+        })),
+      );
+    }
+
+    const inputHash = buildRemixUnderstandingInputFingerprint(document);
+    const overviewRollup = {
+      artifactKind: REMIX_UNDERSTANDING_ROLLUP_KIND,
+      sourceAssetId: document.sourceAsset.id,
+      segmentCount: document.sourceAsset.segments.length,
+      understoodSegmentCount: orderedGateItems.length,
+      segmentRefs: document.sourceAsset.segments.map((segment) => ({
+        segmentId: segment.id,
+        understandingPath: segment.analysisJsonPath ?? getRemixSegmentUnderstandingJsonPath(sourceAssetId, segment.id),
+      })),
+      inputHash,
+      partialFailures: failures,
+    };
+
+    await fs.writeFile(
+      overviewMarkdownPath,
+      buildSourceOverviewMarkdown(document, orderedDocuments),
+      'utf8',
+    );
+    await fs.writeFile(
+      segmentAnalysisMarkdownPath,
+      buildSegmentAnalysisMarkdown(orderedDocuments),
+      'utf8',
+    );
+    await fs.writeFile(overviewJsonPath, `${JSON.stringify(overviewRollup, null, 2)}\n`, 'utf8');
     await fs.writeFile(
       segmentAnalysisJsonPath,
-      `${JSON.stringify(
-        document.sourceAsset.segments.map((segment) => ({
-          segmentId: segment.id,
-          artifactKind: REMIX_UNDERSTANDING_PLACEHOLDER_KIND,
-          artifactStatus: 'placeholder',
-          title: segment.title,
-          boundaryType: segment.boundaryType,
-          durationMs: segment.timeRange.durationMs,
-          keyframeCount: segment.keyframes.length,
-        })),
-        null,
-        2,
-      )}\n`,
+      `${JSON.stringify(orderedGateItems, null, 2)}\n`,
       'utf8',
     );
 
-    document.sourceAsset.status = 'ready_for_review';
+    document.sourceAsset.status = failures.length > 0 ? 'processing' : 'ready_for_review';
     document.sourceAsset.updatedAt = new Date().toISOString();
-    document.processingStageStates.remix_understanding = 'ready_for_review';
+    document.processingStageStates.remix_understanding =
+      failures.length > 0 ? 'needs_input' : 'ready_for_review';
     await writeStoredSourceAsset(projectDir, document);
     return document;
   }

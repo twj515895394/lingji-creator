@@ -150,7 +150,7 @@ function validateSegmentUnderstandingItems(
   const errors: string[] = [];
 
   for (const item of segmentItems) {
-    if (isPlaceholderSegmentAnalysisItem(item as Record<string, unknown>)) {
+    if (isPlaceholderSegmentAnalysisItem(item as unknown as Record<string, unknown>)) {
       errors.push(`片段 ${item.segmentId} 仍为占位理解产物。`);
       continue;
     }
@@ -230,7 +230,7 @@ export async function validateRemixUnderstandingArtifacts(
     errors.push('当前原片理解仍为占位汇总，不能视为完成。');
   }
 
-  if (segmentItems.some((item) => isPlaceholderSegmentAnalysisItem(item as Record<string, unknown>))) {
+  if (segmentItems.some((item) => isPlaceholderSegmentAnalysisItem(item as unknown as Record<string, unknown>))) {
     errors.push('存在占位型片段理解产物。');
   }
 
