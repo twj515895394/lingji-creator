@@ -19,10 +19,13 @@ import type {
   UpdateVariantConfigInput,
 } from './remix-ipc-types';
 import { RemixService } from './remix-service';
+import { registerSceneForgeRemixSegmentClipIpc } from './segment-clips/segment-clip-ipc';
 
 const service = new RemixService();
 
 export function registerSceneForgeRemixIpc(): void {
+  registerSceneForgeRemixSegmentClipIpc();
+
   ipcMain.handle('sceneForgeRemix:listSourceAssets', async (_event, input: ListSourceAssetsInput) => {
     return service.listSourceAssets(input);
   });
