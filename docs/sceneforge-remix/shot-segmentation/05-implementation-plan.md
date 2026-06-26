@@ -7,6 +7,7 @@
 ## 1. 总体阶段
 
 ```text
+Phase 0：TransNetV2 模型资产准备与目录约定
 Phase 1：快速模式真实检测 + source_clip.mp4 最小闭环
 Phase 2：TransNetV2 高精模式 + fallback
 Phase 3：片段导出与文件操作
@@ -14,11 +15,97 @@ Phase 4：真实关键帧抽取
 Phase 5：进度事件、调试产物、内置 Python runtime
 ```
 
-优先级：先让用户拿到可用片段视频，再提升高精检测能力，最后增强导出、进度和运行时体验。
+优先级：先把模型资产和目录结构约定清楚，再让用户拿到可用片段视频，然后提升高精检测能力，最后增强导出、进度和运行时体验。
 
 ---
 
-## 2. Phase 1：快速模式真实检测 + 视频片段产物
+## 2. Phase 0：TransNetV2 模型资产准备与目录约定
+
+### 目标
+
+明确高精模式需要准备的模型文件、模型结构代码和目录位置，避免只准备 `.pth` 权重导致 Worker 无法加载模型。
+
+### 需要准备的文件
+
+```text
+resources/models/transnetv2/<实际权重文件>.pth
+resources/models/transnetv2/model-config.json
+resources/models/transnetv2/README.md
+
+resources/shot-detectors/vendor/transnetv2/<模型结构代码>.py
+resources/shot-detectors/vendor/transnetv2/__init__.py
+resources/shot-detectors/vendor/transnetv2/LICENSE        # 如果来源仓库提供
+resources/shot-detectors/vendor/transnetv2/README.md      # 可选
+```
+
+推荐来源：
+
+```text
+https://huggingface.co/magnusdtd/TransNetV2/tree/main
+```
+
+如果该 Hugging Face 仓库已经提供 PyTorch 代码和 `.pth` 权重，则优先使用它，不需要再从 TensorFlow 权重手动转换。文件名不强制必须是 `transnetv2-pytorch-weights.pth`，代码应支持环境变量和自动扫描唯一 `.pth`。
+
+### 后端任务
+
+1. 新增模型目录 README：
+
+```text
+resources/models/transnetv2/README.md
+```
+
+2. 新增 vendor 目录：
+
+```text
+resources/shot-detectors/vendor/transnetv2/
+```
+
+3. 实现模型路径 resolver：
+
+```text
+electron/sceneforge/remix/shot-detection/model-path-resolver.ts
+```
+
+解析顺序：
+
+```text
+1. LINGJI_TRANSNETV2_MODEL_PATH
+2. resources/models/transnetv2/transnetv2-pytorch-weights.pth
+3. resources/models/transnetv2/*.pth 中唯一文件
+4. 用户数据目录 models/transnetv2/*.pth
+5. 找不到则 accurate fallback 到 fast
+```
+
+4. 实现 vendor 路径 resolver：
+
+```text
+1. LINGJI_TRANSNETV2_VENDOR_DIR
+2. resources/shot-detectors/vendor/transnetv2
+3. site-packages 中已安装的 transnetv2 模块
+4. 找不到则 accurate fallback 到 fast
+```
+
+### 环境变量
+
+```text
+LINGJI_SHOT_PYTHON
+LINGJI_TRANSNETV2_MODEL_PATH
+LINGJI_TRANSNETV2_VENDOR_DIR
+LINGJI_FFMPEG_PATH
+LINGJI_FFPROBE_PATH
+```
+
+### 验收
+
+- `.pth` 权重存在。
+- 匹配的 PyTorch 模型结构代码存在。
+- 缺权重时 accurate 不崩溃，fallback 到 fast。
+- 缺模型结构代码时 accurate 不崩溃，fallback 到 fast。
+- diagnostics 能明确说明缺少的是权重还是模型代码。
+
+---
+
+## 3. Phase 1：快速模式真实检测 + 视频片段产物
 
 ### 目标
 
@@ -75,7 +162,7 @@ electron/sceneforge/remix/segment-clips/segment-clip-service.ts
 
 ---
 
-## 3. Phase 2：TransNetV2 高精模式
+## 4. Phase 2：TransNetV2 高精模式
 
 ### 目标
 
@@ -89,19 +176,17 @@ electron/sceneforge/remix/segment-clips/segment-clip-service.ts
 resources/shot-detectors/accurate_transnetv2.py
 resources/shot-detectors/requirements-accurate.txt
 resources/models/transnetv2/README.md
+resources/shot-detectors/vendor/transnetv2/
 ```
 
-2. 新增模型路径解析：
-
-```text
-electron/sceneforge/remix/shot-detection/model-path-resolver.ts
-```
+2. 使用 Phase 0 的模型路径解析与 vendor 路径解析。
 
 3. 支持环境变量：
 
 ```text
 LINGJI_SHOT_PYTHON
 LINGJI_TRANSNETV2_MODEL_PATH
+LINGJI_TRANSNETV2_VENDOR_DIR
 LINGJI_FFMPEG_PATH
 LINGJI_FFPROBE_PATH
 ```
@@ -119,12 +204,12 @@ LINGJI_FFPROBE_PATH
 ### 验收
 
 - 高精模式真实检测复杂剪辑。
-- 缺模型时不阻塞用户流程。
+- 缺模型权重或模型结构代码时不阻塞用户流程。
 - 生成 clips 与检测边界一致。
 
 ---
 
-## 4. Phase 3：片段导出与文件操作
+## 5. Phase 3：片段导出与文件操作
 
 ### 目标
 
@@ -168,7 +253,7 @@ clips_manifest.json
 
 ---
 
-## 5. Phase 4：真实关键帧抽取
+## 6. Phase 4：真实关键帧抽取
 
 ### 目标
 
@@ -200,7 +285,7 @@ last: endMs - 100ms
 
 ---
 
-## 6. Phase 5：进度、调试、发布运行时
+## 7. Phase 5：进度、调试、发布运行时
 
 ### 进度事件
 
@@ -233,8 +318,8 @@ clip_generation_report.json
 ### 发布运行时
 
 ```text
-内测：用户配置 Python / 模型路径
-正式：内置 Python runtime + site-packages + TransNetV2 weights
+内测：用户配置 Python / 模型路径 / vendor 代码路径
+正式：内置 Python runtime + site-packages + TransNetV2 weights + vendor 代码
 ```
 
 asar unpack 增加：
@@ -247,7 +332,7 @@ resources/python-runtime
 
 ---
 
-## 7. 测试矩阵
+## 8. 测试矩阵
 
 | 场景 | fast | accurate | clips | UI |
 |---|---|---|---|---|
@@ -256,12 +341,13 @@ resources/python-runtime
 | 淡入淡出/溶解 | 可能低置信 | 应更好 | 全部生成 | needs_review |
 | 缺 Python | 失败提示 | fallback 不可用 | 不生成 | 明确错误 |
 | 缺 TransNetV2 权重 | fast 正常 | fallback fast | 全部生成 | 降级提示 |
+| 缺 TransNetV2 模型结构代码 | fast 正常 | fallback fast | 全部生成 | 降级提示 |
 | ffmpeg 裁切失败 | job failed | job failed | 标记失败 | 错误提示 |
 | 人工合并/拆分 | 不重新检测 | 不重新检测 | 重新生成 | 时间轴更新 |
 
 ---
 
-## 8. 最小可交付版本
+## 9. 最小可交付版本
 
 最小版本要求：
 
@@ -272,4 +358,13 @@ fast 真实检测
 + diagnostics 清楚
 ```
 
-完成这个闭环后，Remix 二创工作台才真正拥有可复用的分镜素材资产。
+高精模式最小可交付要求：
+
+```text
+.pth 权重 + PyTorch 模型结构代码可被 resolver 找到
++ accurate 可真实运行
++ 缺任意模型资产时 fallback fast
++ diagnostics 明确说明缺失项
+```
+
+完成这些闭环后，Remix 二创工作台才真正拥有可复用的分镜素材资产。
