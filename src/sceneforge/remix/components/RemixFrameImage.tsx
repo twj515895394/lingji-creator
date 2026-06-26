@@ -6,11 +6,17 @@ interface RemixFrameImageProps {
   imagePath: string;
   alt: string;
   className?: string;
+  projectDir?: string | null;
 }
 
-export function RemixFrameImage({ imagePath, alt, className }: RemixFrameImageProps) {
+export function RemixFrameImage({ imagePath, alt, className, projectDir }: RemixFrameImageProps) {
   const [hasError, setHasError] = useState(false);
-  const src = useMemo(() => toFileSrc(imagePath), [imagePath]);
+  const src = useMemo(() => {
+    if (!imagePath) return '';
+    const isAbsolute = imagePath.startsWith('/') || /^[a-zA-Z]:[\\/]/.test(imagePath) || imagePath.startsWith('file://');
+    const finalPath = isAbsolute ? imagePath : (projectDir ? `${projectDir}/${imagePath}` : imagePath);
+    return toFileSrc(finalPath);
+  }, [imagePath, projectDir]);
 
   if (!src || hasError) {
     const errorTitle = src ? '加载失败' : '关键帧缺失';

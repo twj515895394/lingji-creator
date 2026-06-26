@@ -11,12 +11,14 @@ interface EditedKeyframeGalleryProps {
   items: EditedKeyframe[];
   selectedEditedKeyframeId: string | null;
   onSelectEditedKeyframe: (editedKeyframeId: string) => void;
+  projectDir?: string | null;
 }
 
 export function EditedKeyframeGallery({
   items,
   selectedEditedKeyframeId,
   onSelectEditedKeyframe,
+  projectDir,
 }: EditedKeyframeGalleryProps) {
   return (
     <div className={styles.galleryGrid} data-testid="remix-edited-keyframe-gallery">
@@ -35,7 +37,7 @@ export function EditedKeyframeGallery({
             className={styles.selectionButtonReset}
             onClick={() => onSelectEditedKeyframe(item.id)}
           >
-            <RemixFrameImage imagePath={item.editedFramePath} alt={item.id} />
+            <RemixFrameImage imagePath={item.editedFramePath} alt={item.id} projectDir={projectDir} />
             <div className={styles.galleryTitle}>
               {item.segmentId} · {getKeyframeRoleLabel(item.frameRole)}
             </div>

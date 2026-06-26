@@ -19,37 +19,6 @@ function copyStealthPlugin() {
   };
 }
 
-function injectRemixSegmentClipPreloadPlugin() {
-  const preloadEntry = resolve('electron/preload.ts');
-  return {
-    name: 'inject-remix-segment-clip-preload',
-    transform(code: string, id: string) {
-      if (id.split('?')[0] !== preloadEntry) return null;
-      return `${code}\nimport './sceneforge/remix/segment-clips/segment-clip-preload';\n`;
-    },
-  };
-}
-
-function injectRemixSegmentClipActionsPanelPlugin() {
-  const pageEntry = resolve('src/sceneforge/remix/pages/RemixAssetProcessing.tsx');
-  return {
-    name: 'inject-remix-segment-clip-actions-panel',
-    transform(code: string, id: string) {
-      if (id.split('?')[0] !== pageEntry) return null;
-      if (code.includes('SegmentClipActionsPanel')) return null;
-      return code
-        .replace(
-          "import { SegmentTimeline } from '../components/SegmentTimeline';",
-          "import { SegmentTimeline } from '../components/SegmentTimeline';\nimport { SegmentClipActionsPanel } from '../components/SegmentClipActionsPanel';",
-        )
-        .replace(
-          '        <SegmentTimeline\n',
-          '        <SegmentClipActionsPanel\n          projectDir={projectDir}\n          sourceAssetId={sourceAssetId}\n          activeSegmentId={activePreviewSegment?.id ?? null}\n          disabled={Boolean(pendingActionId)}\n          onRefresh={reloadSnapshot}\n        />\n        <SegmentTimeline\n',
-        );
-    },
-  };
-}
-
 export default defineConfig({
   main: {
     plugins: [copyStealthPlugin()],
@@ -70,7 +39,7 @@ export default defineConfig({
     },
   },
   preload: {
-    plugins: [injectRemixSegmentClipPreloadPlugin()],
+    plugins: [],
     build: {
       outDir: 'dist-electron',
       emptyOutDir: false,
@@ -83,7 +52,7 @@ export default defineConfig({
   },
   renderer: {
     root: '.',
-    plugins: [injectRemixSegmentClipActionsPanelPlugin(), react(), tailwindcss()],
+    plugins: [react(), tailwindcss()],
     build: {
       outDir: 'dist',
       rollupOptions: {

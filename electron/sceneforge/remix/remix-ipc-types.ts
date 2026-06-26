@@ -43,7 +43,9 @@ export interface CreateSourceAssetFromImportInput {
   sourceVideoPath?: string | null;
 }
 
-export interface RunSourceAssetStageInput extends RemixSourceAssetRefInput {}
+export interface RunSourceAssetStageInput extends RemixSourceAssetRefInput {
+  minDurationForMiddleFrameSec?: number;
+}
 
 export interface RunSourceSegmentationInput extends RemixSourceAssetRefInput {
   mode?: RemixSegmentationMode;

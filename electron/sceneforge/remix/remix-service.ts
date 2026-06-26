@@ -245,7 +245,9 @@ export class RemixService {
     return this.runProcessingStage(
       input,
       'remix_keyframes',
-      () => this.keyframeService.run(input.projectDir, input.sourceAssetId),
+      () => this.keyframeService.run(input.projectDir, input.sourceAssetId, {
+        minDurationForMiddleFrameSec: input.minDurationForMiddleFrameSec,
+      }),
       '关键帧任务',
     );
   }

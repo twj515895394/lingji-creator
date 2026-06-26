@@ -139,4 +139,66 @@ describe('recent projects identity', () => {
       remixRoutePath: '/remix/projects/variant-001',
     });
   });
+
+  it('keeps remix identity after refreshing recent projects', async () => {
+    await writeProject(baseProject({
+      type: 'sceneforge',
+      sceneforge: {
+        version: 1,
+        projectRoot: 'sceneforge',
+        pipelineId: 'reference_remake',
+        entryPath: 'source_intake',
+        selectedStyleProfileId: null,
+        selectedAssetIds: [],
+        currentStage: 'source_intake',
+        status: 'ready',
+        coreArtifacts: { design: null, storyboard: null, videoPrompts: null },
+        lastExportPath: null,
+      },
+    }));
+
+    await addRecentProject(userDataPath, projectDir, 'remix-demo', {
+      projectKind: 'remix',
+      remixEntryIntent: 'creation',
+      remixRoutePath: '/remix/projects/variant-001',
+    });
+
+    const refreshed = await refreshRecentProjects(userDataPath);
+
+    expect(refreshed).toHaveLength(1);
+    expect(refreshed[0]).toMatchObject({
+      path: projectDir,
+      projectKind: 'remix',
+      remixEntryIntent: 'creation',
+      remixRoutePath: '/remix/projects/variant-001',
+      updatedAt: '2026-06-24T10:05:00.000Z',
+    });
+  });
+
+  it('corrects projectKind from sceneforge to remix when pipelineId is reference_remake', async () => {
+    await writeProject(baseProject({
+      type: 'sceneforge',
+      sceneforge: {
+        version: 1,
+        projectRoot: 'sceneforge',
+        pipelineId: 'reference_remake',
+        entryPath: 'source_intake',
+      },
+    }));
+
+    // 模拟被错误篡改成了普通的 sceneforge
+    await addRecentProject(userDataPath, projectDir, 'remix-demo', {
+      projectKind: 'sceneforge',
+    });
+
+    const refreshed = await refreshRecentProjects(userDataPath);
+    expect(refreshed).toHaveLength(1);
+    // 应该被物理文件纠正为 remix 且自动加载默认二创路由
+    expect(refreshed[0]).toMatchObject({
+      path: projectDir,
+      projectKind: 'remix',
+      remixEntryIntent: 'asset-ingestion',
+      remixRoutePath: '/remix/assets',
+    });
+  });
 });

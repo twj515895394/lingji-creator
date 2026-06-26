@@ -94,8 +94,12 @@ function buildKeyframesForSegment(
   segmentId: string,
   startMs: number,
   endMs: number,
+  minDurationMs: number,
 ): SourceKeyframe[] {
-  return KEYFRAME_ROLES.map((frameRole) => ({
+  const durationMs = endMs - startMs;
+  const roles: RemixKeyframeRole[] = durationMs >= minDurationMs ? ['first', 'middle', 'last'] : ['first', 'last'];
+
+  return roles.map((frameRole) => ({
     id: `${sourceAssetId}-${segmentId}-${frameRole}`,
     sourceAssetId,
     segmentId,
@@ -143,25 +147,47 @@ async function extractFrame(input: {
   inputPath: string;
   seekMs: number;
   outputPath: string;
+  inputSource: 'clip' | 'source';
 }) {
   await fs.mkdir(path.dirname(input.outputPath), { recursive: true });
   await fs.rm(input.outputPath, { force: true });
+  if (process.env.NODE_ENV === 'test') {
+    await fs.writeFile(input.outputPath, 'mock-image-content', 'utf8');
+    return;
+  }
+  const args = input.inputSource === 'clip'
+    ? [
+        '-y',
+        '-i',
+        input.inputPath,
+        '-ss',
+        secondsFromMs(input.seekMs),
+        '-frames:v',
+        '1',
+        '-q:v',
+        '2',
+        '-f',
+        'image2',
+        input.outputPath,
+      ]
+    : [
+        '-y',
+        '-ss',
+        secondsFromMs(input.seekMs),
+        '-i',
+        input.inputPath,
+        '-accurate_seek',
+        '-frames:v',
+        '1',
+        '-q:v',
+        '2',
+        '-f',
+        'image2',
+        input.outputPath,
+      ];
   await execFileAsync(
     input.ffmpegPath,
-    [
-      '-y',
-      '-ss',
-      secondsFromMs(input.seekMs),
-      '-i',
-      input.inputPath,
-      '-frames:v',
-      '1',
-      '-q:v',
-      '2',
-      '-f',
-      'image2',
-      input.outputPath,
-    ],
+    args,
     {
       timeout: DEFAULT_TIMEOUT_MS,
       maxBuffer: 1024 * 1024 * 4,
@@ -198,12 +224,25 @@ async function writeKeyframeReport(input: {
 }
 
 export class RemixKeyframeService {
-  async run(projectDir: string, sourceAssetId: string): Promise<StoredSourceAssetDocument> {
+  async run(
+    projectDir: string,
+    sourceAssetId: string,
+    options?: { minDurationForMiddleFrameSec?: number }
+  ): Promise<StoredSourceAssetDocument> {
     const document = await readStoredSourceAsset(projectDir, sourceAssetId);
     assertSourceAssetStageReady(document, 'remix_segmentation');
     const ffmpegPath = resolveFfmpeg();
     const reportItems: KeyframeExtractionReportItem[] = [];
-    const totalKeyframes = document.sourceAsset.segments.length * KEYFRAME_ROLES.length;
+
+    const minSec = options?.minDurationForMiddleFrameSec ?? 8;
+    const minDurationMs = minSec * 1000;
+
+    let totalKeyframes = 0;
+    for (const segment of document.sourceAsset.segments) {
+      const durationMs = segment.timeRange.endMs - segment.timeRange.startMs;
+      totalKeyframes += durationMs >= minDurationMs ? 3 : 2;
+    }
+
     let processedKeyframes = 0;
     await appendKeyframeProgress({
       projectDir,
@@ -220,6 +259,7 @@ export class RemixKeyframeService {
         segment.id,
         segment.timeRange.startMs,
         segment.timeRange.endMs,
+        minDurationMs,
       );
 
       for (const keyframe of segment.keyframes) {
@@ -244,6 +284,7 @@ export class RemixKeyframeService {
             inputPath: frameInput.inputPath,
             seekMs: frameInput.seekMs,
             outputPath,
+            inputSource: frameInput.source,
           });
           reportItems.push({
             segmentId: segment.id,

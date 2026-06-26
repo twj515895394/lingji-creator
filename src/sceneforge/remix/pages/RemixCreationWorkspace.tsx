@@ -595,6 +595,7 @@ export function RemixCreationWorkspace({
         onApprove={() => handleEditedKeyframeStatus('approved')}
         onNeedsRevision={() => handleEditedKeyframeStatus('needs_revision')}
         onReject={() => handleEditedKeyframeStatus('rejected')}
+        projectDir={projectDir}
       />
     ),
     'seedance-prompts': (

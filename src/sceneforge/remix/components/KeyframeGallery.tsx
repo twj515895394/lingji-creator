@@ -10,9 +10,10 @@ import styles from './RemixWorkspacePanels.module.css';
 
 interface KeyframeGalleryProps {
   asset: SourceAsset;
+  projectDir?: string | null;
 }
 
-export function KeyframeGallery({ asset }: KeyframeGalleryProps) {
+export function KeyframeGallery({ asset, projectDir }: KeyframeGalleryProps) {
   if (asset.segments.length === 0) {
     return (
       <div className={styles.emptyHint} data-testid="remix-keyframe-gallery">
@@ -42,7 +43,7 @@ export function KeyframeGallery({ asset }: KeyframeGalleryProps) {
             <div className={styles.galleryGrid}>
               {segment.keyframes.map((frame) => (
                 <article key={frame.id} className={styles.galleryCard}>
-                  <RemixFrameImage imagePath={frame.imagePath} alt={frame.id} />
+                  <RemixFrameImage imagePath={frame.imagePath} alt={frame.id} projectDir={projectDir} />
                   <div className={styles.galleryTitle}>
                     {getKeyframeRoleLabel(frame.frameRole)}
                   </div>

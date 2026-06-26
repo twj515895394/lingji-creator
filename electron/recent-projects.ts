@@ -49,7 +49,8 @@ export async function saveRecentProjects(
 }
 
 function isRemixProjectData(projectData: ProjectData | null | undefined): boolean {
-  return projectData?.type === 'sceneforge' && projectData.sceneforge?.entryPath === 'source_intake';
+  // 必须以 pipelineId === 'reference_remake' 物理字段为唯一真理判定是否是二创 Remix 项目
+  return projectData?.type === 'sceneforge' && projectData.sceneforge?.pipelineId === 'reference_remake';
 }
 
 function deriveRecentProjectIdentity(

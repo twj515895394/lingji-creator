@@ -29,6 +29,7 @@ interface EditedKeyframeStepPanelProps {
   onApprove: () => void;
   onNeedsRevision: () => void;
   onReject: () => void;
+  projectDir?: string | null;
 }
 
 export function EditedKeyframeStepPanel({
@@ -49,6 +50,7 @@ export function EditedKeyframeStepPanel({
   onApprove,
   onNeedsRevision,
   onReject,
+  projectDir,
 }: EditedKeyframeStepPanelProps) {
   const [isDragActive, setIsDragActive] = useState(false);
 
@@ -144,6 +146,7 @@ export function EditedKeyframeStepPanel({
         items={editedKeyframes}
         selectedEditedKeyframeId={selectedEditedKeyframeId}
         onSelectEditedKeyframe={onSelectEditedKeyframe}
+        projectDir={projectDir}
       />
       <div className={panelStyles.copyRow}>
         <Button

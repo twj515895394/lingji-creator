@@ -873,3 +873,6 @@ contextBridge.exposeInMainWorld('publishAPI', {
     return () => ipcRenderer.removeListener('publish:progress', handler);
   },
 });
+
+import './sceneforge/remix/segment-clips/segment-clip-preload';
+

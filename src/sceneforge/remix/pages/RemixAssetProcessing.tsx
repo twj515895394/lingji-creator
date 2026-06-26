@@ -8,6 +8,7 @@ import { PublishToLibraryButton } from '../components/PublishToLibraryButton';
 import { RemixStageNav } from '../components/RemixStageNav';
 import { SegmentTable } from '../components/SegmentTable';
 import { SegmentTimeline } from '../components/SegmentTimeline';
+import { SegmentClipActionsPanel } from '../components/SegmentClipActionsPanel';
 import { SourceVideoPreview } from '../components/SourceVideoPreview';
 import { SourceOverviewPanel } from '../components/SourceOverviewPanel';
 import { formatAssetLibraryDate, getLatestFailedJob, getProcessingStepLabel, getSourceAssetFilename } from '../lib/asset-library-view-model';
@@ -209,6 +210,7 @@ export function RemixAssetProcessing({
   const [segmentationMode, setSegmentationMode] = useState<'fast' | 'accurate'>('fast');
   const [preserveManualEdits, setPreserveManualEdits] = useState(true);
   const [granularity, setGranularity] = useState<'fine' | 'balanced' | 'coarse'>('balanced');
+  const [minDurationForMiddleFrameSec, setMinDurationForMiddleFrameSec] = useState<number>(8);
 
   useEffect(() => {
     async function loadSnapshot() {
@@ -607,7 +609,7 @@ export function RemixAssetProcessing({
       await runAction(
         'retry-keyframes',
         'remix_keyframes',
-        () => resolveClient().runSourceKeyframes({ projectDir: projectDir!, sourceAssetId }),
+        () => resolveClient().runSourceKeyframes({ projectDir: projectDir!, sourceAssetId, minDurationForMiddleFrameSec }),
         '正在重跑关键帧提取',
       );
       return;
@@ -916,6 +918,13 @@ export function RemixAssetProcessing({
             </span>
           </div>
         ) : null}
+        <SegmentClipActionsPanel
+          projectDir={projectDir!}
+          sourceAssetId={sourceAssetId}
+          activeSegmentId={activePreviewSegment?.id ?? null}
+          disabled={Boolean(pendingActionId)}
+          onRefresh={() => { void reloadSnapshot(); }}
+        />
         <SegmentTimeline
           asset={asset}
           activeSegmentId={activePreviewSegment?.id ?? null}
@@ -953,7 +962,27 @@ export function RemixAssetProcessing({
           </div>
           <div className={panelStyles.chip}>{getStageStatusLabel(stepStatuses.keyframes)}</div>
         </div>
-        <div className={panelStyles.copyRow}>
+        <div className={panelStyles.copyRow} style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <span style={{ fontSize: '13px', color: 'rgba(255,255,255,0.6)' }}>中间帧提取阈值:</span>
+            <input
+              type="number"
+              min={1}
+              max={60}
+              value={minDurationForMiddleFrameSec}
+              onChange={(e) => setMinDurationForMiddleFrameSec(Math.max(1, parseInt(e.target.value) || 1))}
+              style={{
+                width: '60px',
+                background: 'rgba(255,255,255,0.05)',
+                border: '1px solid rgba(255,255,255,0.1)',
+                borderRadius: '4px',
+                color: '#fff',
+                padding: '4px 8px',
+                fontSize: '13px',
+              }}
+            />
+            <span style={{ fontSize: '13px', color: 'rgba(255,255,255,0.4)' }}>秒 (时长低于该值仅提取首尾帧)</span>
+          </div>
           <Button
             variant="primary"
             disabled={Boolean(pendingActionId)}
@@ -962,10 +991,11 @@ export function RemixAssetProcessing({
                 'keyframes',
                 'remix_keyframes',
                 () =>
-                resolveClient().runSourceKeyframes({
-                  projectDir: projectDir,
-                  sourceAssetId,
-                }),
+                  resolveClient().runSourceKeyframes({
+                    projectDir: projectDir,
+                    sourceAssetId,
+                    minDurationForMiddleFrameSec,
+                  }),
                 '正在提取关键帧',
               );
             }}
@@ -974,7 +1004,7 @@ export function RemixAssetProcessing({
             {pendingActionId === 'keyframes' ? '提取中…' : '提取关键帧'}
           </Button>
         </div>
-        <KeyframeGallery asset={asset} />
+        <KeyframeGallery asset={asset} projectDir={projectDir} />
       </section>
     ),
     understanding: (

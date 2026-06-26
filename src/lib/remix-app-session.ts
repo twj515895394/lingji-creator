@@ -105,6 +105,13 @@ export function buildRecentProjectIdentityForOpen(
     };
   }
   if (projectData.type === 'sceneforge') {
+    if (projectData.sceneforge?.pipelineId === 'reference_remake') {
+      return {
+        projectKind: 'remix',
+        remixEntryIntent: 'asset-ingestion',
+        remixRoutePath: '/remix/assets',
+      };
+    }
     return { projectKind: 'sceneforge', remixEntryIntent: null, remixRoutePath: null };
   }
   return { projectKind: 'script', remixEntryIntent: null, remixRoutePath: null };
