@@ -5,6 +5,8 @@ import { promisify } from 'node:util';
 import { fileURLToPath } from 'node:url';
 import type { SourceSegment } from '../../../../src/sceneforge/remix/types';
 import { resolveFfmpegPath } from '../../../runtime-binaries';
+import { getRemixClipGenerationReportPath } from '../remix-artifact-paths';
+import { writeRemixDebugJson, withDebugReportMeta } from '../remix-debug-artifacts';
 import { resolveProjectFile } from '../remix-validators';
 
 const execFileAsync = promisify(execFile);
@@ -193,7 +195,27 @@ export class SegmentClipService {
     }
 
     const failed = results.filter((result) => result.status === 'failed');
+    const summary: SegmentClipGenerationSummary = {
+      mode,
+      totalCount: results.length,
+      successCount: results.length - failed.length,
+      failedCount: failed.length,
+      elapsedMs: Date.now() - startedAt,
+      results,
+    };
+
     if (failed.length > 0) {
+      await writeRemixDebugJson({
+        projectDir: input.projectDir,
+        relativePath: getRemixClipGenerationReportPath(input.sourceAssetId),
+        payload: withDebugReportMeta({
+          sourceAssetId: input.sourceAssetId,
+          sourceVideoPath: input.sourceVideoPath,
+          status: 'failed',
+          segmentCount: input.segments.length,
+          clipGeneration: summary,
+        }),
+      });
       const preview = failed
         .slice(0, 3)
         .map((item) => `${item.segmentId}: ${item.error ?? 'unknown error'}`)
@@ -201,13 +223,6 @@ export class SegmentClipService {
       throw new Error(`分镜视频片段生成失败 ${failed.length}/${results.length}：\n${preview}`);
     }
 
-    return {
-      mode,
-      totalCount: results.length,
-      successCount: results.length,
-      failedCount: 0,
-      elapsedMs: Date.now() - startedAt,
-      results,
-    };
+    return summary;
   }
 }
