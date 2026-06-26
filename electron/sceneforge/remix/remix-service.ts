@@ -2,6 +2,7 @@ import type {
   RemixAssetLibrarySnapshot,
   RemixAssetProcessingStageId,
   RemixProcessingJob,
+  RemixProcessingJobStepId,
   RemixCreationWorkspaceSnapshot,
   SourceSegment,
 } from '../../../src/sceneforge/remix/types';
@@ -44,6 +45,8 @@ import {
 import { RemixMediaValidationService } from './remix-media-validation-service';
 import { RemixSegmentationService, writeSegmentArtifacts } from './remix-segmentation-service';
 import { RemixSourceAssetService, type RemixSourceAssetServiceOptions } from './remix-source-asset-service';
+import { RemixAudioExtractionService } from './remix-audio-extraction-service';
+import { RemixTranscriptService } from './remix-transcript-service';
 import { RemixUnderstandingService } from './remix-understanding-service';
 import { RemixVariantService } from './remix-variant-service';
 import { RemixStrategyService } from './remix-strategy-service';
@@ -51,7 +54,12 @@ import { RemixDesignService } from './remix-design-service';
 import { RemixKeyframePromptService } from './remix-keyframe-prompt-service';
 import { RemixEditedKeyframeService } from './remix-edited-keyframe-service';
 import { RemixSeedancePromptService } from './remix-seedance-prompt-service';
+import { markRemixUnderstandingStale } from './remix-understanding-gate';
 import { assertPublishReady } from './remix-validators';
+
+export interface RemixServiceOptions extends RemixSourceAssetServiceOptions {
+  transcriptService?: RemixTranscriptService;
+}
 
 export class RemixService {
   private readonly sourceAssetService;
@@ -61,6 +69,10 @@ export class RemixService {
   private readonly keyframeService;
 
   private readonly mediaValidationService;
+
+  private readonly audioExtractionService;
+
+  private readonly transcriptService;
 
   private readonly understandingService;
 
@@ -76,11 +88,13 @@ export class RemixService {
 
   private readonly seedancePromptService;
 
-  constructor(options: RemixSourceAssetServiceOptions = {}) {
+  constructor(options: RemixServiceOptions = {}) {
     this.sourceAssetService = new RemixSourceAssetService(options);
     this.segmentationService = new RemixSegmentationService();
     this.keyframeService = new RemixKeyframeService();
     this.mediaValidationService = new RemixMediaValidationService(options);
+    this.audioExtractionService = new RemixAudioExtractionService();
+    this.transcriptService = options.transcriptService ?? new RemixTranscriptService();
     this.understandingService = new RemixUnderstandingService();
     this.variantService = new RemixVariantService(options);
     this.strategyService = new RemixStrategyService();
@@ -127,7 +141,7 @@ export class RemixService {
 
   private async runProcessingStage(
     input: RunSourceAssetStageInput,
-    stepId: RemixAssetProcessingStageId,
+    stepId: RemixAssetProcessingStageId | RemixProcessingJobStepId,
     runner: () => Promise<Awaited<ReturnType<RemixSegmentationService['run']>>>,
     message: string,
   ) {
@@ -279,6 +293,24 @@ export class RemixService {
     return snapshot;
   }
 
+  async runSourceAudio(input: RunSourceAssetStageInput) {
+    return this.runProcessingStage(
+      input,
+      'remix_audio_extraction',
+      () => this.audioExtractionService.run(input.projectDir, input.sourceAssetId),
+      '音频抽取任务',
+    );
+  }
+
+  async runSourceTranscript(input: RunSourceAssetStageInput) {
+    return this.runProcessingStage(
+      input,
+      'remix_transcript',
+      () => this.transcriptService.run(input.projectDir, input.sourceAssetId),
+      '台词识别任务',
+    );
+  }
+
   async runSourceUnderstanding(
     input: RunSourceAssetStageInput,
   ) {
@@ -294,7 +326,7 @@ export class RemixService {
     input: RemixSourceAssetRefInput,
   ) {
     const document = await readStoredSourceAsset(input.projectDir, input.sourceAssetId);
-    assertPublishReady(document);
+    await assertPublishReady(input.projectDir, document);
     document.sourceAsset.status = 'published_to_library';
     document.sourceAsset.updatedAt = new Date().toISOString();
     await writeStoredSourceAsset(input.projectDir, document);
@@ -349,6 +381,7 @@ export class RemixService {
           generatedAt: new Date().toISOString(),
         }
       : null;
+    markRemixUnderstandingStale(document);
     document.sourceAsset.updatedAt = new Date().toISOString();
     await writeSegmentArtifacts(
       input.projectDir,

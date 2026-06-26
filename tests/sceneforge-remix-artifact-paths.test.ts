@@ -6,6 +6,9 @@ import {
   getRemixSegmentManifestIndexPath,
   getRemixSegmentManifestPath,
   getRemixSourceManifestPath,
+  getRemixSourceAudioJsonPath,
+  getRemixSourceAudioWavPath,
+  getRemixSegmentAudioWavPath,
   getRemixSourceOverviewJsonPath,
   getRemixVariantDesignJsonPath,
   getRemixVariantEditedKeyframePath,
@@ -31,8 +34,17 @@ describe('sceneforge remix artifact paths', () => {
     expect(getRemixSegmentManifestPath('source-001', 'segment-001')).toBe(
       'sceneforge/remix/source-assets/source-001/source_segments/segment-001/segment_manifest.json',
     );
+    expect(getRemixSourceAudioWavPath('source-001')).toBe(
+      'sceneforge/remix/source-assets/source-001/audio/source_audio.wav',
+    );
+    expect(getRemixSourceAudioJsonPath('source-001')).toBe(
+      'sceneforge/remix/source-assets/source-001/audio/source_audio.json',
+    );
     expect(getRemixSegmentClipPath('source-001', 'segment-001')).toBe(
       'sceneforge/remix/source-assets/source-001/source_segments/segment-001/source_clip.mp4',
+    );
+    expect(getRemixSegmentAudioWavPath('source-001', 'segment-001')).toBe(
+      'sceneforge/remix/source-assets/source-001/source_segments/segment-001/audio/segment_audio.wav',
     );
     expect(getRemixSegmentKeyframePath('source-001', 'segment-001', 'middle')).toBe(
       'sceneforge/remix/source-assets/source-001/source_segments/segment-001/middle_frame.png',

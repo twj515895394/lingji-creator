@@ -12,6 +12,7 @@ import {
 } from './remix-artifact-paths';
 import { writeRemixDebugJson, withDebugReportMeta } from './remix-debug-artifacts';
 import { appendRemixProgressEvent } from './remix-progress-events';
+import { markRemixUnderstandingStale } from './remix-understanding-gate';
 import { assertSourceAssetStageReady, resolveProjectFile } from './remix-validators';
 import type { StoredSourceAssetDocument } from './remix-store';
 import { readStoredSourceAsset, writeStoredSourceAsset } from './remix-store';
@@ -368,7 +369,7 @@ export class RemixKeyframeService {
     });
     document.sourceAsset.updatedAt = new Date().toISOString();
     document.processingStageStates.remix_keyframes = 'approved';
-    document.processingStageStates.remix_understanding = 'ready_for_review';
+    markRemixUnderstandingStale(document);
     await writeStoredSourceAsset(projectDir, document);
     return document;
   }
@@ -434,6 +435,7 @@ export class RemixKeyframeService {
       'utf8',
     );
 
+    markRemixUnderstandingStale(document);
     document.sourceAsset.updatedAt = new Date().toISOString();
     await writeStoredSourceAsset(projectDir, document);
     return document;
@@ -470,6 +472,7 @@ export class RemixKeyframeService {
       'utf8',
     );
 
+    markRemixUnderstandingStale(document);
     document.sourceAsset.updatedAt = new Date().toISOString();
     await writeStoredSourceAsset(projectDir, document);
     return document;

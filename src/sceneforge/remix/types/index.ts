@@ -28,6 +28,15 @@ export const REMIX_STAGE_STATUSES = [
   'failed',
 ] as const;
 
+export const REMIX_PROCESSING_JOB_STEP_IDS = [
+  'remix_source_import',
+  'remix_segmentation',
+  'remix_keyframes',
+  'remix_audio_extraction',
+  'remix_transcript',
+  'remix_understanding',
+] as const;
+
 export const REMIX_PROCESSING_JOB_STATUSES = [
   'queued',
   'running',
@@ -101,6 +110,7 @@ export const REMIX_CREATION_STAGE_IDS = [
 export type RemixSourceAssetStatus = (typeof REMIX_SOURCE_ASSET_STATUSES)[number];
 export type RemixAssetLibrarySection = (typeof REMIX_ASSET_LIBRARY_SECTIONS)[number];
 export type RemixStageStatus = (typeof REMIX_STAGE_STATUSES)[number];
+export type RemixProcessingJobStepId = (typeof REMIX_PROCESSING_JOB_STEP_IDS)[number];
 export type RemixProcessingJobStatus = (typeof REMIX_PROCESSING_JOB_STATUSES)[number];
 export type RemixEditedKeyframeStatus = (typeof REMIX_EDITED_KEYFRAME_STATUSES)[number];
 export type RemixReferenceStrength = (typeof REMIX_REFERENCE_STRENGTHS)[number];
@@ -216,6 +226,10 @@ export interface SourceSegment {
   semantic?: RemixSegmentSemanticDetails | null;
   analysisMarkdownPath?: string | null;
   analysisJsonPath?: string | null;
+  segmentAudioPath?: string | null;
+  segmentAudioJsonPath?: string | null;
+  segmentTranscriptJsonPath?: string | null;
+  audioSkippedReason?: string | null;
 }
 
 export interface RemixSegmentationInputProfile {
@@ -276,6 +290,8 @@ export interface SourceAsset {
   sourceOverviewJsonPath?: string | null;
   segmentAnalysisMarkdownPath?: string | null;
   segmentAnalysisJsonPath?: string | null;
+  sourceAudioPath?: string | null;
+  sourceAudioJsonPath?: string | null;
   segments: SourceSegment[];
   segmentationMode?: RemixSegmentationMode | null;
   segmentationDiagnostics?: RemixSegmentationDiagnostics | null;
@@ -401,7 +417,7 @@ export interface SourceAssetSummary {
 export interface RemixProcessingJob {
   id: string;
   sourceAssetId: string;
-  stepId: RemixAssetProcessingStageId;
+  stepId: RemixAssetProcessingStageId | RemixProcessingJobStepId;
   status: RemixProcessingJobStatus;
   message?: string | null;
   error?: string | null;

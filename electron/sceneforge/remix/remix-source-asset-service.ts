@@ -115,6 +115,8 @@ export class RemixSourceAssetService {
         sourceOverviewJsonPath: getRemixSourceOverviewJsonPath(sourceAssetId),
         segmentAnalysisMarkdownPath: getRemixSegmentAnalysisMarkdownPath(sourceAssetId),
         segmentAnalysisJsonPath: getRemixSegmentAnalysisJsonPath(sourceAssetId),
+        sourceAudioPath: null,
+        sourceAudioJsonPath: null,
         segments: [],
         segmentationMode: 'fast',
         segmentationDiagnostics: null,

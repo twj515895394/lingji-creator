@@ -118,8 +118,39 @@ describe('SceneForge Remix IPC contract', () => {
       projectDir,
       sourceAssetId: liveSourceAssetId,
     });
-    expect(understood.processingStageStates.remix_understanding).toBe('approved');
+    expect(understood.processingStageStates.remix_understanding).toBe('ready_for_review');
     expect(understood.processingJobs?.[0]?.stepId).toBe('remix_understanding');
+
+    const overviewPath = understood.sourceAsset.sourceOverviewJsonPath ?? '';
+    const segmentPath = understood.sourceAsset.segmentAnalysisJsonPath ?? '';
+    const { REMIX_UNDERSTANDING_ROLLUP_KIND } = await import('../electron/sceneforge/remix/remix-understanding-gate');
+    const { buildRemixUnderstandingInputFingerprint } = await import('../electron/sceneforge/remix/remix-understanding-gate');
+    const stored = await service.getSourceAsset({ projectDir, sourceAssetId: liveSourceAssetId });
+    const inputHash = buildRemixUnderstandingInputFingerprint({
+      schema: 'sceneforge-remix-source-asset',
+      version: 1,
+      sourceAsset: stored.sourceAsset,
+      processingStageStates: stored.processingStageStates,
+    });
+    await fs.writeFile(path.join(projectDir, overviewPath), `${JSON.stringify({
+      artifactKind: REMIX_UNDERSTANDING_ROLLUP_KIND,
+      sourceAssetId: liveSourceAssetId,
+      segmentCount: stored.sourceAsset.segments.length,
+      understoodSegmentCount: stored.sourceAsset.segments.length,
+      segmentRefs: stored.sourceAsset.segments.map((segment) => ({
+        segmentId: segment.id,
+        understandingPath: `segments/${segment.id}/understanding.json`,
+      })),
+      inputHash,
+    }, null, 2)}\n`);
+    await fs.writeFile(path.join(projectDir, segmentPath), `${JSON.stringify(stored.sourceAsset.segments.map((segment) => ({
+      segmentId: segment.id,
+      visual: { mainAction: '人物抬头' },
+      camera: { shotSize: '中近景' },
+      videoPrompt: '固定镜头，人物缓慢抬头。',
+    })), null, 2)}\n`);
+    stored.processingStageStates.remix_understanding = 'approved';
+    await fs.writeFile(path.join(projectDir, stored.sourceAsset.sourceManifestPath), `${JSON.stringify(stored, null, 2)}\n`);
 
     const annotated = await service.updateSourceAssetMetadata({
       projectDir,

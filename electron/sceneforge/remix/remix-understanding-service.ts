@@ -1,5 +1,9 @@
 import fs from 'node:fs/promises';
 import path from 'node:path';
+import {
+  buildRemixUnderstandingInputFingerprint,
+  REMIX_UNDERSTANDING_PLACEHOLDER_KIND,
+} from './remix-understanding-gate';
 import { assertSourceAssetStageReady, resolveProjectFile } from './remix-validators';
 import type { StoredSourceAssetDocument } from './remix-store';
 import { readStoredSourceAsset, writeStoredSourceAsset } from './remix-store';
@@ -60,14 +64,18 @@ export class RemixUnderstandingService {
       segmentAnalysisMarkdown,
       'utf8',
     );
+    const inputHash = buildRemixUnderstandingInputFingerprint(document);
     await fs.writeFile(
       overviewJsonPath,
       `${JSON.stringify(
         {
+          artifactKind: REMIX_UNDERSTANDING_PLACEHOLDER_KIND,
+          artifactStatus: 'placeholder',
           title: document.sourceAsset.title,
           sourceAssetId: document.sourceAsset.id,
           segmentCount: document.sourceAsset.segments.length,
           durationMs: document.sourceAsset.videoMetadata.durationMs,
+          inputHash,
         },
         null,
         2,
@@ -78,7 +86,9 @@ export class RemixUnderstandingService {
       segmentAnalysisJsonPath,
       `${JSON.stringify(
         document.sourceAsset.segments.map((segment) => ({
-          id: segment.id,
+          segmentId: segment.id,
+          artifactKind: REMIX_UNDERSTANDING_PLACEHOLDER_KIND,
+          artifactStatus: 'placeholder',
           title: segment.title,
           boundaryType: segment.boundaryType,
           durationMs: segment.timeRange.durationMs,
@@ -92,7 +102,7 @@ export class RemixUnderstandingService {
 
     document.sourceAsset.status = 'ready_for_review';
     document.sourceAsset.updatedAt = new Date().toISOString();
-    document.processingStageStates.remix_understanding = 'approved';
+    document.processingStageStates.remix_understanding = 'ready_for_review';
     await writeStoredSourceAsset(projectDir, document);
     return document;
   }

@@ -39,6 +39,7 @@ describe('SceneForge Remix understanding service', () => {
     });
 
     expect(understood.sourceAsset.status).toBe('ready_for_review');
+    expect(understood.processingStageStates.remix_understanding).toBe('ready_for_review');
     await expect(
       fs.readFile(path.join(projectDir, understood.sourceAsset.sourceOverviewMarkdownPath ?? ''), 'utf8'),
     ).resolves.toContain('# Source Overview');
@@ -47,3 +48,25 @@ describe('SceneForge Remix understanding service', () => {
     ).resolves.toContain('# Segment Analysis');
   });
 });
+
+
+  it('does not auto-approve placeholder understanding output', async () => {
+    const service = new RemixService({ readDurationMs: async () => 12000 });
+    const imported = await service.createSourceAssetFromImport({
+      projectDir,
+      sourceVideoPath: path.join(projectDir, 'source.mp4'),
+    });
+    await service.runSourceSegmentation({ projectDir, sourceAssetId: imported.sourceAsset.id });
+    await service.runSourceKeyframes({ projectDir, sourceAssetId: imported.sourceAsset.id });
+
+    const understood = await service.runSourceUnderstanding({
+      projectDir,
+      sourceAssetId: imported.sourceAsset.id,
+    });
+
+    const overview = JSON.parse(
+      await fs.readFile(path.join(projectDir, understood.sourceAsset.sourceOverviewJsonPath ?? ''), 'utf8'),
+    );
+    expect(overview.artifactStatus).toBe('placeholder');
+    expect(understood.processingStageStates.remix_understanding).toBe('ready_for_review');
+  });

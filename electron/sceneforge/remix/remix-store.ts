@@ -64,6 +64,10 @@ function normalizeSourceAsset(sourceAsset: SourceAsset): SourceAsset {
       },
       reviewStatus: segment.reviewStatus ?? 'approved',
       semantic: segment.semantic ?? null,
+      segmentAudioPath: segment.segmentAudioPath ?? null,
+      segmentAudioJsonPath: segment.segmentAudioJsonPath ?? null,
+      segmentTranscriptJsonPath: segment.segmentTranscriptJsonPath ?? null,
+      audioSkippedReason: segment.audioSkippedReason ?? null,
     })),
     tags: Array.isArray(sourceAsset.tags) ? sourceAsset.tags : [],
     annotationNote: sourceAsset.annotationNote ?? null,
@@ -74,6 +78,8 @@ function normalizeSourceAsset(sourceAsset: SourceAsset): SourceAsset {
     segmentationDiagnostics: sourceAsset.segmentationDiagnostics ?? null,
     manualSegmentationOverride: sourceAsset.manualSegmentationOverride ?? null,
     mediaValidation: sourceAsset.mediaValidation ?? null,
+    sourceAudioPath: sourceAsset.sourceAudioPath ?? null,
+    sourceAudioJsonPath: sourceAsset.sourceAudioJsonPath ?? null,
   };
 }
 

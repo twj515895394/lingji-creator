@@ -134,6 +134,8 @@ export interface RemixIpcContract {
     input: RunSourceSegmentationInput,
   ): Promise<RemixAssetProcessingSnapshot>;
   runSourceKeyframes(input: RunSourceAssetStageInput): Promise<RemixAssetProcessingSnapshot>;
+  runSourceAudio(input: RunSourceAssetStageInput): Promise<RemixAssetProcessingSnapshot>;
+  runSourceTranscript(input: RunSourceAssetStageInput): Promise<RemixAssetProcessingSnapshot>;
   addSegmentMiddleKeyframe(input: SegmentKeyframeActionInput): Promise<RemixAssetProcessingSnapshot>;
   deleteSegmentMiddleKeyframe(input: SegmentKeyframeActionInput): Promise<RemixAssetProcessingSnapshot>;
   runSourceUnderstanding(

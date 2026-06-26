@@ -19,6 +19,7 @@ import {
   getRemixSourceSegmentsDir,
 } from './remix-artifact-paths';
 import { writeRemixDebugJson, withDebugReportMeta } from './remix-debug-artifacts';
+import { markRemixUnderstandingStale } from './remix-understanding-gate';
 import { assertFileExists, resolveProjectFile } from './remix-validators';
 import type { StoredSourceAssetDocument } from './remix-store';
 import { readStoredSourceAsset, writeStoredSourceAsset } from './remix-store';
@@ -667,6 +668,7 @@ export class RemixSegmentationService {
     document.sourceAsset.updatedAt = nowIso(this.now);
     document.processingStageStates.remix_segmentation = 'approved';
     document.processingStageStates.remix_keyframes = 'ready_for_review';
+    markRemixUnderstandingStale(document);
     await writeStoredSourceAsset(projectDir, document);
     return document;
   }

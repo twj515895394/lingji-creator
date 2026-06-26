@@ -67,6 +67,13 @@ export function registerSceneForgeRemixIpc(): void {
   );
 
   ipcMain.handle(
+    'sceneForgeRemix:runSourceAudio',
+    async (_event, input: RunSourceAssetStageInput) => {
+      return service.runSourceAudio(input);
+    },
+  );
+
+  ipcMain.handle(
     'sceneForgeRemix:runSourceKeyframes',
     async (_event, input: RunSourceAssetStageInput) => {
       return service.runSourceKeyframes(input);
@@ -84,6 +91,13 @@ export function registerSceneForgeRemixIpc(): void {
     'sceneForgeRemix:deleteSegmentMiddleKeyframe',
     async (_event, input: SegmentKeyframeActionInput) => {
       return service.deleteSegmentMiddleKeyframe(input);
+    },
+  );
+
+  ipcMain.handle(
+    'sceneForgeRemix:runSourceTranscript',
+    async (_event, input: RunSourceAssetStageInput) => {
+      return service.runSourceTranscript(input);
     },
   );
 

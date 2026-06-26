@@ -5,6 +5,7 @@ import type {
   RemixEditedKeyframeStatus,
   RemixStageStatus,
 } from '../../../src/sceneforge/remix/types';
+import { assertRemixUnderstandingReady } from './remix-understanding-gate';
 import type { StoredSourceAssetDocument, StoredVariantDocument } from './remix-store';
 
 function isApproved(status: RemixStageStatus | undefined): boolean {
@@ -29,10 +30,14 @@ export function assertSourceAssetStageReady(
   }
 }
 
-export function assertPublishReady(document: StoredSourceAssetDocument): void {
+export async function assertPublishReady(
+  projectDir: string,
+  document: StoredSourceAssetDocument,
+): Promise<void> {
   assertSourceAssetStageReady(document, 'remix_segmentation');
   assertSourceAssetStageReady(document, 'remix_keyframes');
   assertSourceAssetStageReady(document, 'remix_understanding');
+  await assertRemixUnderstandingReady(projectDir, document);
   if ((document.sourceAsset.tags ?? []).length === 0) {
     throw new Error('请先保存至少一个人工标签。');
   }

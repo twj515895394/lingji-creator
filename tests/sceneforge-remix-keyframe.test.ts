@@ -95,3 +95,25 @@ describe('SceneForge Remix keyframe service', () => {
     ).rejects.toThrow();
   });
 });
+
+
+  it('marks understanding as stale after rerunning keyframes', async () => {
+    const service = new RemixService({ readDurationMs: async () => 12000 });
+    const imported = await service.createSourceAssetFromImport({
+      projectDir,
+      sourceVideoPath: path.join(projectDir, 'source.mp4'),
+    });
+    await service.runSourceSegmentation({ projectDir, sourceAssetId: imported.sourceAsset.id });
+    const firstKeyframes = await service.runSourceKeyframes({ projectDir, sourceAssetId: imported.sourceAsset.id });
+    expect(firstKeyframes.processingStageStates.remix_understanding).toBe('not_started');
+
+    const understood = await service.runSourceUnderstanding({ projectDir, sourceAssetId: imported.sourceAsset.id });
+    understood.processingStageStates.remix_understanding = 'approved';
+    await fs.writeFile(
+      path.join(projectDir, understood.sourceAsset.sourceManifestPath),
+      `${JSON.stringify(understood, null, 2)}\n`,
+    );
+
+    const rerun = await service.runSourceKeyframes({ projectDir, sourceAssetId: imported.sourceAsset.id });
+    expect(rerun.processingStageStates.remix_understanding).toBe('needs_input');
+  });

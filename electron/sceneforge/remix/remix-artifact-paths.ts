@@ -108,6 +108,52 @@ export function getRemixSegmentManifestIndexPath(sourceAssetId: string): string 
   return joinRemixPath(getRemixSourceAssetDir(sourceAssetId), SEGMENTS_DIR, 'segment_manifest_index.json');
 }
 
+
+export function getRemixSourceAudioDir(sourceAssetId: string): string {
+  return joinRemixPath(getRemixSourceAssetDir(sourceAssetId), 'audio');
+}
+
+export function getRemixSourceAudioWavPath(sourceAssetId: string): string {
+  return joinRemixPath(getRemixSourceAudioDir(sourceAssetId), 'source_audio.wav');
+}
+
+export function getRemixSourceAudioJsonPath(sourceAssetId: string): string {
+  return joinRemixPath(getRemixSourceAudioDir(sourceAssetId), 'source_audio.json');
+}
+
+
+
+export function getRemixTranscriptsDir(sourceAssetId: string): string {
+  return joinRemixPath(getRemixSourceAssetDir(sourceAssetId), 'transcripts');
+}
+
+export function getRemixSourceTranscriptJsonPath(sourceAssetId: string): string {
+  return joinRemixPath(getRemixTranscriptsDir(sourceAssetId), 'source_transcript.json');
+}
+
+export function getRemixSourceTranscriptSrtPath(sourceAssetId: string): string {
+  return joinRemixPath(getRemixTranscriptsDir(sourceAssetId), 'source_transcript.srt');
+}
+
+export function getRemixSourceTranscriptMarkdownPath(sourceAssetId: string): string {
+  return joinRemixPath(getRemixTranscriptsDir(sourceAssetId), 'source_transcript.md');
+}
+
+export function getRemixSegmentTranscriptJsonPath(sourceAssetId: string, segmentId: string): string {
+  return joinRemixPath(getRemixSegmentDir(sourceAssetId, segmentId), 'transcripts', 'segment_transcript.json');
+}
+export function getRemixSegmentAudioDir(sourceAssetId: string, segmentId: string): string {
+  return joinRemixPath(getRemixSegmentDir(sourceAssetId, segmentId), 'audio');
+}
+
+export function getRemixSegmentAudioWavPath(sourceAssetId: string, segmentId: string): string {
+  return joinRemixPath(getRemixSegmentAudioDir(sourceAssetId, segmentId), 'segment_audio.wav');
+}
+
+export function getRemixSegmentAudioJsonPath(sourceAssetId: string, segmentId: string): string {
+  return joinRemixPath(getRemixSegmentAudioDir(sourceAssetId, segmentId), 'segment_audio.json');
+}
+
 export function getRemixSegmentClipPath(sourceAssetId: string, segmentId: string): string {
   return joinRemixPath(getRemixSegmentDir(sourceAssetId, segmentId), 'source_clip.mp4');
 }
