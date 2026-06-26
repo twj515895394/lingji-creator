@@ -46,9 +46,34 @@ if [ -n "$LINGERING_PIDS" ]; then
 fi
 
 echo "✨ All existing dev processes cleared."
+echo "------------------------------------------------------------"
+
+# 4. Setup and verify python virtual environment
+VENV_DIR="$PROJECT_DIR/.venv-shot"
+REQ_FILE="$PROJECT_DIR/resources/shot-detectors/requirements-accurate.txt"
+INSTALLED_FLAG="$VENV_DIR/.installed"
+
+if [ ! -d "$VENV_DIR" ]; then
+  echo "📦 Creating python virtual environment .venv-shot..."
+  python3 -m venv "$VENV_DIR" || { echo "❌ Failed to create virtual environment"; exit 1; }
+fi
+
+source "$VENV_DIR/bin/activate" || { echo "❌ Failed to activate virtual environment"; exit 1; }
+
+if [ ! -f "$INSTALLED_FLAG" ] || [ "$REQ_FILE" -nt "$INSTALLED_FLAG" ]; then
+  echo "📥 Installing/Updating python dependencies..."
+  pip install --upgrade pip
+  pip install -r "$REQ_FILE" || { echo "❌ Failed to install dependencies"; exit 1; }
+  touch "$INSTALLED_FLAG"
+fi
+
+export LINGJI_SHOT_PYTHON="$VENV_DIR/bin/python"
+echo "🐍 LINGJI_SHOT_PYTHON set to: $LINGJI_SHOT_PYTHON"
+echo "------------------------------------------------------------"
 echo "🚀 Starting development environment (npm run dev)..."
 echo "------------------------------------------------------------"
 
 # Execute npm run dev
 cd "$PROJECT_DIR" || exit 1
 npm run dev
+
