@@ -17,6 +17,12 @@ import {
 import { assertFileExists, resolveProjectFile } from './remix-validators';
 import type { StoredSourceAssetDocument } from './remix-store';
 import { readStoredSourceAsset, writeStoredSourceAsset } from './remix-store';
+import { runShotDetector } from './shot-detection/shot-detector-runner';
+import type { ShotDetectionResult } from './shot-detection/shot-detector-types';
+import {
+  SegmentClipService,
+  type SegmentClipGenerationSummary,
+} from './segment-clips/segment-clip-service';
 
 interface SegmentationCandidateBoundary {
   timeMs: number;
@@ -33,6 +39,13 @@ export interface RunSegmentationOptions {
 
 export interface RemixSegmentationServiceOptions {
   now?: () => Date;
+}
+
+interface SegmentationBuildResult {
+  segments: SourceSegment[];
+  lowConfidenceSegmentIds: string[];
+  detectionResult: ShotDetectionResult | null;
+  fallbackReason: string | null;
 }
 
 function withCompleteBoundary(segment: SourceSegment): SourceSegment {
@@ -120,7 +133,7 @@ function buildCandidateBoundaries(
   for (let timeMs = baseStepMs; timeMs < durationMs - 1200; timeMs += baseStepMs) {
     adaptive.push({
       timeMs,
-      sources: ['adaptive'],
+      sources: ['adaptive_fallback'],
       confidence: mode === 'accurate' ? 0.72 : 0.64,
       boundaryType: 'hard_cut',
     });
@@ -129,7 +142,7 @@ function buildCandidateBoundaries(
   for (let timeMs = denseStepMs - 400; timeMs < durationMs - 1200; timeMs += denseStepMs) {
     ffmpegLike.push({
       timeMs,
-      sources: ['ffmpeg_scene'],
+      sources: ['ffmpeg_scene_fallback'],
       confidence: mode === 'accurate' ? 0.61 : 0.53,
       boundaryType: timeMs % (denseStepMs * 2) === 0 ? 'gradual' : 'hard_cut',
     });
@@ -139,7 +152,7 @@ function buildCandidateBoundaries(
     for (let timeMs = 2600; timeMs < durationMs - 900; timeMs += 2800) {
       accurateRefiner.push({
         timeMs,
-        sources: ['accurate_refiner'],
+        sources: ['accurate_refiner_fallback'],
         confidence: 0.78,
         boundaryType: 'hard_cut',
       });
@@ -152,9 +165,10 @@ function buildCandidateBoundaries(
 function confidenceFromSources(sources: string[], baseConfidence: number): number {
   const boosted =
     baseConfidence +
-    (sources.includes('adaptive') ? 0.08 : 0) +
-    (sources.includes('ffmpeg_scene') ? 0.05 : 0) +
-    (sources.includes('accurate_refiner') ? 0.1 : 0) -
+    (sources.some((source) => source.includes('adaptive')) ? 0.08 : 0) +
+    (sources.some((source) => source.includes('ffmpeg_scene')) ? 0.05 : 0) +
+    (sources.some((source) => source.includes('accurate_refiner')) ? 0.1 : 0) +
+    (sources.includes('pyscenedetect_adaptive') ? 0.08 : 0) -
     (sources.length === 1 ? 0.12 : 0);
   return roundConfidence(boosted);
 }
@@ -187,6 +201,19 @@ function buildSegmentTitle(index: number, durationMs: number, reviewStatus: Remi
     durationMs >= 8000 ? '长段观察' : durationMs >= 4500 ? '节奏推进' : '快速反应';
   const reviewLabel = reviewStatus === 'needs_review' ? '待校准' : '已检测';
   return `片段 ${String(index).padStart(2, '0')} · ${energyLabel} · ${reviewLabel}`;
+}
+
+function boundaryTypeFromDuration(
+  durationMs: number,
+  nextBoundary: SegmentationCandidateBoundary | null,
+): SourceSegment['boundaryType'] {
+  return nextBoundary?.boundaryType === 'gradual'
+    ? 'merged_short_shots'
+    : durationMs >= 9000
+      ? 'long_segment'
+      : durationMs >= 6000
+        ? 'split_long_shot'
+        : 'source_shot';
 }
 
 function buildSegmentsFromCandidates(
@@ -226,26 +253,14 @@ function buildSegmentsFromCandidates(
     const endConfidence = nextBoundary?.confidence ?? 1;
     const reviewStatus: RemixSegmentReviewStatus =
       startConfidence < 0.7 || endConfidence < 0.7 ? 'needs_review' : 'auto';
-    const boundaryType =
-      nextBoundary?.boundaryType === 'gradual'
-        ? 'merged_short_shots'
-        : endMs - startMs >= 9000
-          ? 'long_segment'
-          : endMs - startMs >= 6000
-            ? 'split_long_shot'
-            : 'source_shot';
     const segmentId = `segment-${String(index + 1).padStart(3, '0')}`;
     const segment: SourceSegment = {
       id: segmentId,
       sourceAssetId,
       index: index + 1,
       title: buildSegmentTitle(index + 1, endMs - startMs, reviewStatus),
-      boundaryType,
-      timeRange: {
-        startMs,
-        endMs,
-        durationMs: endMs - startMs,
-      },
+      boundaryType: boundaryTypeFromDuration(endMs - startMs, nextBoundary),
+      timeRange: { startMs, endMs, durationMs: endMs - startMs },
       boundary: {
         startConfidence,
         endConfidence,
@@ -261,13 +276,70 @@ function buildSegmentsFromCandidates(
       analysisJsonPath: null,
     };
     segment.semantic = buildSemanticDetails(segment);
-    if (reviewStatus === 'needs_review') {
-      lowConfidenceSegmentIds.push(segmentId);
-    }
+    if (reviewStatus === 'needs_review') lowConfidenceSegmentIds.push(segmentId);
     segments.push(segment);
   }
 
   return { segments, lowConfidenceSegmentIds };
+}
+
+function candidatesFromDetectionResult(detectionResult: ShotDetectionResult): SegmentationCandidateBoundary[] {
+  return detectionResult.boundaries.map((boundary) => ({
+    timeMs: boundary.timeMs,
+    sources: boundary.sources,
+    confidence: boundary.confidence,
+    boundaryType: boundary.boundaryType,
+  }));
+}
+
+async function buildSegmentsForMode(
+  projectDir: string,
+  sourceAssetId: string,
+  document: StoredSourceAssetDocument,
+  mode: RemixSegmentationMode,
+  inputProfile: RemixSegmentationInputProfile,
+  minShotDurationMs: number,
+): Promise<SegmentationBuildResult> {
+  if (mode === 'fast') {
+    try {
+      const detectionResult = await runShotDetector({
+        projectDir,
+        sourceAssetId,
+        videoPath: document.sourceAsset.sourceVideoPath,
+        mode,
+        minShotDurationMs,
+        durationMs: document.sourceAsset.videoMetadata.durationMs,
+        fps: document.sourceAsset.videoMetadata.fps ?? 25,
+        width: document.sourceAsset.videoMetadata.width,
+        height: document.sourceAsset.videoMetadata.height,
+      });
+      const built = buildSegmentsFromCandidates(
+        sourceAssetId,
+        document.sourceAsset.videoMetadata.durationMs,
+        candidatesFromDetectionResult(detectionResult),
+        minShotDurationMs,
+      );
+      return { ...built, detectionResult, fallbackReason: null };
+    } catch (error) {
+      const fallbackReason = error instanceof Error ? error.message : String(error);
+      const built = buildSegmentsFromCandidates(
+        sourceAssetId,
+        document.sourceAsset.videoMetadata.durationMs,
+        buildCandidateBoundaries(inputProfile, mode),
+        minShotDurationMs,
+      );
+      return { ...built, detectionResult: null, fallbackReason };
+    }
+  }
+
+  const fallbackReason = 'TransNetV2 accurate detector has not been implemented in Phase 1.';
+  const built = buildSegmentsFromCandidates(
+    sourceAssetId,
+    document.sourceAsset.videoMetadata.durationMs,
+    buildCandidateBoundaries(inputProfile, mode),
+    minShotDurationMs,
+  );
+  return { ...built, detectionResult: null, fallbackReason };
 }
 
 export async function writeSegmentArtifacts(
@@ -275,7 +347,7 @@ export async function writeSegmentArtifacts(
   sourceVideoPath: string,
   sourceAssetId: string,
   segments: SourceSegment[],
-): Promise<void> {
+): Promise<SegmentClipGenerationSummary> {
   await fs.rm(resolveProjectFile(projectDir, getRemixSourceSegmentsDir(sourceAssetId)), {
     recursive: true,
     force: true,
@@ -284,7 +356,6 @@ export async function writeSegmentArtifacts(
   for (const segment of segments) {
     const clipPath = resolveProjectFile(projectDir, segment.sourceClipPath);
     await fs.mkdir(path.dirname(clipPath), { recursive: true });
-    await fs.copyFile(sourceVideoPath, clipPath);
     await fs.writeFile(
       resolveProjectFile(projectDir, getRemixSegmentManifestPath(sourceAssetId, segment.id)),
       `${JSON.stringify(segment, null, 2)}\n`,
@@ -292,11 +363,22 @@ export async function writeSegmentArtifacts(
     );
   }
 
+  const clipSummary = await new SegmentClipService().generateClips({
+    projectDir,
+    sourceVideoPath,
+    sourceAssetId,
+    segments,
+    mode: 'reencode_accurate',
+    overwrite: true,
+  });
+
   await fs.writeFile(
     resolveProjectFile(projectDir, getRemixSegmentManifestIndexPath(sourceAssetId)),
     `${JSON.stringify({ segmentIds: segments.map((segment) => segment.id) }, null, 2)}\n`,
     'utf8',
   );
+
+  return clipSummary;
 }
 
 function buildDiagnostics(
@@ -305,30 +387,47 @@ function buildDiagnostics(
   lowConfidenceSegmentIds: string[],
   preserveManualEdits: boolean,
   now: () => Date,
+  detectionResult: ShotDetectionResult | null,
+  fallbackReason: string | null,
+  clipSummary: SegmentClipGenerationSummary | null,
 ): RemixSegmentationDiagnostics {
-  const usedFallback = mode === 'accurate';
+  const usedFallback = Boolean(fallbackReason) || detectionResult?.usedFallback === true;
   const notes = [
-    mode === 'fast'
-      ? '当前结果来自 fast 模式候选边界检测与规则约束。'
-      : '当前环境未接入独立模型 worker，accurate 模式以更密集候选边界和规则精修降级运行。',
+    detectionResult
+      ? 'fast 模式已接入 PySceneDetect AdaptiveDetector 真实镜头检测。'
+      : mode === 'fast'
+        ? 'fast 模式检测 Worker 不可用，已使用规则候选边界 fallback。'
+        : 'accurate 模式仍待接入 TransNetV2，当前使用规则候选边界 fallback。',
     lowConfidenceSegmentIds.length > 0
       ? `检测到 ${lowConfidenceSegmentIds.length} 个低置信度镜头段，建议人工校准。`
       : '当前没有低置信度镜头段。',
   ];
 
-  if (preserveManualEdits) {
-    notes.push('本次重跑保留了已有人工校准覆盖项。');
-  }
+  if (fallbackReason) notes.push(`fallback 原因：${fallbackReason}`);
+  if (preserveManualEdits) notes.push('本次重跑保留了已有人工校准覆盖项。');
+  if (clipSummary) notes.push(`已生成 ${clipSummary.successCount}/${clipSummary.totalCount} 个真实分镜视频片段。`);
+  if (detectionResult?.notes?.length) notes.push(...detectionResult.notes);
 
   return {
     mode,
-    detector: mode === 'accurate' ? 'hybrid' : 'adaptive',
+    detector: detectionResult?.detector ?? (usedFallback ? 'hybrid_fallback' : mode === 'accurate' ? 'hybrid' : 'adaptive'),
     inputProfile: profile,
     lowConfidenceSegmentIds,
     notes,
     usedFallback,
+    fallbackReason,
     preserveManualEdits,
     generatedAt: nowIso(now),
+    detectionMetrics: detectionResult?.metrics ?? null,
+    clipGeneration: clipSummary
+      ? {
+          mode: clipSummary.mode,
+          totalCount: clipSummary.totalCount,
+          successCount: clipSummary.successCount,
+          failedCount: clipSummary.failedCount,
+          elapsedMs: clipSummary.elapsedMs,
+        }
+      : null,
   };
 }
 
@@ -343,14 +442,9 @@ export class RemixSegmentationService {
     document: StoredSourceAssetDocument,
     preserveManualEdits: boolean,
   ): SourceSegment[] | null {
-    if (!preserveManualEdits) {
-      return null;
-    }
-
+    if (!preserveManualEdits) return null;
     const override = document.sourceAsset.manualSegmentationOverride;
-    if (!override?.preserveOnRerun || override.segments.length === 0) {
-      return null;
-    }
+    if (!override?.preserveOnRerun || override.segments.length === 0) return null;
 
     return override.segments.map((segment, index) => ({
       ...withCompleteBoundary(segment),
@@ -382,28 +476,32 @@ export class RemixSegmentationService {
     const inputProfile = buildInputProfile(document, mode);
     const preservedSegments = this.applyManualOverrideIfNeeded(document, preserveManualEdits);
 
-    const { segments, lowConfidenceSegmentIds } = preservedSegments
+    const buildResult: SegmentationBuildResult = preservedSegments
       ? {
           segments: preservedSegments,
           lowConfidenceSegmentIds: preservedSegments
             .filter((segment) => segment.reviewStatus === 'needs_review')
             .map((segment) => segment.id),
+          detectionResult: null,
+          fallbackReason: null,
         }
-      : buildSegmentsFromCandidates(
+      : await buildSegmentsForMode(
+          projectDir,
           sourceAssetId,
-          document.sourceAsset.videoMetadata.durationMs,
-          buildCandidateBoundaries(inputProfile, mode),
+          document,
+          mode,
+          inputProfile,
           minShotDurationMs,
         );
 
-    await writeSegmentArtifacts(
+    const clipSummary = await writeSegmentArtifacts(
       projectDir,
       document.sourceAsset.sourceVideoPath,
       sourceAssetId,
-      segments,
+      buildResult.segments,
     );
 
-    document.sourceAsset.segments = segments.map((segment) => ({
+    document.sourceAsset.segments = buildResult.segments.map((segment) => ({
       ...segment,
       analysisMarkdownPath: document.sourceAsset.segmentAnalysisMarkdownPath ?? null,
       analysisJsonPath: document.sourceAsset.segmentAnalysisJsonPath ?? null,
@@ -412,16 +510,19 @@ export class RemixSegmentationService {
     document.sourceAsset.segmentationDiagnostics = buildDiagnostics(
       inputProfile,
       mode,
-      lowConfidenceSegmentIds,
+      buildResult.lowConfidenceSegmentIds,
       preserveManualEdits,
       this.now,
+      buildResult.detectionResult,
+      buildResult.fallbackReason,
+      clipSummary,
     );
     if (!preservedSegments) {
       document.sourceAsset.manualSegmentationOverride = null;
     }
     document.sourceAsset.updatedAt = nowIso(this.now);
     document.processingStageStates.remix_segmentation = 'approved';
-    document.processingStageStates.remix_keyframes = lowConfidenceSegmentIds.length > 0 ? 'ready_for_review' : 'ready_for_review';
+    document.processingStageStates.remix_keyframes = 'ready_for_review';
     await writeStoredSourceAsset(projectDir, document);
     return document;
   }
