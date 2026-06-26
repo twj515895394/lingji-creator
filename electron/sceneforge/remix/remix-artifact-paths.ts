@@ -5,6 +5,7 @@ const REMIX_ROOT = 'sceneforge/remix';
 const SOURCE_ASSETS_DIR = 'source-assets';
 const VARIANTS_DIR = 'variants';
 const ANALYSIS_DIR = 'analysis';
+const DEBUG_DIR = 'debug';
 const SEGMENTS_DIR = 'source_segments';
 const EDITED_KEYFRAMES_DIR = 'edited_keyframes';
 const SEGMENT_ADAPTATIONS_DIR = 'segment_adaptations';
@@ -68,6 +69,26 @@ export function getRemixSegmentAnalysisMarkdownPath(sourceAssetId: string): stri
 
 export function getRemixSegmentAnalysisJsonPath(sourceAssetId: string): string {
   return joinRemixPath(getRemixSourceAssetDir(sourceAssetId), ANALYSIS_DIR, 'segment_analysis.json');
+}
+
+export function getRemixDebugDir(sourceAssetId: string): string {
+  return joinRemixPath(getRemixSourceAssetDir(sourceAssetId), DEBUG_DIR);
+}
+
+export function getRemixShotDetectionReportPath(sourceAssetId: string): string {
+  return joinRemixPath(getRemixDebugDir(sourceAssetId), 'shot_detection_result.json');
+}
+
+export function getRemixClipGenerationReportPath(sourceAssetId: string): string {
+  return joinRemixPath(getRemixDebugDir(sourceAssetId), 'clip_generation_report.json');
+}
+
+export function getRemixKeyframeReportPath(sourceAssetId: string): string {
+  return joinRemixPath(getRemixDebugDir(sourceAssetId), 'keyframe_report.json');
+}
+
+export function getRemixRuntimeDiagnosticsPath(sourceAssetId: string): string {
+  return joinRemixPath(getRemixDebugDir(sourceAssetId), 'runtime_diagnostics.json');
 }
 
 export function getRemixSourceSegmentsDir(sourceAssetId: string): string {
@@ -217,20 +238,4 @@ export function getRemixVariantSeedancePromptJsonPath(
     SEEDANCE_PROMPTS_DIR,
     `${segmentId}.json`,
   );
-}
-
-export function getRemixVariantAudioPlanPath(variantId: string): string {
-  return joinRemixPath(getRemixVariantDir(variantId), SEEDANCE_PROMPTS_DIR, 'audio_plan.json');
-}
-
-export function getRemixVariantPromptBundleDir(variantId: string): string {
-  return joinRemixPath(getRemixVariantDir(variantId), PROMPT_BUNDLE_DIR);
-}
-
-export function getRemixVariantPromptBundleManifestPath(variantId: string): string {
-  return joinRemixPath(getRemixVariantPromptBundleDir(variantId), 'bundle_manifest.json');
-}
-
-export function getRemixVariantPromptBundlePath(variantId: string): string {
-  return joinRemixPath(getRemixVariantDir(variantId), 'prompt_bundle.zip');
 }
