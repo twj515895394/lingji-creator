@@ -1256,8 +1256,13 @@ ipcMain.handle('load-project', async (_event, projectDir: string) => {
 
 ipcMain.handle(
   'create-scene-forge-project',
-  async (_event, projectDir: string, entryPath?: import('../src/types/sceneforge').SceneEntryPath) => {
-    const data = await createSceneForgeProject(projectDir, entryPath ?? 'topic_gate');
+  async (
+    _event,
+    projectDir: string,
+    entryPath?: import('../src/types/sceneforge').SceneEntryPath,
+    options?: { pipelineId?: import('../src/types/sceneforge').SceneProjectMeta['pipelineId'] },
+  ) => {
+    const data = await createSceneForgeProject(projectDir, entryPath ?? 'topic_gate', options ?? {});
     setActiveProjectPath(projectDir);
     return JSON.stringify(data, null, 2);
   },

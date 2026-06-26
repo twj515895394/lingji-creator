@@ -1,6 +1,7 @@
 import type { FileEntry } from './electron-api';
 import type { ProjectData } from './project-persistence';
 import type { RemixEntryIntent } from '../sceneforge/remix/components/RemixModeEntryDialog';
+import type { SceneProjectMeta } from '../types/sceneforge';
 import { canBootstrapRemixAssetIngestionProject } from '../sceneforge/remix/lib/remix-entry-project';
 import { getRemixProjectRootCandidate } from '../sceneforge/remix/lib/remix-project-dir';
 import { REMIX_DEFAULT_ROUTE } from './remix-app-session';
@@ -31,7 +32,11 @@ export type RemixEntryPlan =
 export interface RemixEntryProjectApi {
   loadProject: (projectDir: string) => Promise<string>;
   readDirectory: (projectDir: string) => Promise<FileEntry[]>;
-  createSceneForgeProject: (projectDir: string, entryPath: 'source_intake') => Promise<string>;
+  createSceneForgeProject: (
+    projectDir: string,
+    entryPath: 'source_intake',
+    options?: { pipelineId?: SceneProjectMeta['pipelineId'] },
+  ) => Promise<string>;
 }
 
 export function decideRemixEntryPlan(input: {
@@ -131,7 +136,9 @@ export async function executeRemixEntryPlan(
   }
 
   if (plan.kind === 'bootstrap-then-open') {
-    await api.createSceneForgeProject(plan.projectDir, 'source_intake');
+    await api.createSceneForgeProject(plan.projectDir, 'source_intake', {
+      pipelineId: 'reference_remake',
+    });
   }
 
   await callbacks.openProject(plan.projectDir, {

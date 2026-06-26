@@ -31,7 +31,7 @@ import type {
   UserPromptEntry,
   UserPromptSeed,
 } from './prompts';
-import type { SceneApprovalPolicy, SceneArtifactDisplayModel, SceneEntryPath, SceneStageId } from '../types/sceneforge';
+import type { SceneApprovalPolicy, SceneArtifactDisplayModel, SceneEntryPath, SceneProjectMeta, SceneStageId } from '../types/sceneforge';
 import type {
   SceneAnalyzeTopicGateIpcInput,
   SceneGetStageContextOptions,
@@ -416,7 +416,11 @@ export interface ElectronAPI {
   saveAIAnalysis: (projectDir: string, data: string) => Promise<string>;
   loadAIAnalysis: (projectDir: string) => Promise<string | null>;
   loadProject: (projectDir: string) => Promise<string>;
-  createSceneForgeProject: (projectDir: string, entryPath?: SceneEntryPath) => Promise<string>;
+  createSceneForgeProject: (
+    projectDir: string,
+    entryPath?: SceneEntryPath,
+    options?: { pipelineId?: SceneProjectMeta['pipelineId'] },
+  ) => Promise<string>;
   sceneGetProjectState: (projectDir: string) => Promise<SceneProjectState>;
   sceneListAvailableAssets: () => Promise<SceneAssetRegistryEntry[]>;
   sceneUpdateStyleSelection: (

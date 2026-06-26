@@ -13,10 +13,16 @@ export interface SceneProjectStyleSelection {
   selectedAssetIds: string[];
 }
 
+export interface CreateSceneForgeProjectOptions {
+  pipelineId?: SceneProjectMeta['pipelineId'];
+}
+
 type SceneProjectMetaInput = Partial<SceneProjectMeta> | undefined;
 
 function normalizeSceneProjectMeta(meta: SceneProjectMetaInput): SceneProjectMeta {
-  const base = createDefaultSceneProjectMeta(meta?.entryPath ?? 'topic_gate');
+  const base = createDefaultSceneProjectMeta(meta?.entryPath ?? 'topic_gate', {
+    pipelineId: meta?.pipelineId,
+  });
   return {
     ...base,
     ...meta,
@@ -28,13 +34,16 @@ function normalizeSceneProjectMeta(meta: SceneProjectMetaInput): SceneProjectMet
   };
 }
 
-export function createDefaultSceneProjectMeta(entryPath: SceneEntryPath = 'topic_gate'): SceneProjectMeta {
+export function createDefaultSceneProjectMeta(
+  entryPath: SceneEntryPath = 'topic_gate',
+  options: CreateSceneForgeProjectOptions = {},
+): SceneProjectMeta {
   const startStage: SceneStageId =
     entryPath === 'source_intake' ? 'source_intake' : 'topic_gate';
   return {
     version: 1,
     projectRoot: SCENE_ROOT,
-    pipelineId: entryPath === 'source_intake' ? 'reference_remake' : 'original_scene',
+    pipelineId: options.pipelineId ?? 'original_scene',
     entryPath,
     selectedStyleProfileId: null,
     selectedAssetIds: [],
@@ -147,8 +156,9 @@ export async function syncSceneProjectMetaFromState(
 export async function createSceneForgeProject(
   projectDir: string,
   entryPath: SceneEntryPath = 'topic_gate',
+  options: CreateSceneForgeProjectOptions = {},
 ): Promise<ProjectData> {
-  const meta = createDefaultSceneProjectMeta(entryPath);
+  const meta = createDefaultSceneProjectMeta(entryPath, options);
   const data: ProjectData = {
     ...createDefaultProjectData(),
     type: 'sceneforge',
