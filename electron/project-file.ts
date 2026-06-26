@@ -81,6 +81,28 @@ interface SceneStateSnapshot {
   coreArtifacts?: SceneProjectMeta['coreArtifacts'];
 }
 
+function isScenePipelineId(value: unknown): value is SceneProjectMeta['pipelineId'] {
+  return value === 'reference_remake' || value === 'original_scene' || value === 'prompt_pack_only';
+}
+
+function resolveRecoveredPipelineId(
+  meta: Partial<SceneProjectMeta> | undefined,
+  state: SceneStateSnapshot,
+  entryPath: SceneEntryPath,
+): SceneProjectMeta['pipelineId'] {
+  if (isScenePipelineId(meta?.pipelineId)) {
+    return meta.pipelineId;
+  }
+
+  if (isScenePipelineId(state.pipelineId)) {
+    return state.pipelineId;
+  }
+
+  // 旧 SceneForge 工坊项目没有 pipelineId。缺省时必须优先恢复为普通工坊，
+  // 否则会把老项目物理写回成 reference_remake，并进一步污染最近项目类型。
+  return entryPath === 'source_intake' ? 'reference_remake' : 'original_scene';
+}
+
 function normalizeRecoveredSceneProjectMeta(
   meta: Partial<SceneProjectMeta> | undefined,
   state: SceneStateSnapshot,
@@ -96,11 +118,7 @@ function normalizeRecoveredSceneProjectMeta(
   return {
     version: 1,
     projectRoot: 'sceneforge',
-    pipelineId:
-      meta?.pipelineId ??
-      (state.pipelineId === 'original_scene' || state.pipelineId === 'prompt_pack_only'
-        ? state.pipelineId
-        : 'reference_remake'),
+    pipelineId: resolveRecoveredPipelineId(meta, state, entryPath),
     entryPath,
     selectedStyleProfileId: meta?.selectedStyleProfileId ?? null,
     selectedAssetIds: Array.isArray(meta?.selectedAssetIds)
