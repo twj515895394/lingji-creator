@@ -34,7 +34,7 @@ export function createDefaultSceneProjectMeta(entryPath: SceneEntryPath = 'topic
   return {
     version: 1,
     projectRoot: SCENE_ROOT,
-    pipelineId: 'reference_remake',
+    pipelineId: entryPath === 'source_intake' ? 'reference_remake' : 'original_scene',
     entryPath,
     selectedStyleProfileId: null,
     selectedAssetIds: [],
