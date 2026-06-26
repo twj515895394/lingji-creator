@@ -27,7 +27,8 @@ interface KeyframeExtractionReportItem {
   inputPath: string;
   seekMs: number;
   outputPath: string;
-  status: 'ready';
+  status: 'ready' | 'failed';
+  error?: string | null;
 }
 
 function currentModuleDir(): string {
@@ -144,6 +145,30 @@ async function extractFrame(input: {
   }
 }
 
+async function writeKeyframeReport(input: {
+  projectDir: string;
+  sourceAssetId: string;
+  sourceVideoPath: string;
+  ffmpegPath: string;
+  segmentCount: number;
+  items: KeyframeExtractionReportItem[];
+  status: 'ready' | 'failed';
+}) {
+  await writeRemixDebugJson({
+    projectDir: input.projectDir,
+    relativePath: getRemixKeyframeReportPath(input.sourceAssetId),
+    payload: withDebugReportMeta({
+      sourceAssetId: input.sourceAssetId,
+      sourceVideoPath: input.sourceVideoPath,
+      ffmpegPath: input.ffmpegPath,
+      status: input.status,
+      segmentCount: input.segmentCount,
+      keyframeCount: input.items.length,
+      items: input.items,
+    }),
+  });
+}
+
 export class RemixKeyframeService {
   async run(projectDir: string, sourceAssetId: string): Promise<StoredSourceAssetDocument> {
     const document = await readStoredSourceAsset(projectDir, sourceAssetId);
@@ -185,8 +210,29 @@ export class RemixKeyframeService {
             status: 'ready',
           });
         } catch (error) {
+          const errorMessage = error instanceof Error ? error.message : String(error);
+          reportItems.push({
+            segmentId: segment.id,
+            frameRole: keyframe.frameRole,
+            timestampMs: keyframe.timestampMs,
+            inputSource: frameInput.source,
+            inputPath: frameInput.inputPath,
+            seekMs: frameInput.seekMs,
+            outputPath,
+            status: 'failed',
+            error: errorMessage,
+          });
+          await writeKeyframeReport({
+            projectDir,
+            sourceAssetId,
+            sourceVideoPath: document.sourceAsset.sourceVideoPath,
+            ffmpegPath,
+            segmentCount: document.sourceAsset.segments.length,
+            items: reportItems,
+            status: 'failed',
+          });
           throw new Error(
-            `关键帧抽取失败：${segment.id}/${keyframe.frameRole} (${frameInput.source}) - ${error instanceof Error ? error.message : String(error)}`,
+            `关键帧抽取失败：${segment.id}/${keyframe.frameRole} (${frameInput.source}) - ${errorMessage}`,
           );
         }
       }
@@ -198,17 +244,14 @@ export class RemixKeyframeService {
       );
     }
 
-    await writeRemixDebugJson({
+    await writeKeyframeReport({
       projectDir,
-      relativePath: getRemixKeyframeReportPath(sourceAssetId),
-      payload: withDebugReportMeta({
-        sourceAssetId,
-        sourceVideoPath: document.sourceAsset.sourceVideoPath,
-        ffmpegPath,
-        segmentCount: document.sourceAsset.segments.length,
-        keyframeCount: reportItems.length,
-        items: reportItems,
-      }),
+      sourceAssetId,
+      sourceVideoPath: document.sourceAsset.sourceVideoPath,
+      ffmpegPath,
+      segmentCount: document.sourceAsset.segments.length,
+      items: reportItems,
+      status: 'ready',
     });
 
     document.sourceAsset.updatedAt = new Date().toISOString();
