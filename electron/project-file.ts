@@ -85,6 +85,16 @@ function isScenePipelineId(value: unknown): value is SceneProjectMeta['pipelineI
   return value === 'reference_remake' || value === 'original_scene' || value === 'prompt_pack_only';
 }
 
+function normalizePipelineIdForEntryPath(
+  pipelineId: SceneProjectMeta['pipelineId'],
+  entryPath: SceneEntryPath,
+): SceneProjectMeta['pipelineId'] {
+  if (pipelineId === 'reference_remake' && entryPath !== 'source_intake') {
+    return 'original_scene';
+  }
+  return pipelineId;
+}
+
 function resolveRecoveredPipelineId(
   meta: Partial<SceneProjectMeta> | undefined,
   state: SceneStateSnapshot,
@@ -92,12 +102,12 @@ function resolveRecoveredPipelineId(
 ): SceneProjectMeta['pipelineId'] {
   const metaPipelineId = meta?.pipelineId;
   if (isScenePipelineId(metaPipelineId)) {
-    return metaPipelineId;
+    return normalizePipelineIdForEntryPath(metaPipelineId, entryPath);
   }
 
   const statePipelineId = state.pipelineId;
   if (isScenePipelineId(statePipelineId)) {
-    return statePipelineId;
+    return normalizePipelineIdForEntryPath(statePipelineId, entryPath);
   }
 
   // 旧 SceneForge 工坊项目没有 pipelineId。缺省时必须优先恢复为普通工坊，
