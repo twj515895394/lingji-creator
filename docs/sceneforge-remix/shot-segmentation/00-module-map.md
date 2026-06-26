@@ -24,6 +24,7 @@ Source Video
 2. 自动切片和人工校准同等重要：人工合并/拆分后必须重新生成对应视频片段。
 3. TypeScript 负责业务编排，Python 只负责算法检测。
 4. 每个 segment 的 `source_clip.mp4` 是一等产物，可直接用于外部视频编辑。
+5. TransNetV2 高精模式要把“权重文件”和“模型结构代码”分开管理，不能只准备 `.pth`。
 
 ---
 
@@ -36,6 +37,7 @@ Source Video
 | TS 后端整合 | `03-backend-integration-design.md` | RemixSegmentationService 调用检测、生成 segments、触发 clip 生成、写 diagnostics | Remix store、IPC | P0 |
 | 前端 UI | `04-frontend-ui-design.md` | 展示检测模式、片段状态、打开/导出片段入口、错误提示 | React、Remix API client | P1 |
 | 实施计划 | `05-implementation-plan.md` | 分阶段任务、验收标准、测试计划 | 全模块 | P0 |
+| 模型文件与目录 | `06-model-assets-and-directory-design.md` | TransNetV2 权重、模型代码、HF 来源、环境变量、打包策略 | `.pth`、模型结构代码、torch、Git LFS | P0 |
 
 ---
 
@@ -58,7 +60,9 @@ PySceneDetect fast detection
 ### Phase 2：TransNetV2 高精模式
 
 ```text
-TransNetV2 accurate detection
+准备 TransNetV2 .pth 权重 + 匹配的 PyTorch 模型结构代码
+  → model resolver 解析模型路径和 vendor 代码路径
+  → TransNetV2 accurate detection
   → predictions 后处理
   → fallback 到 fast
   → diagnostics 显示模型、耗时、fallback 原因
@@ -100,6 +104,8 @@ RemixSegmentationService
   │   └─ Python Worker
   │       ├─ PySceneDetect AdaptiveDetector
   │       └─ TransNetV2
+  │           ├─ resources/models/transnetv2/*.pth
+  │           └─ resources/shot-detectors/vendor/transnetv2/*.py
   ├─ SegmentBuilder
   ├─ SegmentClipService
   │   └─ ffmpeg
@@ -131,3 +137,4 @@ P0 完成后应满足：
 3. 人工合并/拆分后，segment manifest 和 `source_clip.mp4` 同步更新。
 4. 后端 diagnostics 能说明 detector、fallback、clip 生成状态和失败原因。
 5. 生成的片段可以在本地播放器打开，并可作为 Seedance 2.0 输入素材。
+6. 高精模式缺少 `.pth` 权重或模型结构代码时，能清晰 fallback 到 fast，并说明缺失项。
