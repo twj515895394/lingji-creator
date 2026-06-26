@@ -19,6 +19,17 @@ function copyStealthPlugin() {
   };
 }
 
+function injectRemixSegmentClipPreloadPlugin() {
+  const preloadEntry = resolve('electron/preload.ts');
+  return {
+    name: 'inject-remix-segment-clip-preload',
+    transform(code: string, id: string) {
+      if (id.split('?')[0] !== preloadEntry) return null;
+      return `${code}\nimport './sceneforge/remix/segment-clips/segment-clip-preload';\n`;
+    },
+  };
+}
+
 export default defineConfig({
   main: {
     plugins: [copyStealthPlugin()],
@@ -39,6 +50,7 @@ export default defineConfig({
     },
   },
   preload: {
+    plugins: [injectRemixSegmentClipPreloadPlugin()],
     build: {
       outDir: 'dist-electron',
       emptyOutDir: false,
