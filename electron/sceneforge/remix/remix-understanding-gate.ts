@@ -17,7 +17,21 @@ export interface RemixUnderstandingGateOverview {
   sourceAssetId: string;
   segmentCount: number;
   understoodSegmentCount: number;
+  failedSegmentCount?: number;
   segmentRefs: RemixUnderstandingGateSegmentRef[];
+  overall?: {
+    summary?: string;
+    storyArc?: string;
+    highValueSegmentIds?: string[];
+  };
+  quality?: {
+    segmentCount?: number;
+    understoodSegmentCount?: number;
+    failedSegmentCount?: number;
+    needsHumanReview?: boolean;
+    avgConfidence?: number | null;
+  };
+  originalUnderstandingPath?: string;
   inputHash?: {
     segments?: string;
     keyframes?: string;
@@ -135,6 +149,22 @@ function validateRollupPayload(
     errors.push(
       `全片理解 understoodSegmentCount 不完整：期望 ${segments.length}，实际 ${overview.understoodSegmentCount}。`,
     );
+  }
+
+  if (overview.failedSegmentCount && overview.failedSegmentCount > 0) {
+    errors.push(`全片理解存在 ${overview.failedSegmentCount} 个失败片段。`);
+  }
+
+  if (!overview.quality || overview.quality.understoodSegmentCount !== segments.length) {
+    errors.push('全片理解 quality 计数不完整。');
+  }
+
+  if (!overview.overall?.summary?.trim()) {
+    errors.push('全片理解缺少 overall 摘要。');
+  }
+
+  if (!overview.originalUnderstandingPath?.trim()) {
+    errors.push('全片理解缺少 original_understanding 索引路径。');
   }
 
   if (!Array.isArray(overview.segmentRefs) || overview.segmentRefs.length !== segments.length) {

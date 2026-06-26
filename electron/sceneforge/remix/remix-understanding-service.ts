@@ -4,13 +4,11 @@ import type { AISettings } from '../../../src/types/ai';
 import { generateStructuredData } from '../../../src/lib/llm';
 import type { SourceSegment } from '../../../src/sceneforge/remix/types';
 import {
+  getRemixOriginalUnderstandingJsonPath,
   getRemixSegmentManifestPath,
   getRemixSegmentUnderstandingJsonPath,
 } from './remix-artifact-paths';
-import {
-  REMIX_UNDERSTANDING_ROLLUP_KIND,
-  buildRemixUnderstandingInputFingerprint,
-} from './remix-understanding-gate';
+import { buildRemixUnderstandingInputFingerprint } from './remix-understanding-gate';
 import { assertSourceAssetStageReady, resolveProjectFile } from './remix-validators';
 import type { StoredSourceAssetDocument } from './remix-store';
 import { readStoredSourceAsset, writeStoredSourceAsset } from './remix-store';
@@ -22,6 +20,11 @@ import {
   validateSegmentUnderstandingDocument,
   type RemixSegmentUnderstandingDocument,
 } from './remix-segment-understanding-schema';
+import {
+  buildOriginalUnderstandingDocument,
+  buildOriginalUnderstandingSummaryMarkdown,
+  buildSourceOverviewIndexDocument,
+} from './remix-source-understanding-rollup';
 
 export interface RemixUnderstandingServiceOptions {
   loadAISettings?: () => Promise<AISettings | null>;
@@ -334,23 +337,47 @@ export class RemixUnderstandingService {
       );
     }
 
+    const failedSegmentCount = document.sourceAsset.segments.length - orderedDocuments.length + failures.length;
+    if (orderedDocuments.length !== document.sourceAsset.segments.length) {
+      throw new Error(`片段理解未全部完成：${orderedDocuments.length}/${document.sourceAsset.segments.length}`);
+    }
+
+    const generatedAt = new Date().toISOString();
+    const sourceOverviewRel = document.sourceAsset.sourceOverviewJsonPath ?? '';
+    const segmentAnalysisRel = document.sourceAsset.segmentAnalysisJsonPath ?? '';
+    const originalUnderstandingRel = getRemixOriginalUnderstandingJsonPath(sourceAssetId);
+    const originalUnderstandingPath = resolveProjectFile(projectDir, originalUnderstandingRel);
+
+    const originalUnderstanding = buildOriginalUnderstandingDocument({
+      document,
+      segmentDocuments: orderedDocuments,
+      generatedAt,
+      failedSegmentCount: 0,
+      sourceOverviewPath: sourceOverviewRel,
+      segmentAnalysisPath: segmentAnalysisRel,
+    });
     const inputHash = buildRemixUnderstandingInputFingerprint(document);
-    const overviewRollup = {
-      artifactKind: REMIX_UNDERSTANDING_ROLLUP_KIND,
-      sourceAssetId: document.sourceAsset.id,
-      segmentCount: document.sourceAsset.segments.length,
-      understoodSegmentCount: orderedGateItems.length,
-      segmentRefs: document.sourceAsset.segments.map((segment) => ({
-        segmentId: segment.id,
-        understandingPath: segment.analysisJsonPath ?? getRemixSegmentUnderstandingJsonPath(sourceAssetId, segment.id),
-      })),
+    const overviewIndex = buildSourceOverviewIndexDocument({
+      original: originalUnderstanding,
+      originalUnderstandingPath: originalUnderstandingRel,
       inputHash,
       partialFailures: failures,
-    };
+    });
 
+    const segmentAnalysisIndex = orderedDocuments.map((doc) => ({
+      ...toGateSegmentUnderstandingItem(doc),
+      understandingPath:
+        document.sourceAsset.segments.find((segment) => segment.id === doc.segmentId)?.analysisJsonPath ??
+        getRemixSegmentUnderstandingJsonPath(sourceAssetId, doc.segmentId),
+      title: doc.title,
+      generatedAt: doc.generatedAt,
+      inputHash: doc.inputHash,
+    }));
+
+    await fs.mkdir(path.dirname(originalUnderstandingPath), { recursive: true });
     await fs.writeFile(
       overviewMarkdownPath,
-      buildSourceOverviewMarkdown(document, orderedDocuments),
+      buildOriginalUnderstandingSummaryMarkdown(originalUnderstanding),
       'utf8',
     );
     await fs.writeFile(
@@ -358,15 +385,16 @@ export class RemixUnderstandingService {
       buildSegmentAnalysisMarkdown(orderedDocuments),
       'utf8',
     );
-    await fs.writeFile(overviewJsonPath, `${JSON.stringify(overviewRollup, null, 2)}\n`, 'utf8');
+    await fs.writeFile(originalUnderstandingPath, `${JSON.stringify(originalUnderstanding, null, 2)}\n`, 'utf8');
+    await fs.writeFile(overviewJsonPath, `${JSON.stringify(overviewIndex, null, 2)}\n`, 'utf8');
     await fs.writeFile(
       segmentAnalysisJsonPath,
-      `${JSON.stringify(orderedGateItems, null, 2)}\n`,
+      `${JSON.stringify(segmentAnalysisIndex, null, 2)}\n`,
       'utf8',
     );
 
     document.sourceAsset.status = failures.length > 0 ? 'processing' : 'ready_for_review';
-    document.sourceAsset.updatedAt = new Date().toISOString();
+    document.sourceAsset.updatedAt = generatedAt;
     document.processingStageStates.remix_understanding =
       failures.length > 0 ? 'needs_input' : 'ready_for_review';
     await writeStoredSourceAsset(projectDir, document);

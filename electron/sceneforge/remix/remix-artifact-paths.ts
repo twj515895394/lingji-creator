@@ -62,6 +62,10 @@ export function getRemixSourceOverviewMarkdownPath(sourceAssetId: string): strin
 export function getRemixSourceOverviewJsonPath(sourceAssetId: string): string {
   return joinRemixPath(getRemixSourceAssetDir(sourceAssetId), ANALYSIS_DIR, 'source_overview.json');
 }
+export function getRemixOriginalUnderstandingJsonPath(sourceAssetId: string): string {
+  return joinRemixPath(getRemixSourceAssetDir(sourceAssetId), ANALYSIS_DIR, 'original_understanding.json');
+}
+
 
 export function getRemixSegmentAnalysisMarkdownPath(sourceAssetId: string): string {
   return joinRemixPath(getRemixSourceAssetDir(sourceAssetId), ANALYSIS_DIR, 'segment_analysis.md');

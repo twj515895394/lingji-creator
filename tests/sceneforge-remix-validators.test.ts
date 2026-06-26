@@ -145,6 +145,10 @@ describe('SceneForge Remix publish understanding gate', () => {
           sourceAssetId: 'source-001',
           segmentCount: 1,
           understoodSegmentCount: 1,
+          failedSegmentCount: 0,
+          originalUnderstandingPath: 'analysis/original_understanding.json',
+          overall: { summary: '全片摘要', storyArc: '剧情线', highValueSegmentIds: ['segment-001'] },
+          quality: { segmentCount: 1, understoodSegmentCount: 1, failedSegmentCount: 0, needsHumanReview: true },
           segmentRefs: [
             {
               segmentId: 'segment-001',
@@ -156,6 +160,10 @@ describe('SceneForge Remix publish understanding gate', () => {
         null,
         2,
       ) + '\n',
+    );
+    await fs.writeFile(
+      path.join(projectDir, 'sceneforge/remix/source-assets/source-001/analysis/original_understanding.json'),
+      JSON.stringify({ schema: 'sceneforge-remix-original-understanding', quality: { understoodSegmentCount: 1 } }, null, 2) + '\n',
     );
     await fs.writeFile(
       path.join(projectDir, segmentPath),

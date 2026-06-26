@@ -10,7 +10,10 @@ import {
   REMIX_UNDERSTANDING_ROLLUP_KIND,
   validateRemixUnderstandingArtifacts,
 } from '../electron/sceneforge/remix/remix-understanding-gate';
-import { getRemixSegmentUnderstandingJsonPath } from '../electron/sceneforge/remix/remix-artifact-paths';
+import {
+  getRemixOriginalUnderstandingJsonPath,
+  getRemixSegmentUnderstandingJsonPath,
+} from '../electron/sceneforge/remix/remix-artifact-paths';
 
 let projectDir: string;
 
@@ -86,6 +89,17 @@ describe('SceneForge Remix understanding service', () => {
     );
     expect(overview.artifactKind).toBe(REMIX_UNDERSTANDING_ROLLUP_KIND);
     expect(overview.understoodSegmentCount).toBe(understood.sourceAsset.segments.length);
+    expect(overview.originalUnderstandingPath).toBe(
+      getRemixOriginalUnderstandingJsonPath(imported.sourceAsset.id),
+    );
+    expect(overview.overall.summary).toContain('段');
+    const original = JSON.parse(
+      await fs.readFile(
+        path.join(projectDir, getRemixOriginalUnderstandingJsonPath(imported.sourceAsset.id)),
+        'utf8',
+      ),
+    );
+    expect(original.quality.understoodSegmentCount).toBe(understood.sourceAsset.segments.length);
 
     for (const segment of understood.sourceAsset.segments) {
       const rel = getRemixSegmentUnderstandingJsonPath(imported.sourceAsset.id, segment.id);

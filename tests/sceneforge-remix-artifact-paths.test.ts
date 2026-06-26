@@ -9,7 +9,9 @@ import {
   getRemixSourceAudioJsonPath,
   getRemixSourceAudioWavPath,
   getRemixSegmentAudioWavPath,
+  getRemixOriginalUnderstandingJsonPath,
   getRemixSourceOverviewJsonPath,
+  getRemixSegmentUnderstandingJsonPath,
   getRemixVariantDesignJsonPath,
   getRemixVariantEditedKeyframePath,
   getRemixVariantKeyframePromptPath,
@@ -27,6 +29,12 @@ describe('sceneforge remix artifact paths', () => {
     );
     expect(getRemixSourceOverviewJsonPath('source-001')).toBe(
       'sceneforge/remix/source-assets/source-001/analysis/source_overview.json',
+    );
+    expect(getRemixOriginalUnderstandingJsonPath('source-001')).toBe(
+      'sceneforge/remix/source-assets/source-001/analysis/original_understanding.json',
+    );
+    expect(getRemixSegmentUnderstandingJsonPath('source-001', 'segment-001')).toBe(
+      'sceneforge/remix/source-assets/source-001/source_segments/segment-001/segment_understanding.json',
     );
     expect(getRemixSegmentManifestIndexPath('source-001')).toBe(
       'sceneforge/remix/source-assets/source-001/source_segments/segment_manifest_index.json',

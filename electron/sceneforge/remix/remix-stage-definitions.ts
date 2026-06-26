@@ -42,7 +42,7 @@ export const REMIX_STAGE_DEFINITIONS: RemixStageDefinition[] = [
     category: 'support',
     dependencies: ['remix_keyframes'],
     defaultApprovalPolicy: 'required',
-    requiredArtifacts: ['source_overview', 'segment_analysis'],
+    requiredArtifacts: ['source_overview', 'segment_analysis', 'original_understanding'],
   },
   {
     id: 'remix_strategy',

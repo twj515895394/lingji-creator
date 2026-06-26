@@ -153,12 +153,17 @@ describe('SceneForge Remix IPC contract', () => {
       sourceAssetId: liveSourceAssetId,
       segmentCount: stored.sourceAsset.segments.length,
       understoodSegmentCount: stored.sourceAsset.segments.length,
+      failedSegmentCount: 0,
+      originalUnderstandingPath: 'sceneforge/remix/source-assets/' + liveSourceAssetId + '/analysis/original_understanding.json',
+      overall: { summary: '全片摘要', storyArc: '剧情线', highValueSegmentIds: stored.sourceAsset.segments.map((s) => s.id) },
+      quality: { segmentCount: stored.sourceAsset.segments.length, understoodSegmentCount: stored.sourceAsset.segments.length, failedSegmentCount: 0, needsHumanReview: true },
       segmentRefs: stored.sourceAsset.segments.map((segment) => ({
         segmentId: segment.id,
         understandingPath: `segments/${segment.id}/understanding.json`,
       })),
       inputHash,
     }, null, 2)}\n`);
+    await fs.writeFile(path.join(projectDir, 'sceneforge/remix/source-assets/' + liveSourceAssetId + '/analysis/original_understanding.json'), '{}\n');
     await fs.writeFile(path.join(projectDir, segmentPath), `${JSON.stringify(stored.sourceAsset.segments.map((segment) => ({
       segmentId: segment.id,
       visual: { mainAction: '人物抬头' },
