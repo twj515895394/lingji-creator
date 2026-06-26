@@ -1,9 +1,25 @@
 import path from 'node:path';
 import { describe, expect, it } from 'vitest';
-import { resolveTransNetV2Assets } from '../electron/sceneforge/remix/shot-detection/model-path-resolver';
+import {
+  resolveTransNetV2Assets,
+  type TransNetV2AssetResolutionOptions,
+} from '../electron/sceneforge/remix/shot-detection/model-path-resolver';
+
+function addParentDirs(paths: string[]): Set<string> {
+  const normalized = new Set(paths.map((entry) => path.resolve(entry)));
+  for (const entry of paths) {
+    let current = path.dirname(path.resolve(entry));
+    while (current && current !== path.dirname(current)) {
+      normalized.add(current);
+      current = path.dirname(current);
+    }
+    if (current) normalized.add(current);
+  }
+  return normalized;
+}
 
 function buildFs(paths: string[]) {
-  const normalized = new Set(paths.map((entry) => path.resolve(entry)));
+  const normalized = addParentDirs(paths);
   return {
     existsSync: (candidate: string) => normalized.has(path.resolve(candidate)),
     readdirSync: (candidate: string) => {
@@ -19,7 +35,10 @@ function buildFs(paths: string[]) {
   };
 }
 
-function baseOptions(paths: string[], overrides: Record<string, unknown> = {}) {
+function baseOptions(
+  paths: string[],
+  overrides: Partial<TransNetV2AssetResolutionOptions> = {},
+): TransNetV2AssetResolutionOptions {
   return {
     appPath: '/app/app.asar',
     resourcesPath: '/app',
