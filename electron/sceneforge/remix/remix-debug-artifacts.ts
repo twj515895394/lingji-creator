@@ -1,13 +1,23 @@
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import { resolveProjectFile } from './remix-validators';
+import {
+  appendRemixProgressEvent,
+  type RemixProgressStage,
+} from './remix-progress-events';
 
-function progressStageForReport(fileName: string): string {
+function progressStageForReport(fileName: string): RemixProgressStage | 'debug' {
   if (fileName === 'shot_detection_result.json') return 'segmentation';
   if (fileName === 'clip_generation_report.json') return 'clip_generation';
   if (fileName === 'keyframe_report.json') return 'keyframes';
   if (fileName === 'runtime_diagnostics.json') return 'runtime';
   return 'debug';
+}
+
+function sourceAssetIdFromRelativePath(relativePath: string): string | null {
+  const normalized = relativePath.replaceAll('\\', '/');
+  const match = normalized.match(/source-assets\/([^/]+)\/debug\//);
+  return match?.[1] ?? null;
 }
 
 function warnDebugArtifactFailure(action: string, error: unknown): void {
@@ -16,21 +26,29 @@ function warnDebugArtifactFailure(action: string, error: unknown): void {
   );
 }
 
-async function appendProgressEventForReport(filePath: string): Promise<void> {
-  const fileName = path.basename(filePath);
-  const event = {
-    stage: progressStageForReport(fileName),
-    status: 'succeeded',
-    message: `已写入调试产物：${fileName}`,
-    reportPath: filePath,
-    timestamp: new Date().toISOString(),
-  };
+async function appendProgressEventForReport(input: {
+  projectDir: string;
+  relativePath: string;
+  filePath: string;
+}): Promise<void> {
+  const fileName = path.basename(input.filePath);
+  const stage = progressStageForReport(fileName);
+  const sourceAssetId = sourceAssetIdFromRelativePath(input.relativePath);
+  if (!sourceAssetId || stage === 'debug') return;
+
   try {
-    await fs.appendFile(
-      path.join(path.dirname(filePath), 'progress_events.jsonl'),
-      `${JSON.stringify(event)}\n`,
-      'utf8',
-    );
+    await appendRemixProgressEvent({
+      projectDir: input.projectDir,
+      sourceAssetId,
+      event: {
+        stage,
+        status: 'succeeded',
+        message: `已写入调试产物：${fileName}`,
+        details: {
+          reportPath: input.filePath,
+        },
+      },
+    });
   } catch (error) {
     warnDebugArtifactFailure('append progress event', error);
   }
@@ -45,7 +63,11 @@ export async function writeRemixDebugJson(input: {
   try {
     await fs.mkdir(path.dirname(filePath), { recursive: true });
     await fs.writeFile(filePath, `${JSON.stringify(input.payload, null, 2)}\n`, 'utf8');
-    await appendProgressEventForReport(filePath);
+    await appendProgressEventForReport({
+      projectDir: input.projectDir,
+      relativePath: input.relativePath,
+      filePath,
+    });
   } catch (error) {
     warnDebugArtifactFailure(`write debug artifact ${input.relativePath}`, error);
   }
