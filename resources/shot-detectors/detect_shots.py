@@ -6,6 +6,7 @@ import sys
 import traceback
 from typing import Any
 
+from accurate_transnetv2 import run_accurate_detection
 from fast_pyscenedetect import run_fast_detection
 
 
@@ -14,7 +15,7 @@ def run_detection(request: dict[str, Any]) -> dict[str, Any]:
     if mode == "fast":
         return run_fast_detection(request)
     if mode == "accurate":
-        raise RuntimeError("TransNetV2 accurate worker is not implemented yet; use fallback in TypeScript runner.")
+        return run_accurate_detection(request)
     raise RuntimeError(f"Unsupported shot detection mode: {mode}")
 
 
