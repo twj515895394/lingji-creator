@@ -27,3 +27,43 @@ resources/python-runtime/linux-x64/bin/python
 ```
 
 该目录需要 asar-unpack，因为 Python 可执行文件和 site-packages 必须通过真实文件系统路径访问。
+
+---
+
+## Remix 运行时诊断产物
+
+运行 Remix 切片/关键帧流程后，会在项目目录中写入调试产物：
+
+```text
+sceneforge/remix/source-assets/{sourceAssetId}/debug/
+  shot_detection_result.json
+  clip_generation_report.json
+  keyframe_report.json
+  runtime_diagnostics.json
+  progress_events.jsonl
+```
+
+用途：
+
+```text
+shot_detection_result.json
+  记录 fast/accurate 检测结果、fallback 原因、低置信度片段等。
+
+clip_generation_report.json
+  记录 source_clip.mp4 生成结果、耗时、失败项。
+
+keyframe_report.json
+  记录 first/middle/last 关键帧抽取输入源、seek 时间和输出路径。
+
+runtime_diagnostics.json
+  记录 Python/TransNetV2 环境变量是否存在、模型资产解析结果。
+
+progress_events.jsonl
+  记录阶段报告写入事件，便于人工排查当前流程执行到哪一步。
+```
+
+注意：
+
+```text
+runtime_diagnostics.json 不直接保存敏感环境变量值，只记录关键配置是否存在，以及模型资产 resolver 的解析结果。
+```
