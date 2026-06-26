@@ -13,3 +13,4 @@ release/
 resources/pi/
 .DS_Store
 .env
+.venv-shot/
