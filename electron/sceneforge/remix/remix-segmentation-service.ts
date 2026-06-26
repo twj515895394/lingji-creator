@@ -163,13 +163,14 @@ function buildCandidateBoundaries(
 }
 
 function confidenceFromSources(sources: string[], baseConfidence: number): number {
+  const isRealDetector = sources.includes('pyscenedetect_adaptive') || sources.includes('transnetv2_single_frame');
   const boosted =
     baseConfidence +
     (sources.some((source) => source.includes('adaptive')) ? 0.08 : 0) +
     (sources.some((source) => source.includes('ffmpeg_scene')) ? 0.05 : 0) +
     (sources.some((source) => source.includes('accurate_refiner')) ? 0.1 : 0) +
     (sources.includes('pyscenedetect_adaptive') ? 0.08 : 0) -
-    (sources.length === 1 ? 0.12 : 0);
+    (sources.length === 1 && !isRealDetector ? 0.12 : 0);
   return roundConfidence(boosted);
 }
 
