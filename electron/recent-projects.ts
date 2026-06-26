@@ -63,12 +63,25 @@ export async function addRecentProject(
     coverImageUrl = selectedCover?.imageUrl;
   }
 
-  const normalizedIdentity = normalizeRecentProjectIdentity(
-    identity ??
-      (projectData?.type === 'sceneforge'
-        ? { projectKind: 'sceneforge' }
-        : { projectKind: 'script' }),
-  );
+  const oldEntry = existing.find((p) => p.path === projectDir);
+
+  const fallbackKind = projectData?.type === 'sceneforge'
+    ? (projectData.sceneforge?.entryPath === 'source_intake' ? 'remix' : 'sceneforge')
+    : 'script';
+
+  const targetIdentity = identity ?? (oldEntry?.projectKind
+    ? {
+        projectKind: oldEntry.projectKind,
+        remixEntryIntent: oldEntry.remixEntryIntent,
+        remixRoutePath: oldEntry.remixRoutePath,
+      }
+    : {
+        projectKind: fallbackKind,
+        remixEntryIntent: fallbackKind === 'remix' ? 'asset-ingestion' : null,
+        remixRoutePath: fallbackKind === 'remix' ? '/remix/assets' : null,
+      });
+
+  const normalizedIdentity = normalizeRecentProjectIdentity(targetIdentity);
 
   const entry: RecentProjectEntry = {
     path: projectDir,
@@ -81,6 +94,7 @@ export async function addRecentProject(
     remixEntryIntent: normalizedIdentity.remixEntryIntent ?? null,
     remixRoutePath: normalizedIdentity.remixRoutePath ?? null,
   };
+
 
   // 移除已存在的同路径项目，添加到开头
   const filtered = existing.filter((p) => p.path !== projectDir);
@@ -135,9 +149,11 @@ export async function refreshRecentProjects(
       ...normalizeRecentProjectIdentity({
         projectKind:
           entry.projectKind ??
-          (projectData?.type === 'sceneforge' ? 'sceneforge' : 'script'),
-        remixEntryIntent: entry.remixEntryIntent,
-        remixRoutePath: entry.remixRoutePath,
+          (projectData?.type === 'sceneforge'
+            ? (projectData.sceneforge?.entryPath === 'source_intake' ? 'remix' : 'sceneforge')
+            : 'script'),
+        remixEntryIntent: entry.remixEntryIntent ?? (projectData?.sceneforge?.entryPath === 'source_intake' ? 'asset-ingestion' : null),
+        remixRoutePath: entry.remixRoutePath ?? (projectData?.sceneforge?.entryPath === 'source_intake' ? '/remix/assets' : null),
       }),
     });
   }
