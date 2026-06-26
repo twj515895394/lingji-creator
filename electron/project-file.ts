@@ -90,12 +90,14 @@ function resolveRecoveredPipelineId(
   state: SceneStateSnapshot,
   entryPath: SceneEntryPath,
 ): SceneProjectMeta['pipelineId'] {
-  if (isScenePipelineId(meta?.pipelineId)) {
-    return meta.pipelineId;
+  const metaPipelineId = meta?.pipelineId;
+  if (isScenePipelineId(metaPipelineId)) {
+    return metaPipelineId;
   }
 
-  if (isScenePipelineId(state.pipelineId)) {
-    return state.pipelineId;
+  const statePipelineId = state.pipelineId;
+  if (isScenePipelineId(statePipelineId)) {
+    return statePipelineId;
   }
 
   // 旧 SceneForge 工坊项目没有 pipelineId。缺省时必须优先恢复为普通工坊，
