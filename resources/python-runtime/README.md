@@ -17,6 +17,24 @@ pip install -r resources/shot-detectors/requirements-accurate.txt
 LINGJI_SHOT_PYTHON=$(pwd)/.venv-shot/bin/python npm run dev
 ```
 
+TransNetV2 权重可以放在项目 resources 目录，也可以放在用户数据目录。开发期可用：
+
+```bash
+export LINGJI_TRANSNETV2_USER_DATA_DIR=/absolute/path/to/user-data
+```
+
+对应目录约定：
+
+```text
+$LINGJI_TRANSNETV2_USER_DATA_DIR/models/transnetv2/transnetv2-pytorch-weights.pth
+```
+
+也兼容通用变量：
+
+```bash
+export LINGJI_USER_DATA_DIR=/absolute/path/to/user-data
+```
+
 未来正式打包时，建议按平台和架构放置：
 
 ```text
@@ -66,4 +84,5 @@ progress_events.jsonl
 
 ```text
 runtime_diagnostics.json 不直接保存敏感环境变量值，只记录关键配置是否存在，以及模型资产 resolver 的解析结果。
+写出 runtime_diagnostics.json 前会把用户 home 目录前缀替换为 ~，降低调试包分享时泄露本地用户名/目录结构的风险。
 ```
