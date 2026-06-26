@@ -30,6 +30,26 @@ function injectRemixSegmentClipPreloadPlugin() {
   };
 }
 
+function injectRemixSegmentClipActionsPanelPlugin() {
+  const pageEntry = resolve('src/sceneforge/remix/pages/RemixAssetProcessing.tsx');
+  return {
+    name: 'inject-remix-segment-clip-actions-panel',
+    transform(code: string, id: string) {
+      if (id.split('?')[0] !== pageEntry) return null;
+      if (code.includes('SegmentClipActionsPanel')) return null;
+      return code
+        .replace(
+          "import { SegmentTimeline } from '../components/SegmentTimeline';",
+          "import { SegmentTimeline } from '../components/SegmentTimeline';\nimport { SegmentClipActionsPanel } from '../components/SegmentClipActionsPanel';",
+        )
+        .replace(
+          '        <SegmentTimeline\n',
+          '        <SegmentClipActionsPanel\n          projectDir={projectDir}\n          sourceAssetId={sourceAssetId}\n          activeSegmentId={activePreviewSegment?.id ?? null}\n          disabled={Boolean(pendingActionId)}\n          onRefresh={reloadSnapshot}\n        />\n        <SegmentTimeline\n',
+        );
+    },
+  };
+}
+
 export default defineConfig({
   main: {
     plugins: [copyStealthPlugin()],
@@ -63,7 +83,7 @@ export default defineConfig({
   },
   renderer: {
     root: '.',
-    plugins: [react(), tailwindcss()],
+    plugins: [injectRemixSegmentClipActionsPanelPlugin(), react(), tailwindcss()],
     build: {
       outDir: 'dist',
       rollupOptions: {
