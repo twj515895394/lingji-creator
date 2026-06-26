@@ -1,15 +1,48 @@
+import { execFile } from 'node:child_process';
 import fs from 'node:fs/promises';
 import path from 'node:path';
-import type { RemixKeyframeRole, SourceKeyframe } from '../../../src/sceneforge/remix/types';
+import { promisify } from 'node:util';
+import { fileURLToPath } from 'node:url';
+import type { RemixKeyframeRole, SourceKeyframe, SourceSegment } from '../../../src/sceneforge/remix/types';
+import { resolveFfmpegPath } from '../../runtime-binaries';
 import { getRemixSegmentKeyframePath, getRemixSegmentManifestPath } from './remix-artifact-paths';
 import { assertSourceAssetStageReady, resolveProjectFile } from './remix-validators';
 import type { StoredSourceAssetDocument } from './remix-store';
 import { readStoredSourceAsset, writeStoredSourceAsset } from './remix-store';
 
-const ONE_PIXEL_PNG = Buffer.from(
-  '89504e470d0a1a0a0000000d49484452000000010000000108060000001f15c4890000000d49444154789c6360606060000000050001a5f645400000000049454e44ae426082',
-  'hex',
-);
+const execFileAsync = promisify(execFile);
+const KEYFRAME_ROLES: RemixKeyframeRole[] = ['first', 'middle', 'last'];
+const DEFAULT_TIMEOUT_MS = 90 * 1000;
+
+function currentModuleDir(): string {
+  return path.dirname(fileURLToPath(import.meta.url));
+}
+
+function processResourcesPath(): string {
+  return (process as NodeJS.Process & { resourcesPath?: string }).resourcesPath ?? process.cwd();
+}
+
+function secondsFromMs(value: number): string {
+  return (Math.max(0, value) / 1000).toFixed(3);
+}
+
+async function fileExists(filePath: string): Promise<boolean> {
+  try {
+    await fs.access(filePath);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+function timestampForRole(startMs: number, endMs: number, role: RemixKeyframeRole): number {
+  const durationMs = Math.max(1, endMs - startMs);
+  const safeStartMs = startMs + Math.min(80, Math.max(0, durationMs / 10));
+  const safeEndMs = Math.max(startMs, endMs - Math.min(120, Math.max(0, durationMs / 10)));
+  if (role === 'first') return Math.round(safeStartMs);
+  if (role === 'last') return Math.round(Math.max(safeStartMs, safeEndMs));
+  return Math.round(startMs + durationMs / 2);
+}
 
 function buildKeyframesForSegment(
   sourceAssetId: string,
@@ -17,30 +50,89 @@ function buildKeyframesForSegment(
   startMs: number,
   endMs: number,
 ): SourceKeyframe[] {
-  const roles: RemixKeyframeRole[] = ['first', 'last'];
-  if (endMs - startMs > 8000) {
-    roles.splice(1, 0, 'middle');
-  }
-
-  return roles.map((frameRole) => ({
+  return KEYFRAME_ROLES.map((frameRole) => ({
     id: `${sourceAssetId}-${segmentId}-${frameRole}`,
     sourceAssetId,
     segmentId,
     frameRole,
-    timestampMs:
-      frameRole === 'first'
-        ? startMs
-        : frameRole === 'last'
-          ? endMs
-          : Math.round((startMs + endMs) / 2),
+    timestampMs: timestampForRole(startMs, endMs, frameRole),
     imagePath: getRemixSegmentKeyframePath(sourceAssetId, segmentId, frameRole),
   }));
+}
+
+function resolveFfmpeg(): string {
+  return (
+    resolveFfmpegPath({
+      appPath: process.cwd(),
+      resourcesPath: processResourcesPath(),
+      cwd: process.cwd(),
+      moduleDir: currentModuleDir(),
+      env: process.env,
+    }) ?? 'ffmpeg'
+  );
+}
+
+function relativeClipTimestampMs(segment: SourceSegment, absoluteTimestampMs: number): number {
+  return Math.max(0, absoluteTimestampMs - segment.timeRange.startMs);
+}
+
+async function resolveFrameInput(
+  projectDir: string,
+  sourceVideoPath: string,
+  segment: SourceSegment,
+  absoluteTimestampMs: number,
+): Promise<{ inputPath: string; seekMs: number; source: 'clip' | 'source' }> {
+  const clipPath = resolveProjectFile(projectDir, segment.sourceClipPath);
+  if (await fileExists(clipPath)) {
+    return {
+      inputPath: clipPath,
+      seekMs: relativeClipTimestampMs(segment, absoluteTimestampMs),
+      source: 'clip',
+    };
+  }
+  return { inputPath: sourceVideoPath, seekMs: absoluteTimestampMs, source: 'source' };
+}
+
+async function extractFrame(input: {
+  ffmpegPath: string;
+  inputPath: string;
+  seekMs: number;
+  outputPath: string;
+}) {
+  await fs.mkdir(path.dirname(input.outputPath), { recursive: true });
+  await fs.rm(input.outputPath, { force: true });
+  await execFileAsync(
+    input.ffmpegPath,
+    [
+      '-y',
+      '-ss',
+      secondsFromMs(input.seekMs),
+      '-i',
+      input.inputPath,
+      '-frames:v',
+      '1',
+      '-q:v',
+      '2',
+      '-f',
+      'image2',
+      input.outputPath,
+    ],
+    {
+      timeout: DEFAULT_TIMEOUT_MS,
+      maxBuffer: 1024 * 1024 * 4,
+    },
+  );
+  const stat = await fs.stat(input.outputPath);
+  if (stat.size <= 0) {
+    throw new Error(`关键帧抽取失败，输出为空：${input.outputPath}`);
+  }
 }
 
 export class RemixKeyframeService {
   async run(projectDir: string, sourceAssetId: string): Promise<StoredSourceAssetDocument> {
     const document = await readStoredSourceAsset(projectDir, sourceAssetId);
     assertSourceAssetStageReady(document, 'remix_segmentation');
+    const ffmpegPath = resolveFfmpeg();
 
     for (const segment of document.sourceAsset.segments) {
       segment.keyframes = buildKeyframesForSegment(
@@ -51,9 +143,25 @@ export class RemixKeyframeService {
       );
 
       for (const keyframe of segment.keyframes) {
-        const filePath = resolveProjectFile(projectDir, keyframe.imagePath);
-        await fs.mkdir(path.dirname(filePath), { recursive: true });
-        await fs.writeFile(filePath, ONE_PIXEL_PNG);
+        const outputPath = resolveProjectFile(projectDir, keyframe.imagePath);
+        const frameInput = await resolveFrameInput(
+          projectDir,
+          document.sourceAsset.sourceVideoPath,
+          segment,
+          keyframe.timestampMs,
+        );
+        try {
+          await extractFrame({
+            ffmpegPath,
+            inputPath: frameInput.inputPath,
+            seekMs: frameInput.seekMs,
+            outputPath,
+          });
+        } catch (error) {
+          throw new Error(
+            `关键帧抽取失败：${segment.id}/${keyframe.frameRole} (${frameInput.source}) - ${error instanceof Error ? error.message : String(error)}`,
+          );
+        }
       }
 
       await fs.writeFile(
