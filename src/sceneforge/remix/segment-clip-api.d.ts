@@ -1,3 +1,4 @@
+import type { ElectronAPI } from '../../lib/electron-api';
 import type { RemixSourceAssetRefInput } from '../../../electron/sceneforge/remix/remix-ipc-types';
 import type { ExportSegmentClipsResult } from '../../../electron/sceneforge/remix/segment-clips/segment-clip-exporter';
 import type { SegmentClipGenerationSummary } from '../../../electron/sceneforge/remix/segment-clips/segment-clip-service';
@@ -21,6 +22,7 @@ export interface RemixSegmentClipApi {
 
 declare global {
   interface Window {
+    electronAPI?: ElectronAPI;
     sceneForgeRemixSegmentClips?: RemixSegmentClipApi;
   }
 }
