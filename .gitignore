@@ -14,3 +14,10 @@ resources/pi/
 .DS_Store
 .env
 .venv-shot/
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.ipynb_checkpoints/
