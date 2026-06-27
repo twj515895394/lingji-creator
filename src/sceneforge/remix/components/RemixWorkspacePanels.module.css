@@ -490,14 +490,14 @@
 
 .overviewSummaryGrid {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: var(--space-4);
+  grid-template-columns: repeat(3, minmax(0, 1fr)); /* 改为 3 列并排 */
+  gap: var(--space-3); /* 缩减列间距 */
 }
 
 .overviewSummaryCard {
   display: grid;
-  gap: var(--space-2);
-  padding: var(--space-5);
+  gap: var(--space-1); /* 缩减文字间距 */
+  padding: 10px 14px; /* 压缩内边距 */
   border-radius: 12px;
   border: 1px solid rgba(255, 255, 255, 0.06);
   background: rgba(255, 255, 255, 0.026);
@@ -1171,3 +1171,241 @@
   font-size: 11px;
   color: rgba(255, 255, 255, 0.4);
 }
+
+/* ==========================================================================
+   Remix Asset Processing Workbench 4:6 Split Layout Rebuild
+   ========================================================================== */
+
+/* 1. Workbench general layout wrapping */
+.workbenchLayout {
+  display: flex;
+  flex-direction: column;
+  height: calc(100vh - 64px); /* 减去窗口顶栏高度 */
+  overflow: hidden; /* 清除最外层滚动条 */
+}
+
+/* 2. main content container */
+.mainWorkspaceContainer {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  height: 100%;
+  overflow: hidden;
+}
+
+/* 3. Upper split block (Sticky block height is controlled by inline styles in React) */
+.upperStickySection {
+  flex-shrink: 0;
+  height: 260px; /* 默认高度优化为 260px，完美契合 16:9 比例 */
+  min-height: 200px;
+  max-height: 450px;
+  display: grid;
+  grid-template-columns: 42fr 58fr; /* 宽度比调整为 42:58，缩小播放器所占宽度 */
+  gap: 16px;
+  padding: 12px; /* 压缩内边距 */
+  background: rgba(10, 15, 26, 0.95);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  box-sizing: border-box;
+}
+
+/* 4. Left Column: Compact Video Player */
+.playerColumn {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  border-radius: 12px;
+  background: #000;
+  border: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+/* 5. Right Column: Stage instruction and metadata cards */
+.stageMetaColumn {
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-start;
+  gap: 12px;
+  height: 100%;
+  overflow-y: auto; /* 允许置顶元数据超出时微滚动 */
+  padding-right: 8px;
+}
+
+/* 6. Lower operation block (60% scrollable block) */
+.lowerScrollableSection {
+  flex: 1;
+  overflow-y: auto;
+  padding: 10px 16px 20px 16px; /* 压缩顶部 Padding 为 10px，使操作面板更靠上 */
+  background: rgba(7, 10, 17, 0.98);
+  box-sizing: border-box;
+}
+
+.lowerScrollableSection::-webkit-scrollbar {
+  width: 6px;
+}
+.lowerScrollableSection::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.12);
+  border-radius: 3px;
+}
+.lowerScrollableSection::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.24);
+}
+
+/* 7. Styles for stage sticky cards */
+.stageMetaCard {
+  background: rgba(255, 255, 255, 0.026);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  border-radius: 12px;
+  padding: 12px 14px;
+}
+
+.stageTitleRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 6px;
+}
+
+.stageTitleRow h3 {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 600;
+  color: #fff;
+}
+
+.stageChip {
+  font-size: 11px;
+  font-weight: 500;
+  color: #d6a95f;
+  background: rgba(214, 169, 95, 0.1);
+  padding: 2px 8px;
+  border-radius: 99px;
+  border: 1px solid rgba(214, 169, 95, 0.2);
+}
+
+.stageDescText {
+  margin: 0 0 8px 0;
+  font-size: 12px;
+  line-height: 1.5;
+  color: rgba(214, 221, 232, 0.7);
+}
+
+.stageTaskMessage {
+  font-size: 11px;
+  line-height: 1.4;
+  color: rgba(214, 169, 95, 0.9);
+  background: rgba(214, 169, 95, 0.06);
+  border: 1px dashed rgba(214, 169, 95, 0.2);
+  padding: 6px 10px;
+  border-radius: 6px;
+}
+
+/* 8. Active segment info inside sticky upper right */
+.activeSegmentStickyCard {
+  background: rgba(214, 169, 95, 0.04);
+  border: 1px solid rgba(214, 169, 95, 0.15);
+  border-radius: 12px;
+  padding: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.segmentLabel {
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: rgba(214, 169, 95, 0.6);
+  font-weight: 700;
+}
+
+.segmentTitle {
+  font-size: 13px;
+  font-weight: 600;
+  color: #fff;
+}
+
+.segmentSummaryText {
+  margin: 0;
+  font-size: 11px;
+  line-height: 1.4;
+  color: rgba(214, 221, 232, 0.6);
+}
+
+.segmentTimeRange {
+  display: flex;
+  gap: 12px;
+  font-size: 11px;
+  color: rgba(255, 255, 255, 0.4);
+}
+
+/* 9. Video metadata card */
+.videoMetadataCard {
+  background: rgba(255, 255, 255, 0.015);
+  border: 1px solid rgba(255, 255, 255, 0.04);
+  border-radius: 12px;
+  padding: 12px;
+}
+
+.metaGrid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 6px;
+  font-size: 11px;
+  color: rgba(214, 221, 232, 0.6);
+  margin-top: 4px;
+}
+
+.metaGrid strong {
+  color: #fff;
+}
+
+/* Compact video components styles for compact variant */
+.previewSurfaceCompact {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  height: 100%;
+  background: #000;
+  padding: 0;
+  margin: 0;
+  border: none;
+  overflow: hidden;
+}
+
+.previewVideoCompact {
+  width: 100%;
+  height: 100%;
+  flex: 1;
+  object-fit: contain;
+  background: #000;
+  border-radius: 0; /* Let playerColumn handle the rounding */
+}
+
+.previewStatusBarCompact {
+  flex-shrink: 0;
+  display: flex;
+  justify-content: space-between;
+  padding: 6px 12px;
+  font-size: 11px;
+  color: rgba(255, 255, 255, 0.5);
+  background: rgba(0, 0, 0, 0.5);
+}
+
+/* Drag resizer line */
+.resizerLine {
+  flex-shrink: 0;
+  height: 6px;
+  background: rgba(255, 255, 255, 0.04);
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  cursor: row-resize;
+  transition: background-color 150ms ease;
+}
+
+.resizerLine:hover,
+.resizerLineActive {
+  background: rgba(214, 169, 95, 0.3);
+  border-top-color: rgba(214, 169, 95, 0.5);
+  border-bottom-color: rgba(214, 169, 95, 0.5);
+}
+

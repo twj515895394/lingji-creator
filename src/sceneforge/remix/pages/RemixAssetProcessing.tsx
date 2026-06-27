@@ -195,6 +195,15 @@ const EMPTY_STEP_STATUSES: ReturnType<typeof getAssetProcessingStepStatuses> = {
   'publish-source': 'not_started',
 };
 
+const STAGE_DESCRIPTIONS: Record<AssetProcessingStepId, string> = {
+  'source-import': '当前阶段只负责把视频、字幕和基础元数据登记成可追踪的源素材。',
+  segmentation: '先保护原始镜头边界和表演完整性，再决定哪里需要合并或拆分。',
+  keyframes: '点击「提取关键帧」将自动为视频中的所有镜头段一键提取首帧、中帧与尾帧，无需逐个片段处理。',
+  understanding: '把剧情、动作、镜头和梗点整理成可供二创复用的文本材料。',
+  annotate: '这里记录必须保留的动作、停顿和替换点，为后续二创创作打底。',
+  'publish-source': '只有前置步骤和人工标注都完成，这份素材才能进入资产库。',
+};
+
 export function RemixAssetProcessing({
   projectDir = null,
   apiClient,
@@ -225,6 +234,32 @@ export function RemixAssetProcessing({
   const [preserveManualEdits, setPreserveManualEdits] = useState(true);
   const [granularity, setGranularity] = useState<'fine' | 'balanced' | 'coarse'>('balanced');
   const [minDurationForMiddleFrameSec, setMinDurationForMiddleFrameSec] = useState<number>(8);
+  const [upperHeight, setUpperHeight] = useState(260);
+  const [isDragging, setIsDragging] = useState(false);
+
+  useEffect(() => {
+    if (!isDragging) return;
+
+    const handleMouseMove = (e: MouseEvent) => {
+      const container = document.querySelector(`.${panelStyles.mainWorkspaceContainer}`);
+      if (!container) return;
+      const rect = container.getBoundingClientRect();
+      // 计算鼠标相对容器顶部的 Y 轴距离（排除工作台顶栏的偏移）
+      const newHeight = e.clientY - rect.top - 44;
+      setUpperHeight(Math.max(200, Math.min(newHeight, 450)));
+    };
+
+    const handleMouseUp = () => {
+      setIsDragging(false);
+    };
+
+    document.addEventListener('mousemove', handleMouseMove);
+    document.addEventListener('mouseup', handleMouseUp);
+    return () => {
+      document.removeEventListener('mousemove', handleMouseMove);
+      document.removeEventListener('mouseup', handleMouseUp);
+    };
+  }, [isDragging]);
 
   useEffect(() => {
     async function loadSnapshot() {
@@ -933,15 +968,7 @@ export function RemixAssetProcessing({
   const stepPanels: Record<AssetProcessingStepId, ReactElement> = {
     'source-import': (
       <section className={panelStyles.panelCard} data-testid="remix-processing-step-source-import">
-        <div className={panelStyles.panelHeaderRow}>
-          <div className={panelStyles.panelTitleBlock}>
-            <h2 className={panelStyles.panelTitle}>导入原片与元数据登记</h2>
-            <p className={panelStyles.panelDescription}>
-              当前阶段只负责把视频、字幕和基础元数据登记成可追踪的源素材。
-            </p>
-          </div>
-          <div className={panelStyles.chip}>{getStageStatusLabel(stepStatuses['source-import'])}</div>
-        </div>
+
         <div className={panelStyles.fieldStack}>
           <div className={panelStyles.configCard}>
             <div className={panelStyles.configTitle}>源文件</div>
@@ -958,15 +985,7 @@ export function RemixAssetProcessing({
     ),
     segmentation: (
       <section className={panelStyles.panelCard} data-testid="remix-processing-step-segmentation">
-        <div className={panelStyles.panelHeaderRow}>
-          <div className={panelStyles.panelTitleBlock}>
-            <h2 className={panelStyles.panelTitle}>真实镜头切片</h2>
-            <p className={panelStyles.panelDescription}>
-              先保护原始镜头边界和表演完整性，再决定哪里需要合并或拆分。
-            </p>
-          </div>
-          <div className={panelStyles.chip}>{getStageStatusLabel(stepStatuses.segmentation)}</div>
-        </div>
+
         <div className={panelStyles.copyRow}>
           <div className={panelStyles.modeToggleGroup}>
             <button
@@ -1102,15 +1121,7 @@ export function RemixAssetProcessing({
     ),
     keyframes: (
       <section className={panelStyles.panelCard} data-testid="remix-processing-step-keyframes">
-        <div className={panelStyles.panelHeaderRow}>
-          <div className={panelStyles.panelTitleBlock}>
-            <h2 className={panelStyles.panelTitle}>关键帧提取</h2>
-            <p className={panelStyles.panelDescription}>
-              点击「提取关键帧」将自动为视频中的<strong>所有镜头段</strong>一键提取首帧、中帧与尾帧，无需逐个片段处理。
-            </p>
-          </div>
-          <div className={panelStyles.chip}>{getStageStatusLabel(stepStatuses.keyframes)}</div>
-        </div>
+
         <div className={panelStyles.copyRow} style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
             <span style={{ fontSize: '13px', color: 'rgba(255,255,255,0.6)' }}>中间帧提取阈值:</span>
@@ -1164,15 +1175,7 @@ export function RemixAssetProcessing({
     ),
     understanding: (
       <section className={panelStyles.panelCard} data-testid="remix-processing-step-understanding">
-        <div className={panelStyles.panelHeaderRow}>
-          <div className={panelStyles.panelTitleBlock}>
-            <h2 className={panelStyles.panelTitle}>原片理解</h2>
-            <p className={panelStyles.panelDescription}>
-              把剧情、动作、镜头和梗点整理成可供二创复用的文本材料。
-            </p>
-          </div>
-          <div className={panelStyles.chip}>{getStageStatusLabel(stepStatuses.understanding)}</div>
-        </div>
+
         {workspaceState?.activeJob?.understandingProgress ? (
           <p className={panelStyles.copyFeedback} data-testid="remix-understanding-job-progress">
             {workspaceState.activeJob.understandingProgress.message ?? '正在生成原片理解…'}
@@ -1181,7 +1184,7 @@ export function RemixAssetProcessing({
               : ''}
           </p>
         ) : null}
-        <div className={panelStyles.copyRow}>
+        <div className={panelStyles.copyRow} style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
           <Button
             variant="accent"
             disabled={Boolean(pendingActionId)}
@@ -1200,6 +1203,11 @@ export function RemixAssetProcessing({
           >
             {pendingActionId === 'understanding' ? '生成中…' : '生成原片理解'}
           </Button>
+          {understandingWorkbench && (
+            <span style={{ fontSize: '13px', color: 'rgba(255, 255, 255, 0.6)' }}>
+              已完成段数：<strong>{understandingWorkbench.understoodSegmentCount}/{understandingWorkbench.segmentCount}</strong>
+            </span>
+          )}
         </div>
         <UnderstandingWorkbenchPanel
           workbench={understandingWorkbench}
@@ -1218,15 +1226,7 @@ export function RemixAssetProcessing({
     ),
     annotate: (
       <section className={panelStyles.panelCard} data-testid="remix-processing-step-annotate">
-        <div className={panelStyles.panelHeaderRow}>
-          <div className={panelStyles.panelTitleBlock}>
-            <h2 className={panelStyles.panelTitle}>人工标注</h2>
-            <p className={panelStyles.panelDescription}>
-              这里记录必须保留的动作、停顿和替换点，为后续二创创作打底。
-            </p>
-          </div>
-          <div className={panelStyles.chip}>{getStageStatusLabel(stepStatuses.annotate)}</div>
-        </div>
+
         <AnnotationEditor
           prefillHint={understandingWorkbench?.annotationPrefill ? "已根据片段理解预填保留/替换建议，保存前请按真实观感修正。" : null}
           tags={tags}
@@ -1265,15 +1265,7 @@ export function RemixAssetProcessing({
     ),
     'publish-source': (
       <section className={panelStyles.panelCard} data-testid="remix-processing-step-publish-source">
-        <div className={panelStyles.panelHeaderRow}>
-          <div className={panelStyles.panelTitleBlock}>
-            <h2 className={panelStyles.panelTitle}>保存入库</h2>
-            <p className={panelStyles.panelDescription}>
-              只有前置步骤和人工标注都完成，这份素材才能进入资产库。
-            </p>
-          </div>
-          <div className={panelStyles.chip}>{getStageStatusLabel(stepStatuses['publish-source'])}</div>
-        </div>
+
         <PublishToLibraryButton
           items={publishChecklist}
           disabled={!canPublish || Boolean(pendingActionId)}
@@ -1311,13 +1303,13 @@ export function RemixAssetProcessing({
         </div>
       </section>
 
-      <main className={shellStyles.panel}>
-        <div className={shellStyles.panelContent}>
-          <header className={panelStyles.workbenchHeader}>
+      <main className={[shellStyles.panel, panelStyles.workbenchLayout].join(' ')}>
+        <div className={panelStyles.mainWorkspaceContainer}>
+          <header className={panelStyles.workbenchHeader} style={{ padding: '12px 16px 8px 16px', borderBottom: '1px solid rgba(255, 255, 255, 0.05)', marginBottom: 0 }}>
             <div className={panelStyles.headerTitleBlock}>
               <span className={panelStyles.headerEyebrow}>素材处理工作台</span>
               <span className={panelStyles.headerDivider}>/</span>
-              <h1 className={panelStyles.headerTitle} title={asset.title}>
+              <h1 className={panelStyles.headerTitle} title={asset.title} style={{ fontSize: '15px' }}>
                 {asset.title}
               </h1>
               <Badge variant={canPublish ? 'success' : 'warning'}>
@@ -1327,9 +1319,6 @@ export function RemixAssetProcessing({
             </div>
 
             <div className={panelStyles.headerMetaBlock}>
-              <span className={panelStyles.headerMetaText} title={getSourceAssetFilename(asset)}>
-                文件：<span className={panelStyles.headerFilename}>{getSourceAssetFilename(asset)}</span> · {formatRemixDuration(asset.videoMetadata.durationMs)} · {asset.videoMetadata.width}×{asset.videoMetadata.height} · {asset.segments.length}段 · {asset.segments.flatMap((segment) => segment.keyframes).length}帧
-              </span>
               <Button
                 variant="outline"
                 size="sm"
@@ -1342,45 +1331,101 @@ export function RemixAssetProcessing({
           </header>
 
           {errorMessage && (
-            <div className={panelStyles.errorMessageBanner} data-testid="remix-processing-error">
+            <div className={panelStyles.errorMessageBanner} data-testid="remix-processing-error" style={{ margin: '8px 16px 0 16px' }}>
               {errorMessage}
             </div>
           )}
 
-          <section className={panelStyles.panelCardDense} data-testid="remix-processing-current-task">
-            <div className={panelStyles.panelTitle}>
-              {REMIX_ASSET_PROCESSING_NAV_ITEMS.find((item) => item.id === activeStepId)?.title ?? '当前任务'}
+          {/* 上半部分 (置顶固定，高度可通过拖拽动态调整) */}
+          <section className={panelStyles.upperStickySection} style={{ height: `${upperHeight}px` }}>
+            {/* 左侧：视频播放组件 */}
+            <div className={panelStyles.playerColumn}>
+              <SourceVideoPreview
+                asset={asset}
+                activeSegment={activePreviewSegment}
+                currentTimeMs={previewCurrentTimeMs}
+                seekToMs={previewSeekMs}
+                onTimeUpdate={(timeMs) => {
+                  setPreviewCurrentTimeMs(timeMs);
+                }}
+                variant="compact"
+              />
             </div>
-            <div className={panelStyles.panelDescription}>{currentTaskMessage}</div>
+
+            {/* 右侧：当前步骤与片段信息 */}
+            <div className={panelStyles.stageMetaColumn}>
+              {/* 当前步骤说明卡片 */}
+              <div className={panelStyles.stageMetaCard}>
+                <div className={panelStyles.stageTitleRow}>
+                  <h3>{REMIX_ASSET_PROCESSING_NAV_ITEMS.find((item) => item.id === activeStepId)?.title}</h3>
+                  <span className={panelStyles.stageChip}>{getStageStatusLabel(stepStatuses[activeStepId])}</span>
+                </div>
+                <p className={panelStyles.stageDescText}>
+                  {STAGE_DESCRIPTIONS[activeStepId]}
+                </p>
+                <div className={panelStyles.stageTaskMessage}>{currentTaskMessage}</div>
+              </div>
+
+              {/* 选中片段详情卡片 */}
+              {activePreviewSegment ? (
+                <div className={panelStyles.activeSegmentStickyCard}>
+                  <div className={panelStyles.segmentLabel}>当前播放片段</div>
+                  <div className={panelStyles.segmentTitle}>{activePreviewSegment.title}</div>
+                  {activePreviewSegment.semantic?.visualSummary && (
+                    <p className={panelStyles.segmentSummaryText}>
+                      {activePreviewSegment.semantic.visualSummary}
+                    </p>
+                  )}
+                  <div className={panelStyles.segmentTimeRange}>
+                    <span>起: {formatRemixDuration(activePreviewSegment.timeRange.startMs)}</span>
+                    <span>止: {formatRemixDuration(activePreviewSegment.timeRange.endMs)}</span>
+                    <span>时长: {formatRemixDuration(activePreviewSegment.timeRange.durationMs)}</span>
+                  </div>
+                </div>
+              ) : (
+                <div className={panelStyles.videoMetadataCard}>
+                  <div className={panelStyles.segmentLabel}>视频元数据</div>
+                  <div className={panelStyles.metaGrid}>
+                    <div>分辨率: <strong>{asset.videoMetadata.width}×{asset.videoMetadata.height}</strong></div>
+                    <div>帧率: <strong>{asset.videoMetadata.fps ?? 25}fps</strong></div>
+                    <div>总长: <strong>{formatRemixDuration(asset.videoMetadata.durationMs)}</strong></div>
+                    <div>分段数: <strong>{asset.segments.length}段</strong></div>
+                  </div>
+                </div>
+              )}
+            </div>
           </section>
 
-          <section className={panelStyles.workspaceGrid}>
-            <SourceVideoPreview
-              asset={asset}
-              activeSegment={activePreviewSegment}
-              currentTimeMs={previewCurrentTimeMs}
-              seekToMs={previewSeekMs}
-              onTimeUpdate={(timeMs) => {
-                setPreviewCurrentTimeMs(timeMs);
-              }}
-            />
+          {/* 拖拽高度比例调整栏 */}
+          <div
+            className={[
+              panelStyles.resizerLine,
+              isDragging ? panelStyles.resizerLineActive : '',
+            ].join(' ')}
+            onMouseDown={(e) => {
+              e.preventDefault();
+              setIsDragging(true);
+            }}
+          />
 
+          {/* 下半部分 (60% 高度, 独立滚动操作区) */}
+          <section className={panelStyles.lowerScrollableSection}>
             {stepPanels[activeStepId]}
-          </section>
 
-          <details className={shellStyles.technicalDetails} style={{ marginTop: '12px' }}>
-            <summary className={shellStyles.technicalSummary}>技术信息</summary>
-            <div className={shellStyles.summaryList} style={{ marginTop: '8px' }}>
-              <div className={shellStyles.summaryRow} title={asset.sourceVideoPath}>
-                <span className={shellStyles.summaryKey}>源文件</span>
-                <strong className={shellStyles.summaryValue}>{formatCompactPath(asset.sourceVideoPath, 48)}</strong>
+            <details className={shellStyles.technicalDetails} style={{ marginTop: '24px' }}>
+              <summary className={shellStyles.technicalSummary}>技术信息</summary>
+              <div className={shellStyles.summaryList} style={{ marginTop: '8px' }}>
+                <div className={shellStyles.summaryRow} title={asset.sourceVideoPath}>
+                  <span className={shellStyles.summaryKey}>源文件</span>
+                  <strong className={shellStyles.summaryValue}>{formatCompactPath(asset.sourceVideoPath, 48)}</strong>
+                </div>
+                <div className={shellStyles.summaryRow} title={asset.id}>
+                  <span className={shellStyles.summaryKey}>素材编号</span>
+                  <strong className={shellStyles.summaryValue}>{asset.id}</strong>
+                </div>
               </div>
-              <div className={shellStyles.summaryRow} title={asset.id}>
-                <span className={shellStyles.summaryKey}>素材编号</span>
-                <strong className={shellStyles.summaryValue}>{asset.id}</strong>
-              </div>
-            </div>
-          </details>
+            </details>
+          </section>
         </div>
       </main>
 

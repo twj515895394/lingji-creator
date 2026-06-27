@@ -403,6 +403,59 @@ export class RemixUnderstandingService {
     const originalUnderstandingRel = getRemixOriginalUnderstandingJsonPath(sourceAssetId);
     const originalUnderstandingPath = resolveProjectFile(projectDir, originalUnderstandingRel);
 
+    // 调用 LLM 重新梳理全片故事内容与二创方向
+    let overallSummary = `《${document.sourceAsset.title}》共 ${document.sourceAsset.segments.length} 段，已完成 ${orderedDocuments.length} 段结构化理解。`;
+    let remixIdeas: string[] | undefined = undefined;
+
+    try {
+      const segmentLines = orderedDocuments.map((doc, idx) => {
+        const segment = document.sourceAsset.segments.find((s) => s.id === doc.segmentId);
+        const segmentIndex = segment ? segment.index : (idx + 1);
+        return `片段 ${segmentIndex} (标题: ${doc.title}):
+- 动作: ${doc.visual.mainAction}
+- 台词: ${doc.audio.speechSummary || '无'}
+- 功能: ${doc.story.plotFunction}`;
+      }).join('\n\n');
+
+      const systemPrompt = `你是一个专业的影视与剪辑内容理解大师。
+你现在拿到了一个视频中所有片段的结构化分析数据（包含画面动作、镜头规格、台词摘要、剧情功能等）。
+请不要对每个片段进行简单的摘要或流水账式罗列，而是将这些片段的内容和发展脉络有机地串联起来，重新整理成一个连贯的、讲得清清楚楚的整体故事内容（类似于一小段通俗易懂的剧情梗概与内容解说）。
+
+请输出以下格式的 JSON 对象：
+{
+  "storyContent": "重新整理、串联并讲得非常清楚的整体故事内容解说（300字以内，不漏掉核心人物行为与因果联系）",
+  "remixPotential": ["建议的二创剪辑方向 1", "建议的二创剪辑方向 2", "建议的二创剪辑方向 3"]
+}
+
+要求：
+1. storyContent 必须讲清楚发生了什么事，不要使用“片段1做了什么，片段2做了什么”这种断裂的结构，而要作为一个连贯的故事进行叙述。
+2. remixPotential 数组需包含 2 到 4 条具体的剪辑或改编建议。
+3. 只返回合法的 JSON，不要包含任何前言、后记或 Markdown 标记。`;
+
+      const userPrompt = `原片标题: ${document.sourceAsset.title}
+片段详细列表:
+${segmentLines}
+
+请将以上片段重新梳理串联，输出完整连贯的故事内容与二创建议：`;
+
+      const rollupPayload = await this.generateStructured(
+        settings,
+        systemPrompt,
+        userPrompt,
+        undefined,
+        { label: `remix-source-understanding-rollup:${sourceAssetId}` }
+      );
+
+      if (typeof rollupPayload.storyContent === 'string' && rollupPayload.storyContent.trim()) {
+        overallSummary = rollupPayload.storyContent.trim();
+      }
+      if (Array.isArray(rollupPayload.remixPotential) && rollupPayload.remixPotential.length > 0) {
+        remixIdeas = rollupPayload.remixPotential.map(String).filter(Boolean);
+      }
+    } catch (err) {
+      console.error('Failed to generate AI rollup summary, using fallback:', err);
+    }
+
     const originalUnderstanding = buildOriginalUnderstandingDocument({
       document,
       segmentDocuments: orderedDocuments,
@@ -410,6 +463,8 @@ export class RemixUnderstandingService {
       failedSegmentCount: 0,
       sourceOverviewPath: sourceOverviewRel,
       segmentAnalysisPath: segmentAnalysisRel,
+      overallSummary,
+      remixIdeas,
     });
     const inputHash = buildRemixUnderstandingInputFingerprint(document);
     const overviewIndex = buildSourceOverviewIndexDocument({

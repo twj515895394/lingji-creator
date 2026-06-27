@@ -12,6 +12,7 @@ interface SourceVideoPreviewProps {
   currentTimeMs: number;
   seekToMs: number | null;
   onTimeUpdate: (timeMs: number) => void;
+  variant?: 'default' | 'compact';
 }
 
 export function SourceVideoPreview({
@@ -20,6 +21,7 @@ export function SourceVideoPreview({
   currentTimeMs,
   seekToMs,
   onTimeUpdate,
+  variant = 'default',
 }: SourceVideoPreviewProps) {
   const videoRef = useRef<HTMLVideoElement>(null);
   const [hasPreviewError, setHasPreviewError] = useState(false);
@@ -44,16 +46,18 @@ export function SourceVideoPreview({
   }, [seekToMs]);
 
   return (
-    <article className={panelStyles.previewSurface} data-testid="remix-source-video-preview">
-      <div className={panelStyles.previewTopline}>
-        <div>
-          <div className={panelStyles.previewTitle}>原片预览</div>
-          <div className={panelStyles.previewSubtitle}>
-            {asset.videoMetadata.width} × {asset.videoMetadata.height} · {asset.videoMetadata.fps ?? 25}fps
+    <article className={variant === 'compact' ? panelStyles.previewSurfaceCompact : panelStyles.previewSurface} data-testid="remix-source-video-preview">
+      {variant !== 'compact' && (
+        <div className={panelStyles.previewTopline}>
+          <div>
+            <div className={panelStyles.previewTitle}>原片预览</div>
+            <div className={panelStyles.previewSubtitle}>
+              {asset.videoMetadata.width} × {asset.videoMetadata.height} · {asset.videoMetadata.fps ?? 25}fps
+            </div>
           </div>
+          <div className={panelStyles.chip}>{REMIX_SOURCE_STATUS_LABELS[asset.status]}</div>
         </div>
-        <div className={panelStyles.chip}>{REMIX_SOURCE_STATUS_LABELS[asset.status]}</div>
-      </div>
+      )}
 
       {hasPreviewError || !sourceVideoSrc ? (
         <div className={reviewStyles.previewFallback}>
@@ -69,7 +73,7 @@ export function SourceVideoPreview({
       ) : (
         <video
           ref={videoRef}
-          className={reviewStyles.previewVideo}
+          className={variant === 'compact' ? panelStyles.previewVideoCompact : reviewStyles.previewVideo}
           src={sourceVideoSrc}
           controls
           playsInline
@@ -79,12 +83,12 @@ export function SourceVideoPreview({
         />
       )}
 
-      <div className={reviewStyles.previewStatusBar}>
+      <div className={variant === 'compact' ? panelStyles.previewStatusBarCompact : reviewStyles.previewStatusBar}>
         <span>当前播放位置 {formatRemixDuration(currentTimeMs)}</span>
         <span>总时长 {formatRemixDuration(asset.videoMetadata.durationMs)}</span>
       </div>
 
-      {activeSegment ? (
+      {variant !== 'compact' && activeSegment ? (
         <div className={reviewStyles.activeSegmentCard}>
           <div className={reviewStyles.activeSegmentLabel}>当前验证片段</div>
           <div className={reviewStyles.activeSegmentTitle}>{activeSegment.title}</div>

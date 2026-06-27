@@ -66,6 +66,10 @@ describe('SceneForge Remix understanding service', () => {
         loadAISettings: async () => mockSettings,
         generateSegmentUnderstanding: async (_settings, context) =>
           mockUnderstandingPayload(context.segment.id),
+        generateStructuredData: async () => ({
+          storyContent: '全片故事内容连贯串起，已完成段数汇总。',
+          remixPotential: ['保留人物反应镜头', '替换台词做场景改写']
+        }),
       },
     });
 
@@ -135,6 +139,10 @@ describe('SceneForge Remix understanding service', () => {
         loadAISettings: async () => mockSettings,
         generateSegmentUnderstanding: async (_settings, context) =>
           mockUnderstandingPayload(context.segment.id),
+        generateStructuredData: async () => ({
+          storyContent: '全片故事内容连贯串起，已完成段数汇总。',
+          remixPotential: ['保留人物反应镜头', '替换台词做场景改写']
+        }),
       },
     });
     const imported = await service.createSourceAssetFromImport({

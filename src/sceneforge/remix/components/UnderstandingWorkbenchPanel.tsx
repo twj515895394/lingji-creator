@@ -46,27 +46,13 @@ export function UnderstandingWorkbenchPanel({
     <div className={styles.stack} data-testid="remix-understanding-workbench">
       <section className={styles.overviewSummary}>
         <div className={styles.overviewLead}>
-          <div className={styles.overviewLeadLabel}>全片摘要</div>
-          <div className={styles.overviewLeadText}>{workbench.overviewSummary}</div>
-        </div>
-        <div className={styles.overviewSummaryGrid}>
-          <div className={styles.overviewSummaryCard}>
-            <div className={styles.overviewSummaryLabel}>剧情线</div>
-            <div className={styles.overviewSummaryValue}>{workbench.storyArc}</div>
-          </div>
-          <div className={styles.overviewSummaryCard}>
-            <div className={styles.overviewSummaryLabel}>情绪曲线</div>
-            <div className={styles.overviewSummaryValue}>{workbench.emotionCurve}</div>
-          </div>
-          <div className={styles.overviewSummaryCard}>
-            <div className={styles.overviewSummaryLabel}>已完成段数</div>
-            <div className={styles.overviewSummaryValue}>
-              {workbench.understoodSegmentCount}/{workbench.segmentCount}
-            </div>
-          </div>
+          <div className={styles.overviewLeadLabel}>故事内容</div>
+          <div className={styles.overviewLeadText}>{workbench.overviewSummary || '正在生成故事内容…'}</div>
         </div>
         {workbench.remixPotential.length > 0 ? (
-          <p className={styles.copyFeedback}>二创方向：{workbench.remixPotential.join(' / ')}</p>
+          <p className={styles.copyFeedback} style={{ marginTop: '12px', fontSize: '13px' }}>
+            二创方向：{workbench.remixPotential.join(' / ')}
+          </p>
         ) : null}
       </section>
 

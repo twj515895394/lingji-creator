@@ -96,13 +96,15 @@ export function buildOriginalUnderstandingDocument(input: {
   failedSegmentCount: number;
   sourceOverviewPath: string;
   segmentAnalysisPath: string;
+  overallSummary?: string;
+  remixIdeas?: string[];
 }): RemixOriginalUnderstandingDocument {
-  const { document, segmentDocuments, generatedAt, failedSegmentCount } = input;
+  const { document, segmentDocuments, generatedAt, failedSegmentCount, overallSummary, remixIdeas } = input;
   const segmentCount = document.sourceAsset.segments.length;
   const understoodSegmentCount = segmentDocuments.length;
   const plotFunctions = segmentDocuments.map((doc) => doc.story.plotFunction).filter(Boolean);
   const emotions = segmentDocuments.map((doc) => doc.story.emotion).filter(Boolean);
-  const remixIdeas = segmentDocuments.flatMap((doc) => doc.remix.rewriteIdeas).slice(0, 6);
+  const remixIdeasFallback = segmentDocuments.flatMap((doc) => doc.remix.rewriteIdeas).slice(0, 6);
   const visualStyles = segmentDocuments.map((doc) => doc.visual.colorTone).filter(Boolean);
 
   return {
@@ -119,12 +121,12 @@ export function buildOriginalUnderstandingDocument(input: {
       segmentAnalysisPath: input.segmentAnalysisPath,
     },
     overall: {
-      summary: `《${document.sourceAsset.title}》共 ${segmentCount} 段，已完成 ${understoodSegmentCount} 段结构化理解。`,
+      summary: overallSummary ?? `《${document.sourceAsset.title}》共 ${segmentCount} 段，已完成 ${understoodSegmentCount} 段结构化理解。`,
       storyArc: plotFunctions.length ? plotFunctions.join(' → ') : '待人工补充全片剧情线。',
       visualStyle: visualStyles.length ? [...new Set(visualStyles)].join('、') : '写实中性影像风格。',
       mainConflict: segmentDocuments.map((doc) => doc.story.conflict).find(Boolean) ?? '轻度戏剧张力',
       emotionCurve: emotions.length ? emotions.join(' → ') : '情绪平稳推进',
-      remixPotential: remixIdeas.length ? remixIdeas : ['保留人物反应镜头', '替换台词做场景改写'],
+      remixPotential: remixIdeas ?? (remixIdeasFallback.length ? remixIdeasFallback : ['保留人物反应镜头', '替换台词做场景改写']),
       highValueSegmentIds: pickHighValueSegmentIds(segmentDocuments),
     },
     segmentRefs: document.sourceAsset.segments
@@ -194,20 +196,8 @@ export function buildOriginalUnderstandingSummaryMarkdown(
     `- 标题：${original.title}`,
     `- 片段：${original.quality.understoodSegmentCount}/${original.quality.segmentCount}`,
     '',
-    '## 全片摘要',
+    '## 故事内容',
     original.overall.summary,
-    '',
-    '## 剧情线',
-    original.overall.storyArc,
-    '',
-    '## 情绪曲线',
-    original.overall.emotionCurve,
-    '',
-    '## 视觉风格',
-    original.overall.visualStyle,
-    '',
-    '## 高价值片段',
-    ...original.overall.highValueSegmentIds.map((id) => `- ${id}`),
     '',
     '## 二创方向',
     ...original.overall.remixPotential.map((item) => `- ${item}`),
