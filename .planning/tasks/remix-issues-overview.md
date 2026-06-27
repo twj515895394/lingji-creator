@@ -25,6 +25,14 @@ graph TD
     I12["#12 Seedance Prompt 输出"]
     I13["#13 Variant 管理<br/>多版本与继续创作"]
     I14["#14 Source Asset 元数据<br/>人工标注持久化"]
+    
+    %% Remix Understanding V2
+    I15["#15 V2 状态与兜底修复"]
+    I16["#16 V2 台词校对核心"]
+    I17["#17 V2 新鲜度与局部重跑"]
+    I18["#18 V2 中文影视Prompt"]
+    I19["#19 V2 关键帧多模态"]
+    I20["#20 V2 Rollup与导出"]
 
     I0 --> I1
     I0 --> I2
@@ -51,6 +59,14 @@ graph TD
     I8 --> I14
     I10 --> I11
     I11 --> I12
+    
+    %% V2 Connections
+    I8 --> I15
+    I15 --> I16
+    I16 --> I17
+    I17 --> I18
+    I17 --> I20
+    I18 --> I19
 ```
 
 ## 并行执行建议
@@ -65,12 +81,16 @@ graph TD
 | Phase 2 补强 | #14 | #14 承接人工标注持久化与 Source Asset 元数据 |
 | Phase 4 | #11 | 依赖 #10 |
 | Phase 5 | #12 | 依赖 #11，且包含 Audio Plan 子结构 |
+| Remix V2 Phase 1 | #15 | 原片理解状态反馈与 Rollup 兜底修复，依赖 #8 |
+| Remix V2 Phase 2 | #16 → #17 | 台词校对持久化与前端展示，以及后续新鲜度过期机制 |
+| Remix V2 Phase 3 | #18 | 中文影视级 14 维度 Prompt 升级与复制 |
+| Remix V2 Phase 4 | #19 ‖ #20 | 关键帧多模态抽取（依赖 #18），以及 V2 Rollup 与 MD 导出（依赖 #17） |
 
 ---
 
 ## 详细 Issue 列表
 
-具体各 Issue 的“要构建什么”、“验收标准”、“Code Review 检查项”与“Test 验证步骤”等详细内容，请参阅各个子目录下的 `task_plan.md`：
+具体各 Issue 的“要构建什么”、“验收标准”、“Code Review 检查项”与“Test 验证步骤”等详细内容，请参阅各个子目录下的 `task_plan.md`（V1）或 `.scratch/remix-understanding-v2/issues/`（V2）：
 
 1. **Issue #0: 契约冻结** -> [.planning/tasks/remix-issue-00-contract-freeze/task_plan.md](file:///Users/tangwujun/Documents/trae_projects/lingji-creator/.planning/tasks/remix-issue-00-contract-freeze/task_plan.md)
 2. **Issue #1: IPC 契约** -> [.planning/tasks/remix-issue-01-ipc-contract/task_plan.md](file:///Users/tangwujun/Documents/trae_projects/lingji-creator/.planning/tasks/remix-issue-01-ipc-contract/task_plan.md)
@@ -87,3 +107,13 @@ graph TD
 13. **Issue #12: Seedance Prompt 输出** -> [.planning/tasks/remix-issue-12-seedance-prompt/task_plan.md](file:///Users/tangwujun/Documents/trae_projects/lingji-creator/.planning/tasks/remix-issue-12-seedance-prompt/task_plan.md)
 14. **Issue #13: Variant 管理闭环** -> [.planning/tasks/remix-issue-13-variant-management/task_plan.md](file:///Users/tangwujun/Documents/trae_projects/lingji-creator/.planning/tasks/remix-issue-13-variant-management/task_plan.md)
 15. **Issue #14: Source Asset 元数据闭环** -> [.planning/tasks/remix-issue-14-source-asset-metadata/task_plan.md](file:///Users/tangwujun/Documents/trae_projects/lingji-creator/.planning/tasks/remix-issue-14-source-asset-metadata/task_plan.md)
+
+### Remix Understanding V2 优化阶段
+
+16. **Issue #15: V2 状态与兜底修复** -> [.scratch/remix-understanding-v2/issues/01-status-fallback.md](file:///Users/tangwujun/Documents/trae_projects/lingji-creator/.scratch/remix-understanding-v2/issues/01-status-fallback.md)
+17. **Issue #16: V2 台词校对核心** -> [.scratch/remix-understanding-v2/issues/02-transcript-correction-core.md](file:///Users/tangwujun/Documents/trae_projects/lingji-creator/.scratch/remix-understanding-v2/issues/02-transcript-correction-core.md)
+18. **Issue #17: V2 新鲜度与局部重跑** -> [.scratch/remix-understanding-v2/issues/03-transcript-correction-stale-mechanism.md](file:///Users/tangwujun/Documents/trae_projects/lingji-creator/.scratch/remix-understanding-v2/issues/03-transcript-correction-stale-mechanism.md)
+19. **Issue #18: V2 中文影视Prompt** -> [.scratch/remix-understanding-v2/issues/04-chinese-prompt-v2.md](file:///Users/tangwujun/Documents/trae_projects/lingji-creator/.scratch/remix-understanding-v2/issues/04-chinese-prompt-v2.md)
+20. **Issue #19: V2 关键帧多模态** -> [.scratch/remix-understanding-v2/issues/05-keyframe-vision-multimodal.md](file:///Users/tangwujun/Documents/trae_projects/lingji-creator/.scratch/remix-understanding-v2/issues/05-keyframe-vision-multimodal.md)
+21. **Issue #20: V2 Rollup与导出** -> [.scratch/remix-understanding-v2/issues/06-rollup-v2-and-export.md](file:///Users/tangwujun/Documents/trae_projects/lingji-creator/.scratch/remix-understanding-v2/issues/06-rollup-v2-and-export.md)
+
