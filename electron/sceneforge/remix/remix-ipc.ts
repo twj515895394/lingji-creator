@@ -1,4 +1,4 @@
-import { ipcMain } from 'electron';
+import { app, ipcMain } from 'electron';
 import type {
   CreateSourceAssetFromImportInput,
   CreateVariantFromSourceAssetInput,
@@ -20,9 +20,14 @@ import type {
   SegmentKeyframeActionInput,
 } from './remix-ipc-types';
 import { RemixService } from './remix-service';
+import { loadRemixUnderstandingAISettings } from './remix-ai-settings';
 import { registerSceneForgeRemixSegmentClipIpc } from './segment-clips/segment-clip-ipc';
 
-const service = new RemixService();
+const service = new RemixService({
+  understandingServiceOptions: {
+    loadAISettings: async () => loadRemixUnderstandingAISettings(app.getPath('userData')),
+  },
+});
 
 export function registerSceneForgeRemixIpc(): void {
   registerSceneForgeRemixSegmentClipIpc();

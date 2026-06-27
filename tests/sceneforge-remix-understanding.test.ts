@@ -162,3 +162,20 @@ describe('SceneForge Remix understanding service', () => {
     expect(after.generatedAt).not.toBe(before.generatedAt);
   });
 });
+
+describe('loadRemixUnderstandingAISettings', () => {
+  it('returns null when global settings have no usable LLM', async () => {
+    const userData = await fs.mkdtemp(path.join(os.tmpdir(), 'remix-ai-settings-'));
+    await fs.mkdir(userData, { recursive: true });
+    await fs.writeFile(
+      path.join(userData, 'settings.json'),
+      JSON.stringify({ aiSettings: { llmProviders: [], llmBaseUrl: '', llmApiKey: '', llmModel: '' } }),
+      'utf8',
+    );
+    const { loadRemixUnderstandingAISettings } = await import('../electron/sceneforge/remix/remix-ai-settings');
+    const loaded = await loadRemixUnderstandingAISettings(userData);
+    expect(loaded).toBeNull();
+    await fs.rm(userData, { recursive: true, force: true });
+  });
+});
+
