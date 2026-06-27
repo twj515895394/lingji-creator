@@ -141,6 +141,10 @@ function buildMockUnderstandingWorkbench(
     confidence: 0.86,
     understandingPath: segment.analysisJsonPath ?? '',
     isPlaceholder: false,
+    transcriptCorrectionText: '',
+    transcriptCorrectionStatus: 'raw' as const,
+    effectiveTranscript: '对白摘要',
+    isStale: false,
   }));
   const hasSavedAnnotation =
     (asset.tags?.length ?? 0) > 0 ||
@@ -164,6 +168,8 @@ function buildMockUnderstandingWorkbench(
           suggestedTags: ['压迫节奏', '角色身份'],
           suggestedNote: '【AI 预填，请按真实观感修正】\n片段 01：保留 压迫节奏；可替换 角色身份。',
         },
+    rollupFallbackUsed: false,
+    storyStale: false,
   };
 }
 
@@ -314,6 +320,75 @@ export const remixMockApi: RemixIpcContract = {
   async getSourceUnderstandingWorkbench(input: RemixSourceAssetRefInput) {
     const snapshot = findProcessingSnapshot(input.sourceAssetId);
     return buildMockUnderstandingWorkbench(snapshot.sourceAsset);
+  },
+
+  async validateUnderstandingFreshness(input: RemixSourceAssetRefInput) {
+    return {
+      sourceAssetId: input.sourceAssetId,
+      isStale: false,
+      staleSegmentIds: [],
+      staleReasons: [],
+      segmentReports: [],
+      checkedAt: new Date().toISOString(),
+    };
+  },
+
+  async rerunStaleSegmentUnderstandings(input: RemixSourceAssetRefInput) {
+    const snapshot = findProcessingSnapshot(input.sourceAssetId);
+    setProcessingStage(snapshot, 'remix_understanding', 'approved');
+    return snapshot;
+  },
+
+  async getSegmentTranscriptCorrection(input: {
+    projectDir: string;
+    sourceAssetId: string;
+    segmentId: string;
+  }) {
+    return {
+      schema: 'sceneforge-remix-segment-transcript-correction' as const,
+      version: 1,
+      sourceAssetId: input.sourceAssetId,
+      segmentId: input.segmentId,
+      generatedAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+      inputRefs: {
+        sourceTranscriptPath: null,
+        segmentTranscriptPath: null,
+      },
+      transcript: {
+        asrText: 'Whisper 原始文本',
+        correctedText: '',
+        effectiveText: 'Whisper 原始文本',
+        correctionStatus: 'raw' as const,
+        language: 'zh-CN' as const,
+        notes: [],
+      },
+      dialogueLines: [],
+      quality: {
+        needsHumanReview: false,
+        warnings: [],
+      },
+    };
+  },
+
+  async updateSegmentTranscriptCorrection(input: {
+    projectDir: string;
+    sourceAssetId: string;
+    segmentId: string;
+    correctedText: string;
+    markConfirmed?: boolean;
+  }) {
+    const snapshot = findProcessingSnapshot(input.sourceAssetId);
+    const workbench = buildMockUnderstandingWorkbench(snapshot.sourceAsset);
+    const segment = workbench.segments.find((s) => s.segmentId === input.segmentId);
+    if (segment) {
+      segment.transcriptCorrectionText = input.correctedText;
+      segment.transcriptCorrectionStatus = input.markConfirmed ? 'confirmed' : 'edited';
+      segment.effectiveTranscript = input.correctedText;
+      segment.isStale = true;
+    }
+    workbench.storyStale = true;
+    return workbench;
   },
 
   async updateSourceSegments(input: UpdateSourceSegmentsInput) {

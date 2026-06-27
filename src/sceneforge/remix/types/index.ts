@@ -229,6 +229,7 @@ export interface SourceSegment {
   segmentAudioPath?: string | null;
   segmentAudioJsonPath?: string | null;
   segmentTranscriptJsonPath?: string | null;
+  transcriptCorrectionPath?: string | null;
   audioSkippedReason?: string | null;
 }
 

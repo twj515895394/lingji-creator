@@ -18,8 +18,10 @@ import {
   normalizeSegmentUnderstandingPayload,
   toGateSegmentUnderstandingItem,
   validateSegmentUnderstandingDocument,
+  buildSegmentUnderstandingInputHash,
   type RemixSegmentUnderstandingDocument,
 } from './remix-segment-understanding-schema';
+import type { RemixUnderstandingFreshnessReport } from './remix-ipc-types';
 import { RemixOriginalStoryRollupService } from './remix-original-story-rollup-service';
 
 export interface RemixUnderstandingServiceOptions {
@@ -225,6 +227,18 @@ export class RemixUnderstandingService {
         ? document.sourceAsset.segments[index + 1]
         : undefined;
     const transcript = await readSegmentTranscript(projectDir, segment);
+    if (transcript && segment.transcriptCorrectionPath?.trim()) {
+      try {
+        const correctionAbsPath = resolveProjectFile(projectDir, segment.transcriptCorrectionPath);
+        const correctionRaw = await fs.readFile(correctionAbsPath, 'utf8');
+        const correction = JSON.parse(correctionRaw);
+        if (correction?.transcript?.effectiveText) {
+          transcript.plainText = correction.transcript.effectiveText;
+        }
+      } catch {
+        // 读取失败则默默回退 ASR
+      }
+    }
     const generatedAt = new Date().toISOString();
     const payload = await this.generateForSegment(settings, {
       sourceAssetId: document.sourceAsset.id,
@@ -431,5 +445,95 @@ export class RemixUnderstandingService {
       throw new Error('未配置或加载 AI 设置失败，无法重新串联故事。请先前往设置配置您的模型。');
     }
     return this.rollupService.runStoryRollup(projectDir, sourceAssetId, settings);
+  }
+
+  async validateUnderstandingFreshness(
+    projectDir: string,
+    sourceAssetId: string,
+  ): Promise<RemixUnderstandingFreshnessReport> {
+    const document = await readStoredSourceAsset(projectDir, sourceAssetId);
+    const staleSegmentIds: string[] = [];
+    const staleReasons = new Set<RemixUnderstandingFreshnessReport['staleReasons'][number]>();
+    const segmentReports: RemixUnderstandingFreshnessReport['segmentReports'] = [];
+
+    for (const segment of document.sourceAsset.segments) {
+      let effectiveTranscript = '';
+      if (segment.segmentTranscriptJsonPath?.trim()) {
+        const transcriptDoc = await readSegmentTranscript(projectDir, segment);
+        effectiveTranscript = transcriptDoc?.plainText ?? '';
+      }
+      if (segment.transcriptCorrectionPath?.trim()) {
+        try {
+          const correctionAbsPath = resolveProjectFile(projectDir, segment.transcriptCorrectionPath);
+          const correctionRaw = await fs.readFile(correctionAbsPath, 'utf8');
+          const correction = JSON.parse(correctionRaw);
+          if (correction?.transcript?.effectiveText) {
+            effectiveTranscript = correction.transcript.effectiveText;
+          }
+        } catch {
+          // 读取失败默默忽略
+        }
+      }
+
+      const currentInputHash = buildSegmentUnderstandingInputHash({
+        segment,
+        transcript: { plainText: effectiveTranscript } as any,
+        keyframes: segment.keyframes,
+      });
+
+      const existing = await readExistingSegmentUnderstanding(projectDir, segment);
+      let isStale = false;
+      const segStaleReasons: string[] = [];
+      const previousInputHash = existing?.inputHash ?? null;
+
+      if (!existing) {
+        isStale = true;
+        segStaleReasons.push('missing_analysis');
+        staleReasons.add('missing_analysis');
+      } else {
+        if (previousInputHash !== currentInputHash) {
+          isStale = true;
+          segStaleReasons.push('transcript_correction_changed');
+          staleReasons.add('transcript_correction_changed');
+        }
+      }
+
+      if (isStale) {
+        staleSegmentIds.push(segment.id);
+      }
+
+      segmentReports.push({
+        segmentId: segment.id,
+        isStale,
+        staleReasons: segStaleReasons,
+        previousInputHash,
+        currentInputHash,
+      });
+    }
+
+    return {
+      sourceAssetId,
+      isStale: staleSegmentIds.length > 0,
+      staleSegmentIds,
+      staleReasons: Array.from(staleReasons),
+      segmentReports,
+      checkedAt: new Date().toISOString(),
+    };
+  }
+
+  async rerunStaleSegmentUnderstandings(
+    projectDir: string,
+    sourceAssetId: string,
+    options: { useCorrectedTranscript?: boolean } = {},
+  ): Promise<StoredSourceAssetDocument> {
+    const report = await this.validateUnderstandingFreshness(projectDir, sourceAssetId);
+    const targetSegmentIds = report.staleSegmentIds;
+    if (targetSegmentIds.length === 0) {
+      return readStoredSourceAsset(projectDir, sourceAssetId);
+    }
+    return this.runWithProgress(projectDir, sourceAssetId, {
+      segmentIds: targetSegmentIds,
+      concurrency: 1,
+    });
   }
 }

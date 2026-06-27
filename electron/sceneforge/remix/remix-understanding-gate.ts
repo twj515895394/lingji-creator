@@ -21,6 +21,7 @@ export interface RemixUnderstandingGateOverview {
   segmentRefs: RemixUnderstandingGateSegmentRef[];
   overall?: {
     summary?: string;
+    storyContent?: string;
     storyArc?: string;
     highValueSegmentIds?: string[];
   };
@@ -159,8 +160,8 @@ function validateRollupPayload(
     errors.push('全片理解 quality 计数不完整。');
   }
 
-  if (!overview.overall?.summary?.trim()) {
-    errors.push('全片理解缺少 overall 摘要。');
+  if (!overview.overall?.storyContent?.trim() && !overview.overall?.summary?.trim()) {
+    errors.push('全片理解缺少 overall 完整故事内容或摘要。');
   }
 
   if (!overview.originalUnderstandingPath?.trim()) {

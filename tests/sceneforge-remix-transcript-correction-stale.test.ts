@@ -1,0 +1,162 @@
+import { describe, expect, it, vi, beforeEach } from 'vitest';
+import fs from 'node:fs/promises';
+import {
+  RemixTranscriptCorrectionService,
+  getLevenshteinDistance,
+  evaluateTextChangeSeverity,
+} from '../electron/sceneforge/remix/remix-transcript-correction-service';
+
+vi.mock('node:fs/promises', () => {
+  return {
+    default: {
+      readFile: vi.fn(),
+      writeFile: vi.fn(),
+      mkdir: vi.fn(),
+    },
+  };
+});
+
+vi.mock('../electron/sceneforge/remix/remix-store', () => {
+  return {
+    readStoredSourceAsset: vi.fn(),
+    writeStoredSourceAsset: vi.fn(),
+  };
+});
+
+vi.mock('../electron/sceneforge/remix/remix-understanding-workbench', () => {
+  return {
+    loadRemixUnderstandingWorkbench: vi.fn(),
+  };
+});
+
+describe('Levenshtein and Severity Helpers', () => {
+  it('calculates correct Levenshtein distance', () => {
+    expect(getLevenshteinDistance('', '')).toBe(0);
+    expect(getLevenshteinDistance('abc', '')).toBe(3);
+    expect(getLevenshteinDistance('kitten', 'sitting')).toBe(3);
+    expect(getLevenshteinDistance('的地得', '的的的')).toBe(2);
+  });
+
+  it('evaluates text change severity correctly', () => {
+    // 1. 无感变更
+    expect(evaluateTextChangeSeverity('你好。', '你好！')).toBe('none');
+    expect(evaluateTextChangeSeverity('跑的快', '跑地快')).toBe('none');
+    expect(evaluateTextChangeSeverity('跑得快', '跑的快')).toBe('none');
+    expect(evaluateTextChangeSeverity('  你好 ', '你好')).toBe('none');
+
+    // 2. 一般变更 (少数字符修改，不满足 major 比例或绝对阈值)
+    expect(evaluateTextChangeSeverity('我们一起去爬山。', '我们一起去去山。')).toBe('minor');
+    expect(evaluateTextChangeSeverity('这是一只可爱的狸猫。', '这是一只特别可爱的狸猫。')).toBe('minor');
+
+    // 3. 剧烈修改 (大量字符修改)
+    expect(evaluateTextChangeSeverity('这是一只可爱的狸猫。', '今天天气非常不错我们一起去游乐园玩。')).toBe('major');
+    // 编辑距离 > 5 且变动比例 > 15%
+    expect(evaluateTextChangeSeverity('我喜欢吃苹果', '我不喜欢吃香蕉和西瓜了')).toBe('major');
+  });
+});
+
+describe('RemixTranscriptCorrectionService - Stale physical reset', () => {
+  let service: RemixTranscriptCorrectionService;
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    service = new RemixTranscriptCorrectionService();
+  });
+
+  it('does not reset analysis for minor text change', async () => {
+    // 模拟读取 correction.json (之前是 "ASR台词一号")
+    const mockCorrectionDoc = {
+      schema: 'sceneforge-remix-segment-transcript-correction',
+      transcript: {
+        asrText: 'ASR台词一号',
+        correctedText: 'ASR台词一号',
+        effectiveText: 'ASR台词一号',
+        correctionStatus: 'edited',
+      },
+      updatedAt: '2026-06-27T10:00:00.000Z',
+    };
+    vi.mocked(fs.readFile).mockResolvedValueOnce(JSON.stringify(mockCorrectionDoc)); // get correction
+
+    // 模拟 project store
+    const { readStoredSourceAsset } = await import('../electron/sceneforge/remix/remix-store');
+    const mockDoc = {
+      sourceAsset: {
+        id: 'asset-01',
+        segments: [{ id: 'seg-01', transcriptCorrectionPath: 'corr.json', analysisJsonPath: 'analysis.json' }]
+      }
+    };
+    vi.mocked(readStoredSourceAsset).mockResolvedValueOnce(mockDoc as any);
+
+    // 一般修改："ASR台词一号" -> "ASR台词二号"
+    await service.updateSegmentTranscriptCorrection(
+      '/project',
+      'asset-01',
+      'seg-01',
+      'ASR台词二号',
+      false
+    );
+
+    // 验证：fs.writeFile 应该只写了 correction.json（1次），不写 analysis.json
+    expect(fs.writeFile).toHaveBeenCalledTimes(1); 
+  });
+
+  it('resets analysis fields physically for major text change', async () => {
+    // 模拟读取 correction.json (之前是 "ASR台词一号")
+    const mockCorrectionDoc = {
+      schema: 'sceneforge-remix-segment-transcript-correction',
+      transcript: {
+        asrText: 'ASR台词一号',
+        correctedText: 'ASR台词一号',
+        effectiveText: 'ASR台词一号',
+        correctionStatus: 'edited',
+      },
+      updatedAt: '2026-06-27T10:00:00.000Z',
+    };
+    vi.mocked(fs.readFile).mockResolvedValueOnce(JSON.stringify(mockCorrectionDoc)); // get correction
+
+    // 模拟 project store
+    const { readStoredSourceAsset } = await import('../electron/sceneforge/remix/remix-store');
+    const mockDoc = {
+      sourceAsset: {
+        id: 'asset-01',
+        segments: [{ id: 'seg-01', transcriptCorrectionPath: 'corr.json', analysisJsonPath: 'analysis.json' }]
+      }
+    };
+    vi.mocked(readStoredSourceAsset).mockResolvedValueOnce(mockDoc as any);
+
+    // 模拟读取 analysis.json
+    const mockAnalysisDoc = {
+      schema: 'sceneforge-remix-segment-understanding',
+      segmentId: 'seg-01',
+      visual: { mainAction: '动作丰富' },
+      camera: { shotSize: '远景' },
+      videoPrompt: { positivePrompt: '正向提示' },
+    };
+    vi.mocked(fs.readFile).mockResolvedValueOnce(JSON.stringify(mockAnalysisDoc)); // read analysis
+
+    // 剧烈修改："ASR台词一号" -> "今天天气特别晴朗我们大家高高兴兴出去旅行"
+    await service.updateSegmentTranscriptCorrection(
+      '/project',
+      'asset-01',
+      'seg-01',
+      '今天天气特别晴朗我们大家高高兴兴出去旅行',
+      false
+    );
+
+    // 验证：fs.writeFile 应该写了 correction.json 和被重置后的 analysis.json（2次）
+    expect(fs.writeFile).toHaveBeenCalledTimes(2);
+
+    // 获取写入 analysis.json 的数据并断言
+    const analysisWriteCall = vi.mocked(fs.writeFile).mock.calls.find(call => 
+      String(call[0]).includes('analysis.json')
+    );
+    expect(analysisWriteCall).toBeDefined();
+    const resetDoc = JSON.parse(analysisWriteCall![1] as string);
+    expect(resetDoc.visual.mainAction).toBe('');
+    expect(resetDoc.camera.shotSize).toBe('');
+    expect(resetDoc.videoPrompt.positivePrompt).toBe('');
+    expect(resetDoc.quality.needsHumanReview).toBe(true);
+    expect(resetDoc.quality.missingInputs).toContain('transcript_correction_changed');
+    expect(resetDoc.generatedAt).toBe('');
+  });
+});

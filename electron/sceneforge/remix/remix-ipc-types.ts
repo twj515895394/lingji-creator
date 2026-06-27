@@ -17,6 +17,7 @@ import type {
   RetentionMatrix,
 } from '../../../src/sceneforge/remix/types';
 import type { RemixUnderstandingWorkbenchSnapshot } from './remix-understanding-workbench';
+import type { RemixSegmentTranscriptCorrectionDocument } from './remix-transcript-correction-service';
 
 export interface RemixSourceAssetRefInput {
   projectDir: string;
@@ -121,6 +122,30 @@ export interface ExportPromptBundleInput extends RemixVariantRefInput {
   outputPath?: string | null;
 }
 
+export interface RemixUnderstandingFreshnessReport {
+  sourceAssetId: string;
+  isStale: boolean;
+  staleSegmentIds: string[];
+  staleReasons: Array<
+    | 'segments_changed'
+    | 'keyframes_changed'
+    | 'transcript_changed'
+    | 'transcript_correction_changed'
+    | 'frame_vision_changed'
+    | 'prompt_version_changed'
+    | 'model_changed'
+    | 'missing_analysis'
+  >;
+  segmentReports: Array<{
+    segmentId: string;
+    isStale: boolean;
+    staleReasons: string[];
+    previousInputHash?: string | null;
+    currentInputHash: string;
+  }>;
+  checkedAt: string;
+}
+
 export interface RemixIpcContract {
   listSourceAssets(input: ListSourceAssetsInput): Promise<RemixAssetLibrarySnapshot>;
   getSourceAsset(input: RemixSourceAssetRefInput): Promise<RemixAssetProcessingSnapshot>;
@@ -151,6 +176,26 @@ export interface RemixIpcContract {
   getSourceUnderstandingWorkbench(
     input: RemixSourceAssetRefInput,
   ): Promise<RemixUnderstandingWorkbenchSnapshot>;
+  validateUnderstandingFreshness(
+    input: RemixSourceAssetRefInput,
+  ): Promise<RemixUnderstandingFreshnessReport>;
+  rerunStaleSegmentUnderstandings(input: {
+    projectDir: string;
+    sourceAssetId: string;
+    useCorrectedTranscript?: boolean;
+  }): Promise<RemixAssetProcessingSnapshot>;
+  getSegmentTranscriptCorrection(input: {
+    projectDir: string;
+    sourceAssetId: string;
+    segmentId: string;
+  }): Promise<RemixSegmentTranscriptCorrectionDocument | null>;
+  updateSegmentTranscriptCorrection(input: {
+    projectDir: string;
+    sourceAssetId: string;
+    segmentId: string;
+    correctedText: string;
+    markConfirmed?: boolean;
+  }): Promise<RemixUnderstandingWorkbenchSnapshot>;
   updateSourceSegments(input: UpdateSourceSegmentsInput): Promise<RemixAssetProcessingSnapshot>;
   getSegmentationDiagnostics(input: RemixSourceAssetRefInput): Promise<RemixSegmentationDiagnostics | null>;
   validateSourceAssetMedia(input: RemixSourceAssetRefInput): Promise<RemixSourceAssetMediaValidation>;

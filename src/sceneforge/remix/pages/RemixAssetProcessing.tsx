@@ -552,6 +552,44 @@ export function RemixAssetProcessing({
     );
   }
 
+  async function handleRerunStaleSegmentUnderstandings() {
+    if (!projectDir || !asset) {
+      return;
+    }
+    await runAction(
+      'understanding-rerun-stale',
+      'remix_understanding',
+      async () => {
+        const result = await resolveClient().rerunStaleSegmentUnderstandings({ projectDir, sourceAssetId: asset.id });
+        void refreshUnderstandingWorkbench(result.sourceAsset);
+        return result;
+      },
+      '正在重跑过期原片理解',
+    );
+  }
+
+  async function handleUpdateTranscriptCorrection(
+    segmentId: string,
+    correctedText: string,
+    markConfirmed?: boolean,
+  ) {
+    if (!projectDir || !asset) {
+      return;
+    }
+    try {
+      const nextWorkbench = await resolveClient().updateSegmentTranscriptCorrection({
+        projectDir,
+        sourceAssetId: asset.id,
+        segmentId,
+        correctedText,
+        markConfirmed,
+      });
+      setUnderstandingWorkbench(nextWorkbench);
+    } catch (error) {
+      setErrorMessage(error instanceof Error ? error.message : '保存台词失败');
+    }
+  }
+
   function reindexSegments(segments: SourceSegment[]): SourceSegment[] {
     return segments.map((segment, index) => ({
       ...segment,
@@ -1275,6 +1313,8 @@ export function RemixAssetProcessing({
             void handleRerunSegmentUnderstanding(segmentId);
           }}
           onRerunRollup={handleRerunOriginalStoryRollup}
+          onRerunStaleSegments={handleRerunStaleSegmentUnderstandings}
+          onUpdateTranscript={handleUpdateTranscriptCorrection}
         />
       </section>
     ),

@@ -11,8 +11,9 @@ import {
   type RemixUnderstandingGateSegmentItem,
 } from './remix-understanding-gate';
 import type { RemixOriginalUnderstandingDocument } from './remix-source-understanding-rollup';
-import type { RemixSegmentUnderstandingDocument } from './remix-segment-understanding-schema';
+import { buildSegmentUnderstandingInputHash, type RemixSegmentUnderstandingDocument } from './remix-segment-understanding-schema';
 import type { RemixSegmentTranscriptDocument } from './remix-transcript-types';
+import type { RemixSegmentTranscriptCorrectionDocument } from './remix-transcript-correction-service';
 import { resolveProjectFile } from './remix-validators';
 
 export interface RemixUnderstandingWorkbenchSegmentCard {
@@ -32,6 +33,11 @@ export interface RemixUnderstandingWorkbenchSegmentCard {
   confidence: number | null;
   understandingPath: string;
   isPlaceholder: boolean;
+
+  transcriptCorrectionText: string;
+  transcriptCorrectionStatus: 'raw' | 'edited' | 'confirmed';
+  effectiveTranscript: string;
+  isStale: boolean;
 }
 
 export interface RemixUnderstandingAnnotationPrefill {
@@ -53,6 +59,7 @@ export interface RemixUnderstandingWorkbenchSnapshot {
   segments: RemixUnderstandingWorkbenchSegmentCard[];
   annotationPrefill: RemixUnderstandingAnnotationPrefill | null;
   rollupFallbackUsed: boolean;
+  storyStale: boolean;
 }
 
 async function readJson<T>(absPath: string): Promise<T | null> {
@@ -140,6 +147,8 @@ export async function loadRemixUnderstandingWorkbench(
     : [];
 
   const cards: RemixUnderstandingWorkbenchSegmentCard[] = [];
+  const correctionUpdatedTimes: number[] = [];
+
   for (const segment of asset.segments) {
     const relPath =
       segment.analysisJsonPath?.trim() ||
@@ -155,6 +164,49 @@ export async function loadRemixUnderstandingWorkbench(
       transcriptSummary = transcript?.plainText?.trim() ?? '';
     }
 
+    let transcriptCorrectionText = '';
+    let transcriptCorrectionStatus: 'raw' | 'edited' | 'confirmed' = 'raw';
+    let effectiveTranscript = transcriptSummary;
+    let isStale = false;
+    let correctionUpdatedAt = '';
+
+    if (segment.transcriptCorrectionPath?.trim()) {
+      const correction = await readJson<RemixSegmentTranscriptCorrectionDocument>(
+        resolveProjectFile(projectDir, segment.transcriptCorrectionPath),
+      );
+      if (correction) {
+        transcriptCorrectionText = correction.transcript.correctedText ?? '';
+        transcriptCorrectionStatus = correction.transcript.correctionStatus ?? 'raw';
+        effectiveTranscript = correction.transcript.effectiveText || transcriptSummary;
+        correctionUpdatedAt = correction.updatedAt ?? '';
+        if (correctionUpdatedAt && transcriptCorrectionStatus !== 'raw') {
+          const t = new Date(correctionUpdatedAt).getTime();
+          if (!isNaN(t)) {
+            correctionUpdatedTimes.push(t);
+          }
+        }
+      }
+    }
+
+    const currentHash = buildSegmentUnderstandingInputHash({
+      segment,
+      transcript: { plainText: effectiveTranscript } as any,
+      keyframes: segment.keyframes,
+    });
+
+    if (understanding) {
+      const storedHash = understanding.inputHash;
+      if (storedHash && storedHash !== currentHash) {
+        isStale = true;
+      } else if (correctionUpdatedAt && transcriptCorrectionStatus !== 'raw') {
+        const correctionTime = new Date(correctionUpdatedAt).getTime();
+        const understandingTime = new Date(understanding.generatedAt).getTime();
+        if (!isNaN(correctionTime) && !isNaN(understandingTime)) {
+          isStale = correctionTime > understandingTime;
+        }
+      }
+    }
+
     const gateItem = gateItems.find((item) => item.segmentId === segment.id) ?? null;
     const placeholder =
       !understanding ||
@@ -168,7 +220,7 @@ export async function loadRemixUnderstandingWorkbench(
         title: segment.title,
         timeRangeLabel: formatTimeRange(segment.timeRange.startMs, segment.timeRange.endMs),
         thumbnailPath: pickThumbnail(segment),
-        transcriptSummary: transcriptSummary || '（无台词）',
+        transcriptSummary: effectiveTranscript || '（无台词）',
         mainAction: '待生成',
         shotSummary: '待生成',
         plotFunction: '待生成',
@@ -179,6 +231,10 @@ export async function loadRemixUnderstandingWorkbench(
         confidence: null,
         understandingPath: relPath,
         isPlaceholder: true,
+        transcriptCorrectionText,
+        transcriptCorrectionStatus,
+        effectiveTranscript,
+        isStale: false,
       });
       continue;
     }
@@ -189,7 +245,7 @@ export async function loadRemixUnderstandingWorkbench(
       title: segment.title,
       timeRangeLabel: formatTimeRange(segment.timeRange.startMs, segment.timeRange.endMs),
       thumbnailPath: pickThumbnail(segment),
-      transcriptSummary: transcriptSummary || understanding.audio.speechSummary,
+      transcriptSummary: effectiveTranscript || understanding.audio.speechSummary,
       mainAction: understanding.visual.mainAction,
       shotSummary: `${understanding.camera.shotSize} / ${understanding.camera.movement}`,
       plotFunction: understanding.story.plotFunction,
@@ -200,6 +256,10 @@ export async function loadRemixUnderstandingWorkbench(
       confidence: understanding.quality.confidence ?? null,
       understandingPath: relPath,
       isPlaceholder: placeholder,
+      transcriptCorrectionText,
+      transcriptCorrectionStatus,
+      effectiveTranscript,
+      isStale,
     });
   }
 
@@ -229,6 +289,18 @@ export async function loadRemixUnderstandingWorkbench(
 
   const overviewSummary = rollupFallbackUsed ? '' : rawStoryContent;
 
+  const hasAnySegmentStale = cards.some((card) => card.isStale);
+  let storyStale = hasAnySegmentStale;
+  if (!storyStale && original?.generatedAt && correctionUpdatedTimes.length > 0) {
+    const originalTime = new Date(original.generatedAt).getTime();
+    if (!isNaN(originalTime)) {
+      const maxCorrectionTime = Math.max(...correctionUpdatedTimes);
+      if (maxCorrectionTime > originalTime) {
+        storyStale = true;
+      }
+    }
+  }
+
   return {
     ready: understoodSegmentCount === asset.segments.length && !isPlaceholderUnderstandingOverview(overview),
     isPlaceholder,
@@ -243,5 +315,6 @@ export async function loadRemixUnderstandingWorkbench(
     segments: cards,
     annotationPrefill: buildAnnotationPrefillFromUnderstanding(asset, cards.filter((c) => !c.isPlaceholder)),
     rollupFallbackUsed,
+    storyStale,
   };
 }

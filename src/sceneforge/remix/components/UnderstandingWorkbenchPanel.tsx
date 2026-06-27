@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { Button } from '../../../ui';
 import type { RemixUnderstandingWorkbenchSnapshot } from '../../../../electron/sceneforge/remix/remix-understanding-workbench';
 import styles from './RemixWorkspacePanels.module.css';
@@ -11,6 +12,12 @@ interface UnderstandingWorkbenchPanelProps {
   onCopyPrompt: (segmentId: string, text: string) => void;
   onRerunSegment: (segmentId: string) => void;
   onRerunRollup?: () => void;
+  onRerunStaleSegments?: () => void;
+  onUpdateTranscript?: (
+    segmentId: string,
+    correctedText: string,
+    markConfirmed?: boolean,
+  ) => Promise<void>;
 }
 
 export function UnderstandingWorkbenchPanel({
@@ -22,7 +29,42 @@ export function UnderstandingWorkbenchPanel({
   onCopyPrompt,
   onRerunSegment,
   onRerunRollup,
+  onRerunStaleSegments,
+  onUpdateTranscript,
 }: UnderstandingWorkbenchPanelProps) {
+  const [expandedCardIds, setExpandedCardIds] = useState<Record<string, boolean>>({});
+  const [editingSegmentId, setEditingSegmentId] = useState<string | null>(null);
+  const [editingText, setEditingText] = useState('');
+
+  const toggleExpand = (segmentId: string) => {
+    setExpandedCardIds((prev) => ({
+      ...prev,
+      [segmentId]: !prev[segmentId],
+    }));
+  };
+
+  const startEditing = (segmentId: string, currentText: string) => {
+    setEditingSegmentId(segmentId);
+    setEditingText(currentText);
+    setExpandedCardIds((prev) => ({
+      ...prev,
+      [segmentId]: true,
+    }));
+  };
+
+  const handleSave = async (segmentId: string, markConfirmed = false) => {
+    if (onUpdateTranscript) {
+      await onUpdateTranscript(segmentId, editingText, markConfirmed);
+    }
+    setEditingSegmentId(null);
+  };
+
+  const handleConfirmDirect = async (segmentId: string, currentText: string) => {
+    if (onUpdateTranscript) {
+      await onUpdateTranscript(segmentId, currentText, true);
+    }
+  };
+
   if (loading) {
     return <p className={styles.copyFeedback}>正在加载理解结果…</p>;
   }
@@ -44,8 +86,90 @@ export function UnderstandingWorkbenchPanel({
     );
   }
 
+  // 计算 ASR 状态徽标样式
+  const getBadgeStyle = (status: 'raw' | 'edited' | 'confirmed') => {
+    const base = {
+      fontSize: '11px',
+      padding: '2px 8px',
+      borderRadius: '4px',
+      fontWeight: 500,
+    };
+    if (status === 'confirmed') {
+      return {
+        ...base,
+        border: '1px solid rgba(34, 197, 94, 0.3)',
+        background: 'rgba(34, 197, 94, 0.08)',
+        color: '#4ade80',
+      };
+    }
+    if (status === 'edited') {
+      return {
+        ...base,
+        border: '1px solid rgba(59, 130, 246, 0.3)',
+        background: 'rgba(59, 130, 246, 0.08)',
+        color: '#60a5fa',
+      };
+    }
+    return {
+      ...base,
+      border: '1px solid rgba(255, 255, 255, 0.12)',
+      background: 'rgba(255, 255, 255, 0.04)',
+      color: 'rgba(255, 255, 255, 0.5)',
+    };
+  };
+
+  const getStatusLabel = (status: 'raw' | 'edited' | 'confirmed') => {
+    if (status === 'confirmed') return '已确认台词';
+    if (status === 'edited') return '已校对台词';
+    return 'ASR 识别';
+  };
+
   return (
     <div className={styles.stack} data-testid="remix-understanding-workbench">
+      {workbench.storyStale && (
+        <div
+          style={{
+            border: '1px solid var(--color-warning-border, #f97316)',
+            background: 'rgba(249, 115, 22, 0.06)',
+            padding: '12px 16px',
+            borderRadius: '8px',
+            fontSize: '13px',
+            color: '#fb923c',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            gap: '12px',
+          }}
+        >
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+            <span>⚠️ 局部片段台词已校对更新，当前全片故事串联已过期，建议重跑以刷新汇总。</span>
+            {workbench.segments.some((s) => s.isStale) && (
+              <span style={{ fontSize: '12px', opacity: 0.85 }}>检测到有过期的局部理解段，您可以先一键重跑它们。</span>
+            )}
+          </div>
+          <div style={{ display: 'flex', gap: '8px', flexShrink: 0 }}>
+            {workbench.segments.some((s) => s.isStale) && onRerunStaleSegments && (
+              <Button
+                variant="secondary"
+                size="sm"
+                disabled={disabled}
+                onClick={onRerunStaleSegments}
+              >
+                只重跑过期片段
+              </Button>
+            )}
+            <Button
+              variant="accent"
+              size="sm"
+              disabled={disabled}
+              onClick={onRerunRollup}
+            >
+              重跑全片故事
+            </Button>
+          </div>
+        </div>
+      )}
+
       {workbench.rollupFallbackUsed ? (
         <section
           className={styles.overviewSummary}
@@ -96,44 +220,243 @@ export function UnderstandingWorkbenchPanel({
       )}
 
       <section className={styles.segmentAnalysisList}>
-        {workbench.segments.map((segment) => (
-          <article key={segment.segmentId} className={styles.segmentAnalysisCard} data-testid={`remix-understanding-card-${segment.segmentId}`}>
-            <div className={styles.segmentAnalysisHeader}>
-              <div className={styles.segmentAnalysisTitle}>
-                {String(segment.segmentIndex).padStart(2, '0')} · {segment.title}
+        {workbench.segments.map((segment) => {
+          const isExpanded = expandedCardIds[segment.segmentId] ?? segment.isStale;
+          const isEditing = editingSegmentId === segment.segmentId;
+          const cardStyle = segment.isStale
+            ? (!segment.mainAction && !segment.positivePrompt)
+              ? {
+                  border: '1px solid rgba(239, 68, 68, 0.3)',
+                  background: 'rgba(239, 68, 68, 0.01)',
+                  opacity: 0.8,
+                }
+              : {
+                  border: '1px solid rgba(249, 115, 22, 0.35)',
+                  background: 'rgba(249, 115, 22, 0.02)',
+                }
+            : undefined;
+
+          return (
+            <article
+              key={segment.segmentId}
+              className={styles.segmentAnalysisCard}
+              style={cardStyle}
+              data-testid={`remix-understanding-card-${segment.segmentId}`}
+            >
+              <div
+                className={styles.segmentAnalysisHeader}
+                style={{ cursor: 'pointer' }}
+                onClick={() => toggleExpand(segment.segmentId)}
+              >
+                <div
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                    width: '100%',
+                  }}
+                >
+                  <div className={styles.segmentAnalysisTitle}>
+                    {String(segment.segmentIndex).padStart(2, '0')} · {segment.title}
+                  </div>
+                  <div
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '8px',
+                    }}
+                    onClick={(e) => e.stopPropagation()} // 防止徽标及 Chevron 点击穿透
+                  >
+                    <span style={getBadgeStyle(segment.transcriptCorrectionStatus)}>
+                      {getStatusLabel(segment.transcriptCorrectionStatus)}
+                    </span>
+                    <span className={styles.segmentAnalysisMeta}>{segment.timeRangeLabel}</span>
+                    <span
+                      style={{
+                        fontSize: '12px',
+                        transform: isExpanded ? 'rotate(90deg)' : 'rotate(0deg)',
+                        transition: 'transform 0.15s ease',
+                        cursor: 'pointer',
+                        padding: '4px',
+                        color: 'rgba(255, 255, 255, 0.4)',
+                      }}
+                      onClick={() => toggleExpand(segment.segmentId)}
+                    >
+                      ▶
+                    </span>
+                  </div>
+                </div>
               </div>
-              <div className={styles.segmentAnalysisMeta}>{segment.timeRangeLabel}</div>
-            </div>
-            <div className={styles.segmentAnalysisFacts}>
-              <span className={styles.segmentAnalysisFact}>动作：{segment.mainAction}</span>
-              <span className={styles.segmentAnalysisFact}>镜头：{segment.shotSummary}</span>
-              <span className={styles.segmentAnalysisFact}>台词：{segment.transcriptSummary}</span>
-            </div>
-            <div className={styles.segmentAnalysisNote}>剧情功能：{segment.plotFunction}</div>
-            <div className={styles.segmentAnalysisNote}>正向 prompt：{segment.positivePrompt}</div>
-            <div className={styles.copyRow}>
-              <Button
-                variant="outline"
-                size="sm"
-                disabled={disabled || !segment.positivePrompt}
-                onClick={() => onCopyPrompt(segment.segmentId, segment.positivePrompt)}
+
+              {segment.isStale && (
+                <div
+                  style={{
+                    color: (!segment.mainAction && !segment.positivePrompt) ? '#ef4444' : '#fb923c',
+                    fontSize: '12px',
+                    background: (!segment.mainAction && !segment.positivePrompt) ? 'rgba(239, 68, 68, 0.08)' : 'rgba(249, 115, 22, 0.08)',
+                    padding: '6px 12px',
+                    borderRadius: '6px',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '6px',
+                  }}
+                >
+                  <span>
+                    {!segment.mainAction && !segment.positivePrompt
+                      ? '⚠️ 台词发生剧烈修改，本段大模型分析已失效置空，请立即重跑理解。'
+                      : '⚠️ 台词已被修改，本段大模型分析已过期，建议重跑本段理解。'}
+                  </span>
+                </div>
+              )}
+
+              <div className={styles.segmentAnalysisFacts}>
+                <span className={styles.segmentAnalysisFact}>动作：{segment.mainAction || '已失效，请重跑'}</span>
+                <span className={styles.segmentAnalysisFact}>镜头：{segment.shotSummary || '已失效，请重跑'}</span>
+              </div>
+
+              {/* 台词编辑区域 */}
+              <div
+                style={{
+                  background: 'rgba(255, 255, 255, 0.02)',
+                  border: '1px solid rgba(255, 255, 255, 0.05)',
+                  borderRadius: '8px',
+                  padding: '10px 12px',
+                  display: 'flex',
+                  flexDirection: 'column',
+                  gap: '8px',
+                }}
               >
-                复制 video prompt
-              </Button>
-              <Button
-                variant="ghost"
-                size="sm"
-                disabled={disabled || pendingSegmentId === segment.segmentId}
-                onClick={() => onRerunSegment(segment.segmentId)}
-              >
-                {pendingSegmentId === segment.segmentId ? '重跑中…' : '重跑本段'}
-              </Button>
-              {copiedSegmentId === segment.segmentId ? (
-                <span className={styles.copyFeedback}>已复制</span>
-              ) : null}
-            </div>
-          </article>
-        ))}
+                <div
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                  }}
+                >
+                  <span style={{ fontSize: '11px', color: 'rgba(255, 255, 255, 0.4)' }}>片段台词</span>
+                  {!isEditing && (
+                    <div style={{ display: 'flex', gap: '8px' }}>
+                      <Button
+                        variant="ghost"
+                        size="xs"
+                        onClick={() => startEditing(segment.segmentId, segment.transcriptCorrectionText || segment.transcriptSummary)}
+                      >
+                        编辑台词
+                      </Button>
+                      {segment.transcriptCorrectionStatus !== 'confirmed' && (
+                        <Button
+                          variant="ghost"
+                          size="xs"
+                          onClick={() => handleConfirmDirect(segment.segmentId, segment.transcriptCorrectionText || segment.transcriptSummary)}
+                          style={{ color: '#4ade80' }}
+                        >
+                          确认无误
+                        </Button>
+                      )}
+                    </div>
+                  )}
+                </div>
+
+                {isEditing ? (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                    <textarea
+                      value={editingText}
+                      onChange={(e) => setEditingText(e.target.value)}
+                      rows={2}
+                      style={{
+                        width: '100%',
+                        background: '#0a0d14',
+                        border: '1px solid rgba(255, 255, 255, 0.15)',
+                        borderRadius: '6px',
+                        padding: '6px 8px',
+                        color: 'rgba(255, 248, 235, 0.9)',
+                        fontSize: '13px',
+                        outline: 'none',
+                        resize: 'vertical',
+                      }}
+                      autoFocus
+                    />
+                    <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '8px' }}>
+                      <Button
+                        variant="ghost"
+                        size="xs"
+                        onClick={() => setEditingSegmentId(null)}
+                      >
+                        取消
+                      </Button>
+                      <Button
+                        variant="accent"
+                        size="xs"
+                        onClick={() => handleSave(segment.segmentId, false)}
+                      >
+                        保存
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="xs"
+                        onClick={() => handleSave(segment.segmentId, true)}
+                        style={{ color: '#4ade80', border: '1px solid rgba(34, 197, 94, 0.2)' }}
+                      >
+                        保存并确认
+                      </Button>
+                    </div>
+                  </div>
+                ) : (
+                  <div
+                    onDoubleClick={() => startEditing(segment.segmentId, segment.transcriptCorrectionText || segment.transcriptSummary)}
+                    style={{
+                      fontSize: '13px',
+                      color: 'rgba(255, 248, 235, 0.85)',
+                      lineHeight: '1.5',
+                      minHeight: '20px',
+                      cursor: 'pointer',
+                    }}
+                    title="双击进行编辑"
+                  >
+                    {segment.transcriptCorrectionText || segment.transcriptSummary || '（无台词）'}
+                  </div>
+                )}
+              </div>
+
+              {isExpanded && (
+                <div
+                  style={{
+                    display: 'flex',
+                    flexDirection: 'column',
+                    gap: '8px',
+                    borderTop: '1px solid rgba(255, 255, 255, 0.04)',
+                    paddingTop: '8px',
+                  }}
+                >
+                  <div className={styles.segmentAnalysisNote}>剧情功能：{segment.plotFunction || '已失效，请重跑'}</div>
+                  <div className={styles.segmentAnalysisNote}>正向 prompt：{segment.positivePrompt || '已失效，请重跑'}</div>
+                </div>
+              )}
+
+              <div className={styles.copyRow}>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  disabled={disabled || !segment.positivePrompt}
+                  onClick={() => onCopyPrompt(segment.segmentId, segment.positivePrompt)}
+                >
+                  复制 video prompt
+                </Button>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  disabled={disabled || pendingSegmentId === segment.segmentId}
+                  onClick={() => onRerunSegment(segment.segmentId)}
+                >
+                  {pendingSegmentId === segment.segmentId ? '重跑中…' : '重跑本段'}
+                </Button>
+                {copiedSegmentId === segment.segmentId ? (
+                  <span className={styles.copyFeedback}>已复制</span>
+                ) : null}
+              </div>
+            </article>
+          );
+        })}
       </section>
     </div>
   );

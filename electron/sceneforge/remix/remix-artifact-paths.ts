@@ -146,6 +146,9 @@ export function getRemixSourceTranscriptMarkdownPath(sourceAssetId: string): str
 export function getRemixSegmentTranscriptJsonPath(sourceAssetId: string, segmentId: string): string {
   return joinRemixPath(getRemixSegmentDir(sourceAssetId, segmentId), 'transcripts', 'segment_transcript.json');
 }
+export function getRemixSegmentTranscriptCorrectionJsonPath(sourceAssetId: string, segmentId: string): string {
+  return joinRemixPath(getRemixSegmentDir(sourceAssetId, segmentId), 'transcripts', 'segment_transcript_correction.json');
+}
 export function getRemixSegmentUnderstandingJsonPath(sourceAssetId: string, segmentId: string): string {
   return joinRemixPath(getRemixSegmentDir(sourceAssetId, segmentId), 'segment_understanding.json');
 }

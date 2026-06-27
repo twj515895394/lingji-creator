@@ -58,6 +58,7 @@ import { markRemixUnderstandingStale } from './remix-understanding-gate';
 import { assertPublishReady } from './remix-validators';
 import { loadRemixUnderstandingWorkbench } from './remix-understanding-workbench';
 import { RemixUnderstandingOrchestrator } from './remix-understanding-orchestrator';
+import { RemixTranscriptCorrectionService } from './remix-transcript-correction-service';
 
 export interface RemixServiceOptions extends RemixSourceAssetServiceOptions {
   transcriptService?: RemixTranscriptService;
@@ -94,6 +95,7 @@ export class RemixService {
   private readonly seedancePromptService;
 
   private readonly understandingOrchestrator: RemixUnderstandingOrchestrator;
+  private readonly transcriptCorrectionService: RemixTranscriptCorrectionService;
 
   constructor(options: RemixServiceOptions = {}) {
     this.sourceAssetService = new RemixSourceAssetService(options);
@@ -115,6 +117,7 @@ export class RemixService {
       understandingService: this.understandingService,
       understandingConcurrency: options.understandingConcurrency ?? 2,
     });
+    this.transcriptCorrectionService = new RemixTranscriptCorrectionService();
   }
 
   private withCompleteSegmentBoundary(segment: SourceSegment): SourceSegment {
@@ -346,9 +349,50 @@ export class RemixService {
     );
   }
 
+  async validateUnderstandingFreshness(input: RemixSourceAssetRefInput) {
+    return this.understandingService.validateUnderstandingFreshness(input.projectDir, input.sourceAssetId);
+  }
+
+  async rerunStaleSegmentUnderstandings(input: RemixSourceAssetRefInput) {
+    return this.runProcessingStage(
+      input,
+      'remix_understanding',
+      () => this.understandingService.rerunStaleSegmentUnderstandings(input.projectDir, input.sourceAssetId),
+      '只重跑过期原片理解任务',
+    );
+  }
+
   async getSourceUnderstandingWorkbench(input: RemixSourceAssetRefInput) {
     const document = await readStoredSourceAsset(input.projectDir, input.sourceAssetId);
     return loadRemixUnderstandingWorkbench(input.projectDir, document.sourceAsset);
+  }
+
+  async getSegmentTranscriptCorrection(input: {
+    projectDir: string;
+    sourceAssetId: string;
+    segmentId: string;
+  }) {
+    return this.transcriptCorrectionService.getSegmentTranscriptCorrection(
+      input.projectDir,
+      input.sourceAssetId,
+      input.segmentId,
+    );
+  }
+
+  async updateSegmentTranscriptCorrection(input: {
+    projectDir: string;
+    sourceAssetId: string;
+    segmentId: string;
+    correctedText: string;
+    markConfirmed?: boolean;
+  }) {
+    return this.transcriptCorrectionService.updateSegmentTranscriptCorrection(
+      input.projectDir,
+      input.sourceAssetId,
+      input.segmentId,
+      input.correctedText,
+      input.markConfirmed,
+    );
   }
 
   private async patchUnderstandingJob(

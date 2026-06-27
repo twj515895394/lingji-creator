@@ -135,6 +135,43 @@ export function registerSceneForgeRemixIpc(): void {
   );
 
   ipcMain.handle(
+    'sceneForgeRemix:validateUnderstandingFreshness',
+    async (_event, input: RemixSourceAssetRefInput) => {
+      return service.validateUnderstandingFreshness(input);
+    },
+  );
+
+  ipcMain.handle(
+    'sceneForgeRemix:rerunStaleSegmentUnderstandings',
+    async (_event, input: RemixSourceAssetRefInput) => {
+      return service.rerunStaleSegmentUnderstandings(input);
+    },
+  );
+
+  ipcMain.handle(
+    'sceneForgeRemix:getSegmentTranscriptCorrection',
+    async (_event, input: { projectDir: string; sourceAssetId: string; segmentId: string }) => {
+      return service.getSegmentTranscriptCorrection(input);
+    },
+  );
+
+  ipcMain.handle(
+    'sceneForgeRemix:updateSegmentTranscriptCorrection',
+    async (
+      _event,
+      input: {
+        projectDir: string;
+        sourceAssetId: string;
+        segmentId: string;
+        correctedText: string;
+        markConfirmed?: boolean;
+      },
+    ) => {
+      return service.updateSegmentTranscriptCorrection(input);
+    },
+  );
+
+  ipcMain.handle(
     'sceneForgeRemix:updateSourceSegments',
     async (_event, input: UpdateSourceSegmentsInput) => {
       return service.updateSourceSegments(input);

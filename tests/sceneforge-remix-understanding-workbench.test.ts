@@ -164,4 +164,58 @@ describe('SceneForge Remix understanding workbench', () => {
     // rollupFallbackUsed 为 true 时，内容必须为空
     expect(snapshot.overviewSummary).toBe('');
   });
+
+  it('correctly calculates isStale and storyStale based on modification times', async () => {
+    const mockAsset = {
+      ...asset,
+      segments: [
+        {
+          id: 'segment-001',
+          index: 1,
+          title: '片段 01',
+          timeRange: { startMs: 0, endMs: 10000 },
+          keyframes: [],
+          analysisJsonPath: 'segment-001-understanding.json',
+          transcriptCorrectionPath: 'segment-001-correction.json',
+          segmentTranscriptJsonPath: 'segment-001-transcript.json',
+        },
+      ],
+    };
+
+    vi.spyOn(fs, 'readFile').mockImplementation(async (path: any) => {
+      if (path.includes('source_overview.json') || path.includes('original_understanding.json')) {
+        throw new Error('Not found');
+      }
+      if (path.includes('segment-001-understanding.json')) {
+        return JSON.stringify({
+          segmentId: 'segment-001',
+          generatedAt: '2026-06-27T10:00:00.000Z',
+          visual: { mainAction: '测试动作' },
+          camera: { shotSize: '中景', movement: '固定' },
+          story: { plotFunction: '铺垫' },
+          audio: { speechSummary: '测试台词' },
+          videoPrompt: { positivePrompt: '测试prompt' },
+          remix: { keepElements: ['铺垫'], replaceableElements: [] },
+          quality: { confidence: 0.9 },
+        });
+      }
+      if (path.includes('segment-001-correction.json')) {
+        return JSON.stringify({
+          updatedAt: '2026-06-27T11:00:00.000Z',
+          transcript: {
+            asrText: '原始台词',
+            correctedText: '已修改台词',
+            effectiveText: '已修改台词',
+            correctionStatus: 'edited',
+          },
+        });
+      }
+      return '{}';
+    });
+
+    const snapshot = await loadRemixUnderstandingWorkbench('/mock-project', mockAsset as any);
+
+    expect(snapshot.segments[0].isStale).toBe(true);
+    expect(snapshot.storyStale).toBe(true);
+  });
 });

@@ -505,6 +505,18 @@ export interface ElectronAPI {
     getSourceUnderstandingWorkbench: (
       input: RemixSourceAssetRefInput,
     ) => Promise<import('../../electron/sceneforge/remix/remix-understanding-workbench').RemixUnderstandingWorkbenchSnapshot>;
+    getSegmentTranscriptCorrection: (input: {
+      projectDir: string;
+      sourceAssetId: string;
+      segmentId: string;
+    }) => Promise<import('../../electron/sceneforge/remix/remix-transcript-correction-service').RemixSegmentTranscriptCorrectionDocument | null>;
+    updateSegmentTranscriptCorrection: (input: {
+      projectDir: string;
+      sourceAssetId: string;
+      segmentId: string;
+      correctedText: string;
+      markConfirmed?: boolean;
+    }) => Promise<import('../../electron/sceneforge/remix/remix-understanding-workbench').RemixUnderstandingWorkbenchSnapshot>;
     updateSourceSegments: (
       input: UpdateSourceSegmentsInput,
     ) => Promise<RemixAssetProcessingSnapshot>;

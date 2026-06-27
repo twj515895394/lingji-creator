@@ -96,7 +96,7 @@ describe('SceneForge Remix understanding service', () => {
     expect(overview.originalUnderstandingPath).toBe(
       getRemixOriginalUnderstandingJsonPath(imported.sourceAsset.id),
     );
-    expect(overview.overall.summary).toContain('段');
+    expect(overview.overall.storyContent).toContain('段');
     const original = JSON.parse(
       await fs.readFile(
         path.join(projectDir, getRemixOriginalUnderstandingJsonPath(imported.sourceAsset.id)),

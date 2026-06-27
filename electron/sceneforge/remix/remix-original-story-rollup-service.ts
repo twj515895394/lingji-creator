@@ -21,6 +21,7 @@ import {
   toGateSegmentUnderstandingItem,
   type RemixSegmentUnderstandingDocument,
 } from './remix-segment-understanding-schema';
+import { buildRemixUnderstandingInputFingerprint } from './remix-understanding-gate';
 import type {
   RemixUnderstandingGateSegmentItem,
 } from './remix-understanding-gate';
@@ -247,11 +248,11 @@ ${segmentLines}
       errors,
     });
 
-    const mockHash = { segments: 'stale-override', keyframes: 'stale-override' };
+    const realHash = buildRemixUnderstandingInputFingerprint(document);
     const overviewIndex = buildSourceOverviewIndexDocument({
       original: originalUnderstanding,
       originalUnderstandingPath: originalUnderstandingRel,
-      inputHash: mockHash, // 暂用占位哈希，在 Issue #17 Freshness 校验时做高精哈希计算
+      inputHash: realHash,
       partialFailures: failures,
     });
 
