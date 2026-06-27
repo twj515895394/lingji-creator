@@ -1,7 +1,9 @@
 # SceneForge Remix Mode — Issues 拆解
 
-> 源文档：[开发实施计划](file:///Users/tangwujun/Documents/trae_projects/lingji-creator/docs/sceneforge2.0/2026-06-22-sceneforge-remix-mode-development-plan.md)
-> 拆解策略：**垂直切片（tracer bullet）**，每个 Issue 贯穿类型→后端→前端→测试全部层
+> 源文档：[开发实施计划](file:///Users/tangwujun/Documents/trae_projects/lingji-creator/docs/sceneforge2.0/2026-06-22-sceneforge-remix-mode-development-plan.md)  
+> 原片理解 V2 PRD：`.scratch/remix-understanding-v2/PRD.md`  
+> 原片理解 V2 详细设计：`docs/sceneforge-remix/original-understanding-v2-design.md`  
+> 拆解策略：**垂直切片（tracer bullet）**，每个 Issue 贯穿类型→后端→前端→测试全部层  
 > 辅助 Skill：`codebase-design`（架构契约）、`design-taste-frontend`（UI 表现）
 
 ---
@@ -33,6 +35,7 @@ graph TD
     I18["#18 V2 中文影视Prompt"]
     I19["#19 V2 关键帧多模态"]
     I20["#20 V2 Rollup与导出"]
+    I21["#21 V2 Workbench Snapshot兼容"]
 
     I0 --> I1
     I0 --> I2
@@ -65,8 +68,15 @@ graph TD
     I15 --> I16
     I16 --> I17
     I17 --> I18
-    I17 --> I20
+    I18 --> I20
     I18 --> I19
+    I19 -.可选增强.-> I20
+    I15 --> I21
+    I16 --> I21
+    I17 --> I21
+    I18 --> I21
+    I19 -.接入视觉状态.-> I21
+    I20 --> I21
 ```
 
 ## 并行执行建议
@@ -84,7 +94,8 @@ graph TD
 | Remix V2 Phase 1 | #15 | 原片理解状态反馈与 Rollup 兜底修复，依赖 #8 |
 | Remix V2 Phase 2 | #16 → #17 | 台词校对持久化与前端展示，以及后续新鲜度过期机制 |
 | Remix V2 Phase 3 | #18 | 中文影视级 14 维度 Prompt 升级与复制 |
-| Remix V2 Phase 4 | #19 ‖ #20 | 关键帧多模态抽取（依赖 #18），以及 V2 Rollup 与 MD 导出（依赖 #17） |
+| Remix V2 Phase 4 | #19 ‖ #20 | #20 至少依赖 #18；#19 是视觉增强，可并行推进但需后续接入 Rollup / Snapshot |
+| Remix V2 Phase 5 | #21 | Workbench Snapshot V2 聚合与 V1/V2 兼容；可在 #16-#18 后启动，最终承接 #19/#20 状态字段 |
 
 ---
 
@@ -116,4 +127,4 @@ graph TD
 19. **Issue #18: V2 中文影视Prompt** -> [.scratch/remix-understanding-v2/issues/04-chinese-prompt-v2.md](file:///Users/tangwujun/Documents/trae_projects/lingji-creator/.scratch/remix-understanding-v2/issues/04-chinese-prompt-v2.md)
 20. **Issue #19: V2 关键帧多模态** -> [.scratch/remix-understanding-v2/issues/05-keyframe-vision-multimodal.md](file:///Users/tangwujun/Documents/trae_projects/lingji-creator/.scratch/remix-understanding-v2/issues/05-keyframe-vision-multimodal.md)
 21. **Issue #20: V2 Rollup与导出** -> [.scratch/remix-understanding-v2/issues/06-rollup-v2-and-export.md](file:///Users/tangwujun/Documents/trae_projects/lingji-creator/.scratch/remix-understanding-v2/issues/06-rollup-v2-and-export.md)
-
+22. **Issue #21: V2 Workbench Snapshot兼容** -> [.scratch/remix-understanding-v2/issues/07-workbench-v2-viewmodel-compat.md](file:///Users/tangwujun/Documents/trae_projects/lingji-creator/.scratch/remix-understanding-v2/issues/07-workbench-v2-viewmodel-compat.md)
