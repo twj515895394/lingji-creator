@@ -305,6 +305,12 @@ export const remixMockApi: RemixIpcContract = {
     return snapshot;
   },
 
+  async rerunOriginalStoryRollup(input: RemixSourceAssetRefInput) {
+    const snapshot = findProcessingSnapshot(input.sourceAssetId);
+    setProcessingStage(snapshot, 'remix_understanding', 'approved');
+    return snapshot;
+  },
+
   async getSourceUnderstandingWorkbench(input: RemixSourceAssetRefInput) {
     const snapshot = findProcessingSnapshot(input.sourceAssetId);
     return buildMockUnderstandingWorkbench(snapshot.sourceAsset);

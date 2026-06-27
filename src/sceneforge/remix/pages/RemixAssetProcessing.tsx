@@ -3,6 +3,7 @@ import { Badge, Button, Checkbox, Dialog, DialogBody, DialogContent, DialogDescr
 import { PanelHeader } from '../../../ui/patterns/PanelHeader';
 import type { RemixIpcContract } from '../../../../electron/sceneforge/remix/remix-ipc-types';
 import { AnnotationEditor } from '../components/AnnotationEditor';
+import { getAISettingsIssue } from '../../../lib/ai-settings';
 import { KeyframeGallery } from '../components/KeyframeGallery';
 import { PublishToLibraryButton } from '../components/PublishToLibraryButton';
 import { RemixStageNav } from '../components/RemixStageNav';
@@ -223,6 +224,24 @@ export function RemixAssetProcessing({
   const [copiedUnderstandingSegmentId, setCopiedUnderstandingSegmentId] = useState<string | null>(null);
   const [rerunUnderstandingSegmentId, setRerunUnderstandingSegmentId] = useState<string | null>(null);
   const [annotationPrefillApplied, setAnnotationPrefillApplied] = useState(false);
+  const [aiSettingsIssue, setAiSettingsIssue] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (activeStepId !== 'understanding') {
+      return;
+    }
+    const checkAiSettings = async () => {
+      try {
+        const globalSettings = await window.electronAPI.loadGlobalSettings();
+        const settings = typeof globalSettings === 'string' ? JSON.parse(globalSettings) : globalSettings;
+        const issue = getAISettingsIssue(settings?.aiSettings ?? null);
+        setAiSettingsIssue(issue);
+      } catch (err) {
+        setAiSettingsIssue('无法加载全局 AI 模型配置');
+      }
+    };
+    void checkAiSettings();
+  }, [activeStepId]);
   const [isLoading, setIsLoading] = useState(true);
   const [pendingActionId, setPendingActionId] = useState<string | null>(null);
   const [activeJob, setActiveJob] = useState<RemixProcessingJob | null>(null);
@@ -515,6 +534,22 @@ export function RemixAssetProcessing({
     } finally {
       setRerunUnderstandingSegmentId(null);
     }
+  }
+
+  async function handleRerunOriginalStoryRollup() {
+    if (!projectDir || !asset) {
+      return;
+    }
+    await runAction(
+      'understanding-rollup',
+      'remix_understanding',
+      async () => {
+        const result = await resolveClient().rerunOriginalStoryRollup({ projectDir, sourceAssetId: asset.id });
+        void refreshUnderstandingWorkbench(result.sourceAsset);
+        return result;
+      },
+      '正在重跑全片故事串联',
+    );
   }
 
   function reindexSegments(segments: SourceSegment[]): SourceSegment[] {
@@ -1184,10 +1219,28 @@ export function RemixAssetProcessing({
               : ''}
           </p>
         ) : null}
+
+        {aiSettingsIssue ? (
+          <div
+            className={panelStyles.warningBar}
+            style={{
+              padding: '12px',
+              border: '1px solid var(--color-warning-border, #e0a800)',
+              background: 'rgba(224, 168, 0, 0.1)',
+              borderRadius: '4px',
+              marginBottom: '16px',
+              color: 'var(--color-warning-text, #e0a800)',
+              fontSize: '13px',
+            }}
+          >
+            未配置 AI 模型，无法生成原片理解。请先到设置中配置 AI 模型。({aiSettingsIssue})
+          </div>
+        ) : null}
+
         <div className={panelStyles.copyRow} style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
           <Button
             variant="accent"
-            disabled={Boolean(pendingActionId)}
+            disabled={Boolean(pendingActionId) || Boolean(aiSettingsIssue)}
             onClick={() => {
               void runAction(
                 'understanding',
@@ -1221,6 +1274,7 @@ export function RemixAssetProcessing({
           onRerunSegment={(segmentId) => {
             void handleRerunSegmentUnderstanding(segmentId);
           }}
+          onRerunRollup={handleRerunOriginalStoryRollup}
         />
       </section>
     ),

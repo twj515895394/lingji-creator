@@ -9,7 +9,7 @@ import { REMIX_UNDERSTANDING_ROLLUP_KIND } from './remix-understanding-gate';
 import type { RemixSegmentUnderstandingDocument } from './remix-segment-understanding-schema';
 
 export const REMIX_ORIGINAL_UNDERSTANDING_SCHEMA = 'sceneforge-remix-original-understanding' as const;
-export const REMIX_ORIGINAL_UNDERSTANDING_VERSION = 1 as const;
+export const REMIX_ORIGINAL_UNDERSTANDING_VERSION = 2 as const;
 
 export interface RemixOriginalUnderstandingDocument {
   schema: typeof REMIX_ORIGINAL_UNDERSTANDING_SCHEMA;
@@ -25,13 +25,17 @@ export interface RemixOriginalUnderstandingDocument {
     segmentAnalysisPath: string;
   };
   overall: {
-    summary: string;
+    logline: string;
+    storySummaryShort: string; // 300字以内短摘要
+    storyContent: string;      // 600-1200字完整视频内容
     storyArc: string;
     visualStyle: string;
     mainConflict: string;
     emotionCurve: string;
     remixPotential: string[];
     highValueSegmentIds: string[];
+    characterMap?: Array<{ nameOrRole: string; description: string; relation?: string | null }>;
+    eventChain?: string[];
   };
   segmentRefs: Array<{
     segmentId: string;
@@ -48,6 +52,10 @@ export interface RemixOriginalUnderstandingDocument {
     failedSegmentCount: number;
     needsHumanReview: boolean;
     avgConfidence: number | null;
+    rollupFallbackUsed: boolean;
+    errors: string[];
+    warnings: string[];
+    staleReasons: string[];
   };
 }
 
@@ -74,7 +82,7 @@ export interface RemixSourceOverviewIndexDocument {
 
 function averageConfidence(documents: RemixSegmentUnderstandingDocument[]): number | null {
   const values = documents
-    .map((doc) => doc.quality.confidence)
+    .map((doc) => doc.quality?.confidence)
     .filter((value): value is number => typeof value === 'number');
   if (values.length === 0) {
     return null;
@@ -84,7 +92,7 @@ function averageConfidence(documents: RemixSegmentUnderstandingDocument[]): numb
 
 function pickHighValueSegmentIds(documents: RemixSegmentUnderstandingDocument[]): string[] {
   return [...documents]
-    .sort((left, right) => (right.quality.confidence ?? 0) - (left.quality.confidence ?? 0))
+    .sort((left, right) => (right.quality?.confidence ?? 0) - (left.quality?.confidence ?? 0))
     .slice(0, Math.min(5, documents.length))
     .map((doc) => doc.segmentId);
 }
@@ -96,16 +104,26 @@ export function buildOriginalUnderstandingDocument(input: {
   failedSegmentCount: number;
   sourceOverviewPath: string;
   segmentAnalysisPath: string;
-  overallSummary?: string;
+  logline?: string;
+  storySummaryShort?: string;
+  storyContent?: string;
+  eventChain?: string[];
+  characterMap?: Array<{ nameOrRole: string; description: string; relation?: string | null }>;
   remixIdeas?: string[];
+  rollupFallbackUsed?: boolean;
+  errors?: string[];
+  warnings?: string[];
+  staleReasons?: string[];
 }): RemixOriginalUnderstandingDocument {
-  const { document, segmentDocuments, generatedAt, failedSegmentCount, overallSummary, remixIdeas } = input;
+  const { document, segmentDocuments, generatedAt, failedSegmentCount, remixIdeas } = input;
   const segmentCount = document.sourceAsset.segments.length;
   const understoodSegmentCount = segmentDocuments.length;
-  const plotFunctions = segmentDocuments.map((doc) => doc.story.plotFunction).filter(Boolean);
-  const emotions = segmentDocuments.map((doc) => doc.story.emotion).filter(Boolean);
-  const remixIdeasFallback = segmentDocuments.flatMap((doc) => doc.remix.rewriteIdeas).slice(0, 6);
-  const visualStyles = segmentDocuments.map((doc) => doc.visual.colorTone).filter(Boolean);
+  const plotFunctions = segmentDocuments.map((doc) => doc.story?.plotFunction).filter(Boolean);
+  const emotions = segmentDocuments.map((doc) => doc.story?.emotion).filter(Boolean);
+  const remixIdeasFallback = segmentDocuments.flatMap((doc) => doc.remix?.rewriteIdeas ?? []).slice(0, 6);
+  const visualStyles = segmentDocuments.map((doc) => doc.visual?.colorTone).filter(Boolean);
+
+  const fallbackUsed = input.rollupFallbackUsed ?? false;
 
   return {
     schema: REMIX_ORIGINAL_UNDERSTANDING_SCHEMA,
@@ -121,13 +139,17 @@ export function buildOriginalUnderstandingDocument(input: {
       segmentAnalysisPath: input.segmentAnalysisPath,
     },
     overall: {
-      summary: overallSummary ?? `《${document.sourceAsset.title}》共 ${segmentCount} 段，已完成 ${understoodSegmentCount} 段结构化理解。`,
+      logline: input.logline ?? '',
+      storySummaryShort: fallbackUsed ? '' : (input.storySummaryShort ?? ''),
+      storyContent: fallbackUsed ? '' : (input.storyContent ?? ''),
       storyArc: plotFunctions.length ? plotFunctions.join(' → ') : '待人工补充全片剧情线。',
       visualStyle: visualStyles.length ? [...new Set(visualStyles)].join('、') : '写实中性影像风格。',
-      mainConflict: segmentDocuments.map((doc) => doc.story.conflict).find(Boolean) ?? '轻度戏剧张力',
+      mainConflict: segmentDocuments.map((doc) => doc.story?.conflict).find(Boolean) ?? '轻度戏剧张力',
       emotionCurve: emotions.length ? emotions.join(' → ') : '情绪平稳推进',
       remixPotential: remixIdeas ?? (remixIdeasFallback.length ? remixIdeasFallback : ['保留人物反应镜头', '替换台词做场景改写']),
       highValueSegmentIds: pickHighValueSegmentIds(segmentDocuments),
+      characterMap: input.characterMap ?? [],
+      eventChain: input.eventChain ?? [],
     },
     segmentRefs: document.sourceAsset.segments
       .map((segment) => {
@@ -154,6 +176,10 @@ export function buildOriginalUnderstandingDocument(input: {
       failedSegmentCount,
       needsHumanReview: true,
       avgConfidence: averageConfidence(segmentDocuments),
+      rollupFallbackUsed: fallbackUsed,
+      errors: input.errors ?? [],
+      warnings: input.warnings ?? [],
+      staleReasons: input.staleReasons ?? [],
     },
   };
 }
@@ -196,8 +222,14 @@ export function buildOriginalUnderstandingSummaryMarkdown(
     `- 标题：${original.title}`,
     `- 片段：${original.quality.understoodSegmentCount}/${original.quality.segmentCount}`,
     '',
-    '## 故事内容',
-    original.overall.summary,
+    '## 故事一句话梗概 (Logline)',
+    original.overall.logline || '（无）',
+    '',
+    '## 全片故事内容 (完整解说)',
+    original.overall.storyContent || '（无）',
+    '',
+    '## 故事短摘要',
+    original.overall.storySummaryShort || '（无）',
     '',
     '## 二创方向',
     ...original.overall.remixPotential.map((item) => `- ${item}`),

@@ -121,6 +121,13 @@ export function registerSceneForgeRemixIpc(): void {
   );
 
   ipcMain.handle(
+    'sceneForgeRemix:rerunOriginalStoryRollup',
+    async (_event, input: RemixSourceAssetRefInput) => {
+      return service.rerunOriginalStoryRollup(input);
+    },
+  );
+
+  ipcMain.handle(
     'sceneForgeRemix:getSourceUnderstandingWorkbench',
     async (_event, input: RemixSourceAssetRefInput) => {
       return service.getSourceUnderstandingWorkbench(input);

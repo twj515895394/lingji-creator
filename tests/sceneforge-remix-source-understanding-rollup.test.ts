@@ -134,9 +134,16 @@ describe('SceneForge Remix source understanding rollup', () => {
       failedSegmentCount: 0,
       sourceOverviewPath: 'analysis/source_overview.json',
       segmentAnalysisPath: 'analysis/segment_analysis.json',
+      logline: '这是核心梗概',
+      storySummaryShort: '短故事',
+      storyContent: '长剧情故事内容',
     });
     expect(original.quality.understoodSegmentCount).toBe(2);
     expect(original.overall.storyArc).toContain('铺垫');
+    expect(original.overall.storyContent).toBe('长剧情故事内容');
+    expect(original.overall.storySummaryShort).toBe('短故事');
+    expect(original.overall.logline).toBe('这是核心梗概');
+    expect(original.quality.rollupFallbackUsed).toBe(false);
     expect(original.segmentRefs).toHaveLength(2);
 
     const index = buildSourceOverviewIndexDocument({
@@ -149,5 +156,27 @@ describe('SceneForge Remix source understanding rollup', () => {
     expect(index.originalUnderstandingPath).toBe('analysis/original_understanding.json');
     expect(index.quality.failedSegmentCount).toBe(0);
     expect(index.overall.highValueSegmentIds.length).toBeGreaterThan(0);
+  });
+
+  it('builds original understanding with fallback when rollup fails', () => {
+    const segmentDocuments = [
+      segmentDoc('segment-001', '铺垫'),
+    ];
+    const original = buildOriginalUnderstandingDocument({
+      document: baseDoc,
+      segmentDocuments,
+      generatedAt: '2026-06-26T12:00:00.000Z',
+      failedSegmentCount: 1,
+      sourceOverviewPath: 'analysis/source_overview.json',
+      segmentAnalysisPath: 'analysis/segment_analysis.json',
+      rollupFallbackUsed: true,
+      errors: ['AI request timeout'],
+    });
+
+    expect(original.quality.rollupFallbackUsed).toBe(true);
+    expect(original.quality.errors).toContain('AI request timeout');
+    // 兜底时内容必须置空
+    expect(original.overall.storyContent).toBe('');
+    expect(original.overall.storySummaryShort).toBe('');
   });
 });

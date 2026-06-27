@@ -299,13 +299,13 @@ export function toGateSegmentUnderstandingItem(
 ): RemixSegmentUnderstandingGateItem {
   return {
     segmentId: document.segmentId,
-    visual: { mainAction: document.visual.mainAction },
-    camera: { shotSize: document.camera.shotSize },
-    audio: { speechSummary: document.audio.speechSummary },
-    story: { plotFunction: document.story.plotFunction },
-    remix: { keepElements: document.remix.keepElements },
-    videoPrompt: document.videoPrompt.positivePrompt,
-    quality: { confidence: document.quality.confidence },
+    visual: { mainAction: document.visual?.mainAction ?? '' },
+    camera: { shotSize: document.camera?.shotSize ?? '' },
+    audio: { speechSummary: document.audio?.speechSummary ?? '' },
+    story: { plotFunction: document.story?.plotFunction ?? '' },
+    remix: { keepElements: document.remix?.keepElements ?? [] },
+    videoPrompt: document.videoPrompt?.positivePrompt ?? '',
+    quality: { confidence: document.quality?.confidence ?? null },
   };
 }
 

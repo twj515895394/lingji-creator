@@ -52,6 +52,7 @@ export interface RemixUnderstandingWorkbenchSnapshot {
   segmentCount: number;
   segments: RemixUnderstandingWorkbenchSegmentCard[];
   annotationPrefill: RemixUnderstandingAnnotationPrefill | null;
+  rollupFallbackUsed: boolean;
 }
 
 async function readJson<T>(absPath: string): Promise<T | null> {
@@ -209,15 +210,30 @@ export async function loadRemixUnderstandingWorkbench(
       understoodSegmentCount !== asset.segments.length,
   );
 
+  const rollupFallbackUsed = original?.quality && typeof original.quality === 'object'
+    ? Boolean((original.quality as any).rollupFallbackUsed)
+    : false;
+
+  if (original?.quality && typeof original.quality === 'object') {
+    const originalErrors = (original.quality as any).errors;
+    if (Array.isArray(originalErrors)) {
+      errors.push(...originalErrors);
+    }
+  }
+
+  const rawStoryContent = original
+    ? ((original.overall as any).storyContent ?? original.overall.summary ?? null)
+    : (overview && typeof overview.overall === 'object' && overview.overall !== null
+      ? String((overview.overall as any).storyContent ?? (overview.overall as any).summary ?? '').trim() || null
+      : null);
+
+  const overviewSummary = rollupFallbackUsed ? '' : rawStoryContent;
+
   return {
     ready: understoodSegmentCount === asset.segments.length && !isPlaceholderUnderstandingOverview(overview),
     isPlaceholder,
     errors,
-    overviewSummary:
-      original?.overall.summary ??
-      (overview && typeof overview.overall === 'object' && overview.overall !== null
-        ? String((overview.overall as { summary?: string }).summary ?? '').trim() || null
-        : null),
+    overviewSummary,
     storyArc: original?.overall.storyArc ?? null,
     emotionCurve: original?.overall.emotionCurve ?? null,
     remixPotential: original?.overall.remixPotential ?? [],
@@ -226,5 +242,6 @@ export async function loadRemixUnderstandingWorkbench(
     segmentCount: asset.segments.length,
     segments: cards,
     annotationPrefill: buildAnnotationPrefillFromUnderstanding(asset, cards.filter((c) => !c.isPlaceholder)),
+    rollupFallbackUsed,
   };
 }

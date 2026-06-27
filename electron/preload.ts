@@ -233,6 +233,8 @@ contextBridge.exposeInMainWorld('electronAPI', {
       ipcRenderer.invoke('sceneForgeRemix:runSourceUnderstanding', input),
     rerunSegmentUnderstanding: (input: SegmentKeyframeActionInput) =>
       ipcRenderer.invoke('sceneForgeRemix:rerunSegmentUnderstanding', input),
+    rerunOriginalStoryRollup: (input: RemixSourceAssetRefInput) =>
+      ipcRenderer.invoke('sceneForgeRemix:rerunOriginalStoryRollup', input),
     getSourceUnderstandingWorkbench: (input: RemixSourceAssetRefInput) =>
       ipcRenderer.invoke('sceneForgeRemix:getSourceUnderstandingWorkbench', input),
     updateSourceSegments: (input: UpdateSourceSegmentsInput) =>

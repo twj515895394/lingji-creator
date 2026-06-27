@@ -34,12 +34,14 @@ describe('SceneForge Remix IPC contract', () => {
     expect(preload).toContain('sceneForgeRemix:updateSourceAssetMetadata');
     expect(preload).toContain('sceneForgeRemix:listVariantsForSourceAsset');
     expect(preload).toContain('sceneForgeRemix:exportPromptBundle');
+    expect(preload).toContain('sceneForgeRemix:rerunOriginalStoryRollup');
     expect(api).toContain('sceneForgeRemix: {');
     expect(api).toContain('createVariantFromSourceAsset');
     expect(api).toContain('getSegmentationDiagnostics');
     expect(api).toContain('validateSourceAssetMedia');
     expect(api).toContain('updateEditedKeyframeStatus');
     expect(api).toContain('ExportPromptBundleResult');
+    expect(api).toContain('rerunOriginalStoryRollup');
     expect(ipc).toContain('sceneForgeRemix:listSourceAssets');
     expect(ipc).toContain('sceneForgeRemix:deleteSourceAsset');
     expect(ipc).toContain('sceneForgeRemix:updateSourceSegments');
@@ -47,26 +49,73 @@ describe('SceneForge Remix IPC contract', () => {
     expect(ipc).toContain('sceneForgeRemix:renameVariant');
     expect(ipc).toContain('sceneForgeRemix:runRemixStrategy');
     expect(ipc).toContain('sceneForgeRemix:exportPromptBundle');
+    expect(ipc).toContain('sceneForgeRemix:rerunOriginalStoryRollup');
   });
 
   it('returns type-safe stub payloads for the full Remix ipc surface', async () => {
+    const mockTranscriptService = {
+      run: async (projDir: string, assetId: string) => {
+        const { readStoredSourceAsset, writeStoredSourceAsset } = await import('../electron/sceneforge/remix/remix-store');
+        const doc = await readStoredSourceAsset(projDir, assetId);
+        doc.sourceAsset.srtPath = 'transcripts/whisper_out.srt';
+        doc.sourceAsset.transcriptPath = 'transcripts/whisper_out.json';
+        await writeStoredSourceAsset(projDir, doc);
+
+        const srtText = '1\n00:00:00,000 --> 00:00:03,000\n对白\n\n2\n00:00:03,000 --> 00:00:06,000\n对白2';
+        await fs.mkdir(path.join(projDir, 'transcripts'), { recursive: true });
+        await fs.writeFile(path.join(projDir, 'transcripts/whisper_out.srt'), srtText, 'utf8');
+        await fs.writeFile(path.join(projDir, 'transcripts/whisper_out.json'), JSON.stringify({
+          schema: 'sceneforge-remix-source-transcript',
+          version: 1,
+          sourceAssetId: assetId,
+          generatedAt: new Date().toISOString(),
+          inputHash: { audioSha256: 'mock' },
+          utterances: [
+            { text: '对白', startMs: 0, endMs: 3000 },
+            { text: '对白2', startMs: 3000, endMs: 6000 }
+          ]
+        }), 'utf8');
+        return doc;
+      }
+    };
+
     const service = new RemixService({
       readDurationMs: async () => 12800,
       now: () => new Date('2026-06-23T12:00:00.000Z'),
+      transcriptService: mockTranscriptService as any,
       understandingServiceOptions: {
         loadAISettings: async () => ({ provider: 'openai' } as AISettings),
-        generateSegmentUnderstanding: async (_settings, context) => ({
-          visual: { mainAction: '人物抬头' },
-          camera: { shotSize: '中近景', movement: '固定镜头' },
-          story: { plotFunction: '铺垫' },
-          videoPrompt: {
-            positivePrompt: `固定镜头，${context.segment.id} 缓慢抬头。`,
-            negativePrompt: '避免卡通。',
-            motionPrompt: '缓慢抬头。',
-            cameraPrompt: '平视固定镜头。',
-            dialoguePrompt: '语气迟疑。',
-          },
-        }),
+        generateStructuredData: async (settings, systemPrompt, userPrompt, schema, options) => {
+          if (options?.label?.includes('rollup')) {
+            return {
+              logline: '核心梗概',
+              storySummaryShort: '短故事',
+              storyContent: '全片故事内容',
+              eventChain: ['事件1'],
+              characterMap: [{ nameOrRole: '主角', description: '好人', relation: '无' }],
+              mainConflict: '冲突',
+              emotionCurve: '平缓',
+              visualStyle: '写实',
+              dialogueStyle: '日常',
+              remixPotential: ['二创建议'],
+            };
+          }
+          return {
+            visual: { mainAction: '人物抬头', colorTone: '暖色' },
+            camera: { shotSize: '中近景', movement: '固定镜头' },
+            audio: { speechSummary: '台词', dialogue: [], ambient: '环境', music: '无', silenceOrPause: '无' },
+            story: { plotFunction: '铺垫', emotion: '紧张', conflict: '对峙' },
+            remix: { rewriteIdeas: ['职场谈判'], keepElements: [], replaceableElements: [], reuseScenarios: [], riskNotes: [] },
+            videoPrompt: {
+              positivePrompt: '固定镜头，人物缓慢抬头。',
+              negativePrompt: '避免卡通。',
+              motionPrompt: '缓慢抬头',
+              cameraPrompt: '平视',
+              dialoguePrompt: '迟疑',
+            },
+            quality: { confidence: 0.9, missingInputs: [], needsHumanReview: true, warnings: [] },
+          };
+        },
       },
     });
 
@@ -137,6 +186,12 @@ describe('SceneForge Remix IPC contract', () => {
     expect(understood.processingStageStates.remix_understanding).toBe('ready_for_review');
     expect(understood.processingJobs?.[0]?.stepId).toBe('remix_understanding');
 
+    const rollupRerun = await service.rerunOriginalStoryRollup({
+      projectDir,
+      sourceAssetId: liveSourceAssetId,
+    });
+    expect(rollupRerun.processingStageStates.remix_understanding).toBe('ready_for_review');
+
     const overviewPath = understood.sourceAsset.sourceOverviewJsonPath ?? '';
     const segmentPath = understood.sourceAsset.segmentAnalysisJsonPath ?? '';
     const { REMIX_UNDERSTANDING_ROLLUP_KIND } = await import('../electron/sceneforge/remix/remix-understanding-gate');
@@ -168,6 +223,8 @@ describe('SceneForge Remix IPC contract', () => {
       segmentId: segment.id,
       visual: { mainAction: '人物抬头' },
       camera: { shotSize: '中近景' },
+      audio: { speechSummary: '台词' },
+      story: { plotFunction: '铺垫' },
       videoPrompt: '固定镜头，人物缓慢抬头。',
     })), null, 2)}\n`);
     stored.processingStageStates.remix_understanding = 'approved';

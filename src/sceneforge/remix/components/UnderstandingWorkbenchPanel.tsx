@@ -10,6 +10,7 @@ interface UnderstandingWorkbenchPanelProps {
   disabled?: boolean;
   onCopyPrompt: (segmentId: string, text: string) => void;
   onRerunSegment: (segmentId: string) => void;
+  onRerunRollup?: () => void;
 }
 
 export function UnderstandingWorkbenchPanel({
@@ -20,6 +21,7 @@ export function UnderstandingWorkbenchPanel({
   disabled = false,
   onCopyPrompt,
   onRerunSegment,
+  onRerunRollup,
 }: UnderstandingWorkbenchPanelProps) {
   if (loading) {
     return <p className={styles.copyFeedback}>正在加载理解结果…</p>;
@@ -44,17 +46,54 @@ export function UnderstandingWorkbenchPanel({
 
   return (
     <div className={styles.stack} data-testid="remix-understanding-workbench">
-      <section className={styles.overviewSummary}>
-        <div className={styles.overviewLead}>
-          <div className={styles.overviewLeadLabel}>故事内容</div>
-          <div className={styles.overviewLeadText}>{workbench.overviewSummary || '正在生成故事内容…'}</div>
-        </div>
-        {workbench.remixPotential.length > 0 ? (
-          <p className={styles.copyFeedback} style={{ marginTop: '12px', fontSize: '13px' }}>
-            二创方向：{workbench.remixPotential.join(' / ')}
-          </p>
-        ) : null}
-      </section>
+      {workbench.rollupFallbackUsed ? (
+        <section
+          className={styles.overviewSummary}
+          style={{
+            border: '1px solid var(--color-warning-border, #e0a800)',
+            background: 'rgba(224, 168, 0, 0.05)',
+            padding: '16px',
+            borderRadius: '6px',
+          }}
+        >
+          <div
+            style={{
+              color: 'var(--color-warning-text, #e0a800)',
+              fontSize: '13px',
+              display: 'flex',
+              flexDirection: 'column',
+              gap: '8px',
+            }}
+          >
+            <span>全片故事未成功生成，当前显示的是系统兜底信息。请检查 LLM 配置后重跑全片故事。</span>
+            {workbench.errors.length > 0 && (
+              <span style={{ fontSize: '12px', opacity: 0.8 }}>错误原因: {workbench.errors.join('; ')}</span>
+            )}
+            <div>
+              <Button
+                variant="accent"
+                size="sm"
+                disabled={disabled}
+                onClick={onRerunRollup}
+              >
+                重跑全片故事
+              </Button>
+            </div>
+          </div>
+        </section>
+      ) : (
+        <section className={styles.overviewSummary}>
+          <div className={styles.overviewLead}>
+            <div className={styles.overviewLeadLabel}>故事内容</div>
+            <div className={styles.overviewLeadText}>{workbench.overviewSummary || '正在生成故事内容…'}</div>
+          </div>
+          {workbench.remixPotential.length > 0 ? (
+            <p className={styles.copyFeedback} style={{ marginTop: '12px', fontSize: '13px' }}>
+              二创方向：{workbench.remixPotential.join(' / ')}
+            </p>
+          ) : null}
+        </section>
+      )}
 
       <section className={styles.segmentAnalysisList}>
         {workbench.segments.map((segment) => (

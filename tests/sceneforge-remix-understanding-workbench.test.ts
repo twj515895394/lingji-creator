@@ -1,8 +1,19 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi, beforeEach } from 'vitest';
 import {
   buildAnnotationPrefillFromUnderstanding,
+  loadRemixUnderstandingWorkbench,
 } from '../electron/sceneforge/remix/remix-understanding-workbench';
 import type { SourceAsset } from '../src/sceneforge/remix/types';
+import fs from 'node:fs/promises';
+
+vi.mock('node:fs/promises', () => {
+  return {
+    default: {
+      readFile: vi.fn(),
+      mkdir: vi.fn(),
+    },
+  };
+});
 
 const asset: SourceAsset = {
   id: 'source-001',
@@ -22,10 +33,10 @@ const asset: SourceAsset = {
     audioChannels: 2,
     hasAudio: true,
   },
-  sourceOverviewMarkdownPath: null,
-  sourceOverviewJsonPath: null,
-  segmentAnalysisMarkdownPath: null,
-  segmentAnalysisJsonPath: null,
+  sourceOverviewMarkdownPath: 'analysis/source_overview.md',
+  sourceOverviewJsonPath: 'analysis/source_overview.json',
+  segmentAnalysisMarkdownPath: 'analysis/segment_analysis.md',
+  segmentAnalysisJsonPath: 'analysis/segment_analysis.json',
   segments: [],
   variantCount: 0,
   tags: [],
@@ -36,6 +47,10 @@ const asset: SourceAsset = {
 };
 
 describe('SceneForge Remix understanding workbench', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
   it('builds annotation prefill from segment understanding cards', () => {
     const prefill = buildAnnotationPrefillFromUnderstanding(asset, [
       {
@@ -72,5 +87,81 @@ describe('SceneForge Remix understanding workbench', () => {
     };
     const prefill = buildAnnotationPrefillFromUnderstanding(savedAsset, []);
     expect(prefill).toBeNull();
+  });
+
+  it('loads and maps Version 1 original understanding JSON to workbench snapshot', async () => {
+    const mockV1Json = {
+      schema: 'sceneforge-remix-original-understanding',
+      version: 1,
+      sourceAssetId: 'source-001',
+      title: 'V1 Test',
+      generatedAt: '2026-06-26T12:00:00.000Z',
+      overall: {
+        summary: '这是V1的故事总结内容',
+        storyArc: '开端 -> 结尾',
+        visualStyle: '写实',
+        mainConflict: '冲突',
+        emotionCurve: '平缓',
+        remixPotential: ['二创'],
+        highValueSegmentIds: [],
+      },
+      segmentRefs: [],
+      quality: {
+        segmentCount: 0,
+        understoodSegmentCount: 0,
+        failedSegmentCount: 0,
+        needsHumanReview: true,
+        avgConfidence: null,
+      },
+    };
+
+    vi.spyOn(fs, 'readFile').mockResolvedValue(JSON.stringify(mockV1Json));
+    const mockAsset = { ...asset, segments: [] };
+    const snapshot = await loadRemixUnderstandingWorkbench('/mock-project', mockAsset);
+
+    expect(snapshot.rollupFallbackUsed).toBe(false);
+    expect(snapshot.overviewSummary).toBe('这是V1的故事总结内容');
+  });
+
+  it('loads Version 2 original understanding JSON with fallback status and errors', async () => {
+    const mockV2Json = {
+      schema: 'sceneforge-remix-original-understanding',
+      version: 2,
+      sourceAssetId: 'source-001',
+      title: 'V2 Test',
+      generatedAt: '2026-06-27T12:00:00.000Z',
+      overall: {
+        logline: '梗概',
+        storySummaryShort: '',
+        storyContent: '',
+        storyArc: '',
+        visualStyle: '',
+        mainConflict: '',
+        emotionCurve: '',
+        remixPotential: [],
+        highValueSegmentIds: [],
+      },
+      segmentRefs: [],
+      quality: {
+        segmentCount: 0,
+        understoodSegmentCount: 0,
+        failedSegmentCount: 0,
+        needsHumanReview: true,
+        avgConfidence: null,
+        rollupFallbackUsed: true,
+        errors: ['AI error details'],
+        warnings: [],
+        staleReasons: [],
+      },
+    };
+
+    vi.spyOn(fs, 'readFile').mockResolvedValue(JSON.stringify(mockV2Json));
+    const mockAsset = { ...asset, segments: [] };
+    const snapshot = await loadRemixUnderstandingWorkbench('/mock-project', mockAsset);
+
+    expect(snapshot.rollupFallbackUsed).toBe(true);
+    expect(snapshot.errors).toContain('AI error details');
+    // rollupFallbackUsed 为 true 时，内容必须为空
+    expect(snapshot.overviewSummary).toBe('');
   });
 });

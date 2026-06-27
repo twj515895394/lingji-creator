@@ -337,6 +337,15 @@ export class RemixService {
     );
   }
 
+  async rerunOriginalStoryRollup(input: RemixSourceAssetRefInput) {
+    return this.runProcessingStage(
+      input,
+      'remix_understanding',
+      () => this.understandingService.rerunRollupOnly(input.projectDir, input.sourceAssetId),
+      '重跑全片故事串联任务',
+    );
+  }
+
   async getSourceUnderstandingWorkbench(input: RemixSourceAssetRefInput) {
     const document = await readStoredSourceAsset(input.projectDir, input.sourceAssetId);
     return loadRemixUnderstandingWorkbench(input.projectDir, document.sourceAsset);

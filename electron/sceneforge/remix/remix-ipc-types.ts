@@ -145,6 +145,9 @@ export interface RemixIpcContract {
   rerunSegmentUnderstanding(
     input: SegmentKeyframeActionInput,
   ): Promise<RemixAssetProcessingSnapshot>;
+  rerunOriginalStoryRollup(
+    input: RemixSourceAssetRefInput,
+  ): Promise<RemixAssetProcessingSnapshot>;
   getSourceUnderstandingWorkbench(
     input: RemixSourceAssetRefInput,
   ): Promise<RemixUnderstandingWorkbenchSnapshot>;
