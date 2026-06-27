@@ -21,3 +21,7 @@ __pycache__/
 *.pyo
 *.pyd
 .ipynb_checkpoints/
+# Remix local whisper model (large binary, install per tools/local-stt/README.md)
+tools/local-stt/whisper/ggml-small.bin
+tools/local-stt/whisper/*.bin
+

@@ -231,6 +231,10 @@ contextBridge.exposeInMainWorld('electronAPI', {
       ipcRenderer.invoke('sceneForgeRemix:deleteSegmentMiddleKeyframe', input),
     runSourceUnderstanding: (input: RunSourceAssetStageInput) =>
       ipcRenderer.invoke('sceneForgeRemix:runSourceUnderstanding', input),
+    rerunSegmentUnderstanding: (input: SegmentKeyframeActionInput) =>
+      ipcRenderer.invoke('sceneForgeRemix:rerunSegmentUnderstanding', input),
+    getSourceUnderstandingWorkbench: (input: RemixSourceAssetRefInput) =>
+      ipcRenderer.invoke('sceneForgeRemix:getSourceUnderstandingWorkbench', input),
     updateSourceSegments: (input: UpdateSourceSegmentsInput) =>
       ipcRenderer.invoke('sceneForgeRemix:updateSourceSegments', input),
     getSegmentationDiagnostics: (input: RemixSourceAssetRefInput) =>

@@ -99,7 +99,46 @@ function buildApiClient(mode: 'success' | 'failure'): RemixIpcContract {
             throw new Error('切片失败');
           },
     runSourceKeyframes: async () => MOCK_ASSET_PROCESSING_SNAPSHOTS['source-library-001'],
+    runSourceAudio: async () => MOCK_ASSET_PROCESSING_SNAPSHOTS['source-library-001'],
+    runSourceTranscript: async () => MOCK_ASSET_PROCESSING_SNAPSHOTS['source-library-001'],
     runSourceUnderstanding: async () => MOCK_ASSET_PROCESSING_SNAPSHOTS['source-library-001'],
+    rerunSegmentUnderstanding: async () => MOCK_ASSET_PROCESSING_SNAPSHOTS['source-library-001'],
+    getSourceUnderstandingWorkbench: async () => ({
+      ready: true,
+      isPlaceholder: false,
+      errors: [],
+      overviewSummary: '全片围绕对峙与情绪升温展开。',
+      storyArc: '压迫开场 → 情绪升温',
+      emotionCurve: '紧张 → 压迫',
+      remixPotential: ['身份替换'],
+      highValueSegmentIds: ['segment-l-001'],
+      understoodSegmentCount: 1,
+      segmentCount: 1,
+      segments: [
+        {
+          segmentId: 'segment-l-001',
+          segmentIndex: 1,
+          title: '天台风声压场',
+          timeRangeLabel: '00:00 - 00:08',
+          thumbnailPath: null,
+          transcriptSummary: '对白摘要',
+          mainAction: '缓慢抬头',
+          shotSummary: '中近景 / 固定镜头',
+          plotFunction: '推进情绪',
+          speechSummary: '对白摘要',
+          positivePrompt: '固定镜头，缓慢抬头。',
+          keepElements: ['压迫节奏'],
+          replaceableElements: ['角色身份'],
+          confidence: 0.86,
+          understandingPath: 'segment-l-001-analysis.json',
+          isPlaceholder: false,
+        },
+      ],
+      annotationPrefill: {
+        suggestedTags: ['压迫节奏', '角色身份'],
+        suggestedNote: '【AI 预填，请按真实观感修正】\n片段 01：保留 压迫节奏；可替换 角色身份。',
+      },
+    }),
     updateSourceSegments: async (input) => ({
       ...clone(MOCK_ASSET_PROCESSING_SNAPSHOTS['source-library-001']),
       sourceAsset: {
@@ -271,6 +310,52 @@ describe('SceneForge Remix asset processing workspace', () => {
     expect(document.body.textContent).toContain('当前步骤执行失败');
     expect(document.body.textContent).toContain('重跑失败步骤');
     expect(document.body.textContent).toContain('返回异常队列');
+  });
+
+
+  it('原片理解页展示真实片段卡片与复制入口', async () => {
+    const container = await renderProcessing(
+      <RemixAssetProcessing
+        projectDir="/tmp/remix-project"
+        apiClient={buildApiClient('success')}
+        sourceAssetId="source-library-001"
+        initialStepId="understanding"
+      />,
+    );
+
+    expect(container.textContent).toContain('全片摘要');
+    expect(container.textContent).toContain('固定镜头，缓慢抬头。');
+    expect(container.textContent).toContain('复制 video prompt');
+    expect(container.querySelector('[data-testid="remix-understanding-workbench"]')).not.toBeNull();
+  });
+
+  it('进入人工标注时会应用理解预填且不覆盖已保存标注', async () => {
+    const savedSnapshot = {
+      ...clone(MOCK_ASSET_PROCESSING_SNAPSHOTS['source-library-001']),
+      sourceAsset: {
+        ...clone(MOCK_ASSET_PROCESSING_SNAPSHOTS['source-library-001'].sourceAsset),
+        tags: ['hero-asset'],
+        annotationNote: '保留人物逼近时的压迫节奏，不要在长停顿处提前切镜。',
+        lastAnnotatedAt: '2026-06-23T12:00:00.000Z',
+      },
+      variants: [],
+    };
+    const apiClient = {
+      ...buildApiClient('success'),
+      getSourceAsset: async () => savedSnapshot,
+    };
+
+    const container = await renderProcessing(
+      <RemixAssetProcessing
+        projectDir="/tmp/remix-project"
+        apiClient={apiClient}
+        sourceAssetId="source-library-001"
+        initialStepId="annotate"
+      />,
+    );
+
+    expect(container.textContent).toContain('保留人物逼近时的压迫节奏');
+    expect(container.textContent).not.toContain('【AI 预填，请按真实观感修正】');
   });
 
   it('人工标注有未保存修改时，不把步骤显示成已完成', () => {

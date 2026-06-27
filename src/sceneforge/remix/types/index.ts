@@ -414,6 +414,23 @@ export interface SourceAssetSummary {
   updatedAt: string;
 }
 
+
+export type RemixUnderstandingJobPhase = 'transcript' | 'understanding' | 'rollup' | 'done';
+
+export interface RemixUnderstandingJobProgress {
+  phase: RemixUnderstandingJobPhase;
+  total: number;
+  completed: number;
+  currentSegmentId?: string | null;
+  message?: string | null;
+  details?: {
+    transcriptSkipped?: boolean;
+    transcriptEngine?: string | null;
+    understandingConcurrency?: number;
+    failedSegmentIds?: string[];
+  };
+}
+
 export interface RemixProcessingJob {
   id: string;
   sourceAssetId: string;
@@ -422,6 +439,7 @@ export interface RemixProcessingJob {
   message?: string | null;
   error?: string | null;
   progress?: number | null;
+  understandingProgress?: RemixUnderstandingJobProgress | null;
   startedAt: string;
   finishedAt?: string | null;
 }

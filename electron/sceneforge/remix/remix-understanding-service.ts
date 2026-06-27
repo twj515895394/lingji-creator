@@ -145,6 +145,39 @@ async function readExistingSegmentUnderstanding(
   }
 }
 
+
+export interface RemixUnderstandingRunProgress {
+  completed: number;
+  total: number;
+  currentSegmentId?: string;
+  failedSegmentIds?: string[];
+}
+
+export interface RemixUnderstandingRunWithProgressOptions {
+  segmentIds?: string[];
+  concurrency?: number;
+  onProgress?: (progress: RemixUnderstandingRunProgress) => void | Promise<void>;
+}
+
+async function mapWithConcurrency<T>(
+  items: T[],
+  concurrency: number,
+  worker: (item: T) => Promise<void>,
+): Promise<void> {
+  let nextIndex = 0;
+  const runners = Array.from({ length: Math.min(concurrency, items.length) }, async () => {
+    while (true) {
+      const current = nextIndex;
+      nextIndex += 1;
+      if (current >= items.length) {
+        return;
+      }
+      await worker(items[current]);
+    }
+  });
+  await Promise.all(runners);
+}
+
 export class RemixUnderstandingService {
   private readonly loadAISettings: () => Promise<AISettings | null>;
 
@@ -249,6 +282,17 @@ export class RemixUnderstandingService {
     sourceAssetId: string,
     options: { segmentIds?: string[] } = {},
   ): Promise<StoredSourceAssetDocument> {
+    return this.runWithProgress(projectDir, sourceAssetId, {
+      segmentIds: options.segmentIds,
+      concurrency: 1,
+    });
+  }
+
+  async runWithProgress(
+    projectDir: string,
+    sourceAssetId: string,
+    options: RemixUnderstandingRunWithProgressOptions = {},
+  ): Promise<StoredSourceAssetDocument> {
     const document = await readStoredSourceAsset(projectDir, sourceAssetId);
     assertSourceAssetStageReady(document, 'remix_keyframes');
 
@@ -261,11 +305,14 @@ export class RemixUnderstandingService {
       options.segmentIds?.length
         ? options.segmentIds
         : document.sourceAsset.segments.map((segment) => segment.id);
+    const concurrency = Math.max(1, options.concurrency ?? 1);
 
     const generated: RemixSegmentUnderstandingDocument[] = [];
     const failures: Array<{ segmentId: string; error: string }> = [];
+    let completed = 0;
+    const total = targetIds.length;
 
-    for (const segmentId of targetIds) {
+    await mapWithConcurrency(targetIds, concurrency, async (segmentId) => {
       try {
         const understanding = await this.generateSegment(projectDir, document, segmentId, settings);
         await this.writeSegmentUnderstanding(
@@ -280,8 +327,16 @@ export class RemixUnderstandingService {
           segmentId,
           error: error instanceof Error ? error.message : '片段理解失败',
         });
+      } finally {
+        completed += 1;
+        await options.onProgress?.({
+          completed,
+          total,
+          currentSegmentId: segmentId,
+          failedSegmentIds: failures.map((item) => item.segmentId),
+        });
       }
-    }
+    });
 
     if (generated.length === 0) {
       throw new Error(failures[0]?.error ?? '所有片段理解均失败。');

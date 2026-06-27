@@ -2,6 +2,7 @@ import { Button, Input, Textarea } from '../../../ui';
 import styles from './RemixWorkspacePanels.module.css';
 
 interface AnnotationEditorProps {
+  prefillHint?: string | null;
   tags: string[];
   draftTag: string;
   note: string;
@@ -12,6 +13,7 @@ interface AnnotationEditorProps {
 }
 
 export function AnnotationEditor({
+  prefillHint = null,
   tags,
   draftTag,
   note,
@@ -22,7 +24,7 @@ export function AnnotationEditor({
 }: AnnotationEditorProps) {
   return (
     <div className={styles.stack} data-testid="remix-annotation-editor">
-      <p className={styles.copyFeedback}>建议先完成「原片理解」，再填写必须保留或替换的标注。</p>
+      {prefillHint ? <p className={styles.copyFeedback}>{prefillHint}</p> : <p className={styles.copyFeedback}>建议先完成「原片理解」，再填写必须保留或替换的标注。</p>}
       <div className={styles.fieldStack}>
         <label className={styles.fieldLabel}>
           <span className={styles.fieldName}>人工标签</span>

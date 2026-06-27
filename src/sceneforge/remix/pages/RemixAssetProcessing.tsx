@@ -10,7 +10,8 @@ import { SegmentTable } from '../components/SegmentTable';
 import { SegmentTimeline } from '../components/SegmentTimeline';
 import { SegmentClipActionsPanel } from '../components/SegmentClipActionsPanel';
 import { SourceVideoPreview } from '../components/SourceVideoPreview';
-import { SourceOverviewPanel } from '../components/SourceOverviewPanel';
+import { UnderstandingWorkbenchPanel } from '../components/UnderstandingWorkbenchPanel';
+import type { RemixUnderstandingWorkbenchSnapshot } from '../../../../electron/sceneforge/remix/remix-understanding-workbench';
 import { formatAssetLibraryDate, getLatestFailedJob, getProcessingStepLabel, getSourceAssetFilename } from '../lib/asset-library-view-model';
 import { formatCompactPath } from '../lib/remix-display-text';
 import panelStyles from '../components/RemixWorkspacePanels.module.css';
@@ -52,6 +53,14 @@ interface ExitGuardAction {
 function normalizeTags(tags: string[]): string[] {
   return Array.from(new Set(tags.map((tag) => tag.trim()).filter(Boolean))).sort((left, right) =>
     left.localeCompare(right),
+  );
+}
+
+function hasSavedAnnotation(asset: RemixAssetProcessingSnapshot['sourceAsset']): boolean {
+  return (
+    (asset.tags?.length ?? 0) > 0 ||
+    Boolean(asset.annotationNote?.trim()) ||
+    Boolean(asset.lastAnnotatedAt?.trim())
   );
 }
 
@@ -200,6 +209,11 @@ export function RemixAssetProcessing({
   const [tags, setTags] = useState<string[]>(snapshot?.sourceAsset.tags ?? []);
   const [draftTag, setDraftTag] = useState('');
   const [annotationNote, setAnnotationNote] = useState(snapshot?.sourceAsset.annotationNote ?? '');
+  const [understandingWorkbench, setUnderstandingWorkbench] = useState<RemixUnderstandingWorkbenchSnapshot | null>(null);
+  const [understandingLoading, setUnderstandingLoading] = useState(false);
+  const [copiedUnderstandingSegmentId, setCopiedUnderstandingSegmentId] = useState<string | null>(null);
+  const [rerunUnderstandingSegmentId, setRerunUnderstandingSegmentId] = useState<string | null>(null);
+  const [annotationPrefillApplied, setAnnotationPrefillApplied] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const [pendingActionId, setPendingActionId] = useState<string | null>(null);
   const [activeJob, setActiveJob] = useState<RemixProcessingJob | null>(null);
@@ -268,6 +282,27 @@ export function RemixAssetProcessing({
     setPreviewSeekMs(0);
   }, [asset?.id]);
 
+  useEffect(() => {
+    setAnnotationPrefillApplied(false);
+    setUnderstandingWorkbench(null);
+    if (!projectDir || !asset) {
+      return;
+    }
+    void refreshUnderstandingWorkbench(asset);
+  }, [apiClient, projectDir, asset?.id]);
+
+  useEffect(() => {
+    if (!understandingWorkbench?.annotationPrefill || annotationPrefillApplied) {
+      return;
+    }
+    if (!asset || hasSavedAnnotation(asset)) {
+      return;
+    }
+    setTags(understandingWorkbench.annotationPrefill.suggestedTags);
+    setAnnotationNote(understandingWorkbench.annotationPrefill.suggestedNote);
+    setAnnotationPrefillApplied(true);
+  }, [annotationPrefillApplied, asset, understandingWorkbench]);
+
   async function runAction(
     actionId: string,
     stepId: RemixProcessingJob['stepId'] | null,
@@ -276,6 +311,7 @@ export function RemixAssetProcessing({
   ) {
     setPendingActionId(actionId);
     setErrorMessage(null);
+    let pollTimer: ReturnType<typeof setInterval> | null = null;
     if (stepId) {
       setActiveJob({
         id: `${actionId}-local`,
@@ -287,16 +323,31 @@ export function RemixAssetProcessing({
         finishedAt: null,
       });
     }
+    if (stepId === 'remix_understanding' && projectDir) {
+      pollTimer = setInterval(() => {
+        void (async () => {
+          try {
+            const polled = await resolveClient().getSourceAsset({ projectDir, sourceAssetId });
+            const serverJob =
+              polled.activeProcessingJob ??
+              polled.processingJobs?.find((job) => job.status === 'running') ??
+              null;
+            if (serverJob && (serverJob.understandingProgress || serverJob.message)) {
+              setActiveJob(serverJob);
+            }
+          } catch {
+            // polling is best-effort while IPC job runs
+          }
+        })();
+      }, 1500);
+    }
     try {
       const nextSnapshot = await runner();
       if (nextSnapshot) {
-        setSnapshot(nextSnapshot);
-        setTags(nextSnapshot.sourceAsset.tags);
-        setAnnotationNote(nextSnapshot.sourceAsset.annotationNote ?? '');
-        setDraftTag('');
-        setActiveJob(nextSnapshot.activeProcessingJob ?? getLatestFailedJob(nextSnapshot.processingJobs) ?? null);
-        setSegmentationMode(nextSnapshot.sourceAsset.segmentationMode ?? 'fast');
-        setPreserveManualEdits(nextSnapshot.sourceAsset.manualSegmentationOverride?.preserveOnRerun ?? true);
+        applySnapshot(nextSnapshot);
+        if (actionId === 'understanding' || actionId.startsWith('retry-understanding')) {
+          await refreshUnderstandingWorkbench(nextSnapshot.sourceAsset);
+        }
       }
     } catch (error) {
       setErrorMessage(error instanceof Error ? error.message : '执行失败。');
@@ -313,6 +364,9 @@ export function RemixAssetProcessing({
         });
       }
     } finally {
+      if (pollTimer) {
+        clearInterval(pollTimer);
+      }
       setPendingActionId(null);
     }
   }
@@ -340,12 +394,7 @@ export function RemixAssetProcessing({
       return null;
     }
     const nextSnapshot = await resolveClient().getSourceAsset({ projectDir, sourceAssetId });
-    setSnapshot(nextSnapshot);
-    setTags(nextSnapshot.sourceAsset.tags);
-    setAnnotationNote(nextSnapshot.sourceAsset.annotationNote ?? '');
-    setActiveJob(nextSnapshot.activeProcessingJob ?? getLatestFailedJob(nextSnapshot.processingJobs) ?? null);
-    setSegmentationMode(nextSnapshot.sourceAsset.segmentationMode ?? 'fast');
-    setPreserveManualEdits(nextSnapshot.sourceAsset.manualSegmentationOverride?.preserveOnRerun ?? true);
+    applySnapshot(nextSnapshot);
     return nextSnapshot;
   }
 
@@ -365,6 +414,72 @@ export function RemixAssetProcessing({
           annotationSource: 'workspace_manual',
         }),
     );
+  }
+
+
+  function applySnapshot(nextSnapshot: RemixAssetProcessingSnapshot) {
+    setSnapshot(nextSnapshot);
+    setTags(nextSnapshot.sourceAsset.tags);
+    setAnnotationNote(nextSnapshot.sourceAsset.annotationNote ?? '');
+    setDraftTag('');
+    setActiveJob(nextSnapshot.activeProcessingJob ?? getLatestFailedJob(nextSnapshot.processingJobs) ?? null);
+    setSegmentationMode(nextSnapshot.sourceAsset.segmentationMode ?? 'fast');
+    setPreserveManualEdits(nextSnapshot.sourceAsset.manualSegmentationOverride?.preserveOnRerun ?? true);
+    if (!hasSavedAnnotation(nextSnapshot.sourceAsset)) {
+      setAnnotationPrefillApplied(false);
+    }
+  }
+
+  async function refreshUnderstandingWorkbench(nextAsset = asset) {
+    if (!projectDir || !nextAsset) {
+      setUnderstandingWorkbench(null);
+      return;
+    }
+    setUnderstandingLoading(true);
+    try {
+      const workbench = await resolveClient().getSourceUnderstandingWorkbench({
+        projectDir,
+        sourceAssetId: nextAsset.id,
+      });
+      setUnderstandingWorkbench(workbench);
+    } catch {
+      setUnderstandingWorkbench(null);
+    } finally {
+      setUnderstandingLoading(false);
+    }
+  }
+
+  async function handleCopyUnderstandingPrompt(segmentId: string, text: string) {
+    if (!text.trim()) {
+      return;
+    }
+    try {
+      await navigator.clipboard.writeText(text);
+      setCopiedUnderstandingSegmentId(segmentId);
+      window.setTimeout(() => setCopiedUnderstandingSegmentId((current) => (current === segmentId ? null : current)), 1800);
+    } catch {
+      setErrorMessage('复制 video prompt 失败，请手动复制。');
+    }
+  }
+
+  async function handleRerunSegmentUnderstanding(segmentId: string) {
+    if (!projectDir || !asset) {
+      return;
+    }
+    setRerunUnderstandingSegmentId(segmentId);
+    try {
+      const nextSnapshot = await resolveClient().rerunSegmentUnderstanding({
+        projectDir,
+        sourceAssetId: asset.id,
+        segmentId,
+      });
+      applySnapshot(nextSnapshot);
+      await refreshUnderstandingWorkbench(nextSnapshot.sourceAsset);
+    } catch (error) {
+      setErrorMessage(error instanceof Error ? error.message : '单段理解重跑失败');
+    } finally {
+      setRerunUnderstandingSegmentId(null);
+    }
   }
 
   function reindexSegments(segments: SourceSegment[]): SourceSegment[] {
@@ -1058,6 +1173,14 @@ export function RemixAssetProcessing({
           </div>
           <div className={panelStyles.chip}>{getStageStatusLabel(stepStatuses.understanding)}</div>
         </div>
+        {workspaceState?.activeJob?.understandingProgress ? (
+          <p className={panelStyles.copyFeedback} data-testid="remix-understanding-job-progress">
+            {workspaceState.activeJob.understandingProgress.message ?? '正在生成原片理解…'}
+            {workspaceState.activeJob.understandingProgress.phase === 'understanding'
+              ? `（${workspaceState.activeJob.understandingProgress.completed}/${workspaceState.activeJob.understandingProgress.total}）`
+              : ''}
+          </p>
+        ) : null}
         <div className={panelStyles.copyRow}>
           <Button
             variant="accent"
@@ -1078,7 +1201,19 @@ export function RemixAssetProcessing({
             {pendingActionId === 'understanding' ? '生成中…' : '生成原片理解'}
           </Button>
         </div>
-        <SourceOverviewPanel asset={asset} />
+        <UnderstandingWorkbenchPanel
+          workbench={understandingWorkbench}
+          loading={understandingLoading}
+          copiedSegmentId={copiedUnderstandingSegmentId}
+          pendingSegmentId={rerunUnderstandingSegmentId}
+          disabled={Boolean(pendingActionId)}
+          onCopyPrompt={(segmentId, prompt) => {
+            void handleCopyUnderstandingPrompt(segmentId, prompt);
+          }}
+          onRerunSegment={(segmentId) => {
+            void handleRerunSegmentUnderstanding(segmentId);
+          }}
+        />
       </section>
     ),
     annotate: (
@@ -1093,6 +1228,7 @@ export function RemixAssetProcessing({
           <div className={panelStyles.chip}>{getStageStatusLabel(stepStatuses.annotate)}</div>
         </div>
         <AnnotationEditor
+          prefillHint={understandingWorkbench?.annotationPrefill ? "已根据片段理解预填保留/替换建议，保存前请按真实观感修正。" : null}
           tags={tags}
           draftTag={draftTag}
           note={annotationNote}
@@ -1101,6 +1237,14 @@ export function RemixAssetProcessing({
           onRemoveTag={removeTag}
           onNoteChange={setAnnotationNote}
         />
+        {workspaceState?.activeJob?.understandingProgress ? (
+          <p className={panelStyles.copyFeedback} data-testid="remix-understanding-job-progress">
+            {workspaceState.activeJob.understandingProgress.message ?? '正在生成原片理解…'}
+            {workspaceState.activeJob.understandingProgress.phase === 'understanding'
+              ? `（${workspaceState.activeJob.understandingProgress.completed}/${workspaceState.activeJob.understandingProgress.total}）`
+              : ''}
+          </p>
+        ) : null}
         <div className={panelStyles.copyRow}>
           <Button
             variant="accent"

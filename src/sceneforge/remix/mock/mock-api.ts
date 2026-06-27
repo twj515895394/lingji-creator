@@ -120,6 +120,53 @@ function buildWorkspace(
   };
 }
 
+
+function buildMockUnderstandingWorkbench(
+  asset: SourceAsset,
+): import('../../../../electron/sceneforge/remix/remix-understanding-workbench').RemixUnderstandingWorkbenchSnapshot {
+  const segments = asset.segments.map((segment) => ({
+    segmentId: segment.id,
+    segmentIndex: segment.index,
+    title: segment.title,
+    timeRangeLabel: '00:00 - 00:10',
+    thumbnailPath: segment.keyframes[0]?.imagePath ?? null,
+    transcriptSummary: '对白摘要',
+    mainAction: '缓慢抬头',
+    shotSummary: '中近景 / 固定镜头',
+    plotFunction: '推进情绪',
+    speechSummary: '对白摘要',
+    positivePrompt: `固定镜头，${segment.title} 缓慢抬头。`,
+    keepElements: ['压迫节奏'],
+    replaceableElements: ['角色身份'],
+    confidence: 0.86,
+    understandingPath: segment.analysisJsonPath ?? '',
+    isPlaceholder: false,
+  }));
+  const hasSavedAnnotation =
+    (asset.tags?.length ?? 0) > 0 ||
+    Boolean(asset.annotationNote?.trim()) ||
+    Boolean(asset.lastAnnotatedAt?.trim());
+  return {
+    ready: true,
+    isPlaceholder: false,
+    errors: [],
+    overviewSummary: '全片围绕对峙与情绪升温展开。',
+    storyArc: '压迫开场 → 情绪升温',
+    emotionCurve: '紧张 → 压迫',
+    remixPotential: ['身份替换', '节奏增强'],
+    highValueSegmentIds: segments.map((segment) => segment.segmentId),
+    understoodSegmentCount: segments.length,
+    segmentCount: segments.length,
+    segments,
+    annotationPrefill: hasSavedAnnotation
+      ? null
+      : {
+          suggestedTags: ['压迫节奏', '角色身份'],
+          suggestedNote: '【AI 预填，请按真实观感修正】\n片段 01：保留 压迫节奏；可替换 角色身份。',
+        },
+  };
+}
+
 function setProcessingStage(
   snapshot: RemixAssetProcessingSnapshot,
   stage: RemixAssetProcessingStageId,
@@ -206,6 +253,18 @@ export const remixMockApi: RemixIpcContract = {
     return snapshot;
   },
 
+  async runSourceAudio(input: RunSourceAssetStageInput) {
+    const snapshot = findProcessingSnapshot(input.sourceAssetId);
+    setProcessingStage(snapshot, 'remix_segmentation', 'approved');
+    return snapshot;
+  },
+
+  async runSourceTranscript(input: RunSourceAssetStageInput) {
+    const snapshot = findProcessingSnapshot(input.sourceAssetId);
+    setProcessingStage(snapshot, 'remix_segmentation', 'approved');
+    return snapshot;
+  },
+
   async addSegmentMiddleKeyframe(input: SegmentKeyframeActionInput) {
     const snapshot = findProcessingSnapshot(input.sourceAssetId);
     const segment = snapshot.sourceAsset.segments.find((s) => s.id === input.segmentId);
@@ -238,6 +297,17 @@ export const remixMockApi: RemixIpcContract = {
     setProcessingStage(snapshot, 'remix_understanding', 'approved');
     snapshot.sourceAsset.status = 'ready_for_review';
     return snapshot;
+  },
+
+  async rerunSegmentUnderstanding(input: SegmentKeyframeActionInput) {
+    const snapshot = findProcessingSnapshot(input.sourceAssetId);
+    setProcessingStage(snapshot, 'remix_understanding', 'approved');
+    return snapshot;
+  },
+
+  async getSourceUnderstandingWorkbench(input: RemixSourceAssetRefInput) {
+    const snapshot = findProcessingSnapshot(input.sourceAssetId);
+    return buildMockUnderstandingWorkbench(snapshot.sourceAsset);
   },
 
   async updateSourceSegments(input: UpdateSourceSegmentsInput) {

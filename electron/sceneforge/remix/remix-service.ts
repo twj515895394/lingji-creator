@@ -56,11 +56,14 @@ import { RemixEditedKeyframeService } from './remix-edited-keyframe-service';
 import { RemixSeedancePromptService } from './remix-seedance-prompt-service';
 import { markRemixUnderstandingStale } from './remix-understanding-gate';
 import { assertPublishReady } from './remix-validators';
+import { loadRemixUnderstandingWorkbench } from './remix-understanding-workbench';
+import { RemixUnderstandingOrchestrator } from './remix-understanding-orchestrator';
 
 export interface RemixServiceOptions extends RemixSourceAssetServiceOptions {
   transcriptService?: RemixTranscriptService;
   understandingService?: RemixUnderstandingService;
   understandingServiceOptions?: RemixUnderstandingServiceOptions;
+  understandingConcurrency?: number;
 }
 
 export class RemixService {
@@ -90,6 +93,8 @@ export class RemixService {
 
   private readonly seedancePromptService;
 
+  private readonly understandingOrchestrator: RemixUnderstandingOrchestrator;
+
   constructor(options: RemixServiceOptions = {}) {
     this.sourceAssetService = new RemixSourceAssetService(options);
     this.segmentationService = new RemixSegmentationService();
@@ -104,6 +109,12 @@ export class RemixService {
     this.keyframePromptService = new RemixKeyframePromptService();
     this.editedKeyframeService = new RemixEditedKeyframeService();
     this.seedancePromptService = new RemixSeedancePromptService();
+    this.understandingOrchestrator = new RemixUnderstandingOrchestrator({
+      audioExtractionService: this.audioExtractionService,
+      transcriptService: this.transcriptService,
+      understandingService: this.understandingService,
+      understandingConcurrency: options.understandingConcurrency ?? 2,
+    });
   }
 
   private withCompleteSegmentBoundary(segment: SourceSegment): SourceSegment {
@@ -326,15 +337,101 @@ export class RemixService {
     );
   }
 
-  async runSourceUnderstanding(
-    input: RunSourceAssetStageInput,
-  ) {
-    return this.runProcessingStage(
-      input,
-      'remix_understanding',
-      () => this.understandingService.run(input.projectDir, input.sourceAssetId),
-      '原片理解任务',
-    );
+  async getSourceUnderstandingWorkbench(input: RemixSourceAssetRefInput) {
+    const document = await readStoredSourceAsset(input.projectDir, input.sourceAssetId);
+    return loadRemixUnderstandingWorkbench(input.projectDir, document.sourceAsset);
+  }
+
+  private async patchUnderstandingJob(
+    projectDir: string,
+    sourceAssetId: string,
+    jobId: string,
+    jobsDocument: Awaited<ReturnType<typeof readStoredSourceAssetJobs>>,
+    patch: Partial<RemixProcessingJob>,
+  ): Promise<RemixProcessingJob> {
+    const existing = jobsDocument.jobs.find((job) => job.id === jobId);
+    const nextJob: RemixProcessingJob = {
+      ...(existing ?? {
+        id: jobId,
+        sourceAssetId,
+        stepId: 'remix_understanding',
+        status: 'running',
+        startedAt: new Date().toISOString(),
+        finishedAt: null,
+      }),
+      ...patch,
+    } as RemixProcessingJob;
+    jobsDocument.jobs = [nextJob, ...jobsDocument.jobs.filter((job) => job.id !== jobId)];
+    await writeStoredSourceAssetJobs(projectDir, jobsDocument);
+    return nextJob;
+  }
+
+  async runSourceUnderstanding(input: RunSourceAssetStageInput) {
+    const sourceDocument = await readStoredSourceAsset(input.projectDir, input.sourceAssetId);
+    const jobsDocument = await readStoredSourceAssetJobs(input.projectDir, input.sourceAssetId);
+    const startedAt = new Date().toISOString();
+    const jobId = `remix_understanding-${startedAt.replace(/[:.]/g, '-')}`;
+
+    sourceDocument.sourceAsset.status = 'processing';
+    sourceDocument.sourceAsset.updatedAt = startedAt;
+    await writeStoredSourceAsset(input.projectDir, sourceDocument);
+
+    await this.patchUnderstandingJob(input.projectDir, input.sourceAssetId, jobId, jobsDocument, {
+      id: jobId,
+      sourceAssetId: input.sourceAssetId,
+      stepId: 'remix_understanding',
+      status: 'running',
+      message: '正在生成原片理解',
+      progress: 0,
+      startedAt,
+      finishedAt: null,
+      understandingProgress: {
+        phase: 'transcript',
+        total: 1,
+        completed: 0,
+        message: '正在准备全片台词…',
+      },
+    });
+
+    try {
+      const document = await this.understandingOrchestrator.run(
+        input.projectDir,
+        input.sourceAssetId,
+        {
+          onJobUpdate: async (patch) => {
+            await this.patchUnderstandingJob(
+              input.projectDir,
+              input.sourceAssetId,
+              jobId,
+              jobsDocument,
+              patch,
+            );
+          },
+        },
+      );
+      await this.mediaValidationService.validate(input.projectDir, document);
+      const finishedAt = new Date().toISOString();
+      await this.patchUnderstandingJob(input.projectDir, input.sourceAssetId, jobId, jobsDocument, {
+        status: 'succeeded',
+        message: '原片理解任务完成',
+        progress: 1,
+        finishedAt,
+      });
+      return buildSourceAssetSnapshot(document, jobsDocument.jobs);
+    } catch (error) {
+      const finishedAt = new Date().toISOString();
+      await this.patchUnderstandingJob(input.projectDir, input.sourceAssetId, jobId, jobsDocument, {
+        status: 'failed',
+        error: error instanceof Error ? error.message : '执行失败。',
+        message: '原片理解任务失败',
+        finishedAt,
+      });
+      const failedDocument = await readStoredSourceAsset(input.projectDir, input.sourceAssetId);
+      failedDocument.sourceAsset.status = 'failed';
+      failedDocument.sourceAsset.updatedAt = finishedAt;
+      await writeStoredSourceAsset(input.projectDir, failedDocument);
+      throw error;
+    }
   }
 
   async publishSourceAssetToLibrary(

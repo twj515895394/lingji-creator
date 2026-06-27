@@ -109,6 +109,20 @@ export function registerSceneForgeRemixIpc(): void {
   );
 
   ipcMain.handle(
+    'sceneForgeRemix:rerunSegmentUnderstanding',
+    async (_event, input: SegmentKeyframeActionInput) => {
+      return service.rerunSegmentUnderstanding(input);
+    },
+  );
+
+  ipcMain.handle(
+    'sceneForgeRemix:getSourceUnderstandingWorkbench',
+    async (_event, input: RemixSourceAssetRefInput) => {
+      return service.getSourceUnderstandingWorkbench(input);
+    },
+  );
+
+  ipcMain.handle(
     'sceneForgeRemix:updateSourceSegments',
     async (_event, input: UpdateSourceSegmentsInput) => {
       return service.updateSourceSegments(input);

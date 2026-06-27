@@ -16,6 +16,7 @@ import type {
   SourceSegment,
   RetentionMatrix,
 } from '../../../src/sceneforge/remix/types';
+import type { RemixUnderstandingWorkbenchSnapshot } from './remix-understanding-workbench';
 
 export interface RemixSourceAssetRefInput {
   projectDir: string;
@@ -141,6 +142,12 @@ export interface RemixIpcContract {
   runSourceUnderstanding(
     input: RunSourceAssetStageInput,
   ): Promise<RemixAssetProcessingSnapshot>;
+  rerunSegmentUnderstanding(
+    input: SegmentKeyframeActionInput,
+  ): Promise<RemixAssetProcessingSnapshot>;
+  getSourceUnderstandingWorkbench(
+    input: RemixSourceAssetRefInput,
+  ): Promise<RemixUnderstandingWorkbenchSnapshot>;
   updateSourceSegments(input: UpdateSourceSegmentsInput): Promise<RemixAssetProcessingSnapshot>;
   getSegmentationDiagnostics(input: RemixSourceAssetRefInput): Promise<RemixSegmentationDiagnostics | null>;
   validateSourceAssetMedia(input: RemixSourceAssetRefInput): Promise<RemixSourceAssetMediaValidation>;

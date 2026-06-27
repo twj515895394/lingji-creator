@@ -494,6 +494,12 @@ export interface ElectronAPI {
     runSourceUnderstanding: (
       input: RunSourceAssetStageInput,
     ) => Promise<RemixAssetProcessingSnapshot>;
+    rerunSegmentUnderstanding: (
+      input: SegmentKeyframeActionInput,
+    ) => Promise<RemixAssetProcessingSnapshot>;
+    getSourceUnderstandingWorkbench: (
+      input: RemixSourceAssetRefInput,
+    ) => Promise<import('../../electron/sceneforge/remix/remix-understanding-workbench').RemixUnderstandingWorkbenchSnapshot>;
     updateSourceSegments: (
       input: UpdateSourceSegmentsInput,
     ) => Promise<RemixAssetProcessingSnapshot>;

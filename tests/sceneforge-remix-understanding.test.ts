@@ -120,8 +120,17 @@ describe('SceneForge Remix understanding service', () => {
   });
 
   it('reruns a single segment and updates only that segment inputHash', async () => {
+    const mockProvider = new RemixLocalWhisperProvider({
+      transcribe: async ({ outputPrefix }) => {
+        const srtPath = `${outputPrefix}.srt`;
+        const srt = '1\n00:00:00,420 --> 00:00:02,900\n第一句\n';
+        await fs.writeFile(srtPath, srt, 'utf8');
+        return { srtPath };
+      },
+    });
     const service = new RemixService({
       readDurationMs: async () => 12000,
+      transcriptService: new RemixTranscriptService({ whisperProvider: mockProvider }),
       understandingServiceOptions: {
         loadAISettings: async () => mockSettings,
         generateSegmentUnderstanding: async (_settings, context) =>
@@ -134,6 +143,7 @@ describe('SceneForge Remix understanding service', () => {
     });
     await service.runSourceSegmentation({ projectDir, sourceAssetId: imported.sourceAsset.id });
     await service.runSourceKeyframes({ projectDir, sourceAssetId: imported.sourceAsset.id });
+    await service.runSourceTranscript({ projectDir, sourceAssetId: imported.sourceAsset.id });
 
     const firstRun = await service.runSourceUnderstanding({ projectDir, sourceAssetId: imported.sourceAsset.id });
     const firstSegmentId = firstRun.sourceAsset.segments[0]?.id;

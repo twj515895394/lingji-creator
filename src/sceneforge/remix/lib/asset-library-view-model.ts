@@ -1,4 +1,10 @@
-import type { RemixAssetProcessingStageId, RemixCreationStageId, RemixProcessingJob, SourceAsset } from '../types';
+import type {
+  RemixAssetProcessingStageId,
+  RemixCreationStageId,
+  RemixProcessingJob,
+  RemixProcessingJobStepId,
+  SourceAsset,
+} from '../types';
 
 export const REMIX_SOURCE_STATUS_LABELS = {
   draft: '未处理',
@@ -92,8 +98,19 @@ const PROCESSING_STEP_LABELS: Record<RemixAssetProcessingStageId, string> = {
   remix_understanding: '原片理解',
 };
 
-export function getProcessingStepLabel(stepId: RemixAssetProcessingStageId): string {
-  return PROCESSING_STEP_LABELS[stepId] ?? stepId;
+const PROCESSING_JOB_STEP_LABELS: Partial<Record<RemixProcessingJobStepId, string>> = {
+  remix_audio_extraction: '音频抽取',
+  remix_transcript: '台词识别',
+};
+
+export function getProcessingStepLabel(
+  stepId: RemixAssetProcessingStageId | RemixProcessingJobStepId,
+): string {
+  return (
+    PROCESSING_STEP_LABELS[stepId as RemixAssetProcessingStageId] ??
+    PROCESSING_JOB_STEP_LABELS[stepId as RemixProcessingJobStepId] ??
+    stepId
+  );
 }
 
 export function getLatestFailedJob(jobs: RemixProcessingJob[] = []): RemixProcessingJob | null {
