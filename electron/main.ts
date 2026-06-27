@@ -2595,7 +2595,7 @@ ipcMain.handle('quick-look-file', async (_event, filePath: string): Promise<{ ok
 
 ipcMain.handle('load-recent-projects', async () => {
   const userDataPath = app.getPath('userData');
-  const projects = await refreshRecentProjects(userDataPath);
+  const projects = await loadRecentProjects(userDataPath);
   // 更新菜单上下文
   menuContext.recentProjects = projects.map((p) => ({
     path: p.path,

@@ -253,3 +253,24 @@
 .listRow:hover .listRemoveButton {
   opacity: 1;
 }
+
+
+.cardMissing,
+.listRowMissing {
+  opacity: 0.55;
+  cursor: default;
+}
+
+.cardMissing:hover,
+.listRowMissing:hover {
+  transform: none;
+}
+
+.missingBadge {
+  font-size: 11px;
+  padding: 2px 6px;
+  border-radius: 4px;
+  background: rgba(255, 149, 0, 0.15);
+  color: #c93400;
+  margin-left: 6px;
+}

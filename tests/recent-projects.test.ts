@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
-import { addRecentProject, refreshRecentProjects } from '../electron/recent-projects';
+import { addRecentProject, loadRecentProjects, refreshRecentProjects } from '../electron/recent-projects';
 
 let userDataPath: string;
 let projectDir: string;
@@ -201,4 +201,47 @@ describe('recent projects identity', () => {
       remixRoutePath: '/remix/assets',
     });
   });
+
+  it('loadRecentProjects keeps missing paths without writing them away', async () => {
+    const ghostPath = path.join(projectDir, 'deleted-project');
+    await fs.mkdir(userDataPath, { recursive: true });
+    await fs.writeFile(
+      path.join(userDataPath, 'recent-projects.json'),
+      JSON.stringify([
+        {
+          path: projectDir,
+          name: 'alive',
+          lastOpenedAt: 2,
+        },
+        {
+          path: ghostPath,
+          name: 'ghost',
+          lastOpenedAt: 1,
+        },
+      ]),
+      'utf-8',
+    );
+    await writeProject(baseProject());
+
+    const loaded = await loadRecentProjects(userDataPath);
+    expect(loaded).toHaveLength(2);
+    expect(loaded.find((p) => p.path === projectDir)?.missing).toBe(false);
+    expect(loaded.find((p) => p.path === ghostPath)?.missing).toBe(true);
+
+    const raw = JSON.parse(
+      await fs.readFile(path.join(userDataPath, 'recent-projects.json'), 'utf-8'),
+    );
+    expect(raw).toHaveLength(2);
+    expect(raw.some((p: { path: string }) => p.path === ghostPath)).toBe(true);
+  });
+
+  it('saveRecentProjects writes a backup file before overwrite', async () => {
+    await writeProject(baseProject());
+    await addRecentProject(userDataPath, projectDir, 'first');
+
+    await addRecentProject(userDataPath, projectDir, 'second');
+    const backupPath = path.join(userDataPath, 'recent-projects.json.bak');
+    await fs.access(backupPath);
+  });
 });
+

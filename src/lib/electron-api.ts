@@ -310,6 +310,8 @@ export interface RecentProjectEntry {
   projectKind?: RecentProjectKind;
   remixEntryIntent?: RemixProjectIntent | null;
   remixRoutePath?: string | null;
+  /** 工程目录在磁盘上不存在时为 true；仅展示，不自动从 JSON 删除 */
+  missing?: boolean;
 }
 
 export interface ElectronAPI {

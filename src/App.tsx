@@ -595,7 +595,6 @@ export default function App() {
         setPage(resolveProjectLandingPage(projectData));
       } catch (error) {
         console.error('恢复工程失败:', error);
-        await window.electronAPI.removeRecentProject(projectDir);
         if (getCurrentProjectDir() === projectDir) {
           clearCurrentProject();
         }
@@ -812,11 +811,18 @@ export default function App() {
   }, [openProject]);
 
   const handleOpenRecentProject = useCallback(async (project: RecentProjectEntry) => {
+    if (project.missing) {
+      showToast('工程目录不存在，请用「导入项目」重新指定目录，或从列表移除该条目。', {
+        type: 'warning',
+        duration: 6000,
+      });
+      return;
+    }
     if (project.projectKind === 'remix' && project.remixEntryIntent) {
       setRemixEntryIntent(project.remixEntryIntent);
     }
     await openProject(project.path, resolveRecentProjectOpenOptions(project));
-  }, [openProject]);
+  }, [openProject, showToast]);
 
   // ── 导入项目（跨机器项目目录识别与路径修复）──
   const [importProjectDialogOpen, setImportProjectDialogOpen] = useState(false);

@@ -106,8 +106,13 @@ function ProjectCard({
   onClick: () => void;
   onRemove: (e: React.MouseEvent) => void;
 }) {
+  const missing = Boolean(project.missing);
   return (
-    <div className={styles.card} onClick={onClick}>
+    <div
+      className={`${styles.card}${missing ? ` ${styles.cardMissing}` : ''}`}
+      onClick={missing ? undefined : onClick}
+      role={missing ? 'group' : undefined}
+    >
       <div className={styles.coverArea}>
         {project.coverImageUrl ? (
           <img src={toFileSrc(project.coverImageUrl)} alt="" className={styles.coverImage} />
@@ -121,6 +126,7 @@ function ProjectCard({
         </div>
         <div className={styles.projectBadgeRow}>
           <span className={styles.projectBadge}>{getRecentProjectDisplayLabel(project)}</span>
+          {missing ? <span className={styles.missingBadge}>目录缺失</span> : null}
         </div>
         <div className={styles.projectMeta}>
           <span className={styles.metaItem}>
@@ -158,8 +164,12 @@ function ProjectListItem({
   onClick: () => void;
   onRemove: (e: React.MouseEvent) => void;
 }) {
+  const missing = Boolean(project.missing);
   return (
-    <div className={styles.listRow} onClick={onClick}>
+    <div
+      className={`${styles.listRow}${missing ? ` ${styles.listRowMissing}` : ''}`}
+      onClick={missing ? undefined : onClick}
+    >
       <span className={styles.colName} title={project.name}>
         <span className={styles.rowThumb}>
           {project.coverImageUrl ? (
@@ -170,6 +180,7 @@ function ProjectListItem({
         </span>
         {project.name}
         <span className={styles.listBadge}>{getRecentProjectDisplayLabel(project)}</span>
+        {missing ? <span className={styles.missingBadge}>目录缺失</span> : null}
       </span>
       <span className={styles.colDate}>
         {formatDate(project.updatedAt ?? project.lastOpenedAt)}
@@ -242,7 +253,7 @@ export function ProjectList({ projects, onOpenProject, onRemoveProject }: Projec
                 key={project.path}
                 project={project}
                 onClick={() => onOpenProject(project)}
-                onRemove={(e) => handleRemove(e, project)}
+                                onRemove={(e) => handleRemove(e, project)}
               />
             ))}
           </div>
@@ -260,7 +271,7 @@ export function ProjectList({ projects, onOpenProject, onRemoveProject }: Projec
                   key={project.path}
                   project={project}
                   onClick={() => onOpenProject(project)}
-                  onRemove={(e) => handleRemove(e, project)}
+                                  onRemove={(e) => handleRemove(e, project)}
                 />
               ))}
             </div>
