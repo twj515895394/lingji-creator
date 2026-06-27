@@ -20,8 +20,71 @@ function currentModuleDir(): string {
   return path.dirname(fileURLToPath(import.meta.url));
 }
 
-function repoRoot(): string {
-  return path.resolve(currentModuleDir(), '../../..');
+const WHISPER_RELATIVE_PATHS = {
+  whisperBin: [
+    'tools/local-stt/whisper/main',
+    'resources/local-stt/whisper/main',
+  ],
+  modelPath: [
+    'tools/local-stt/whisper/ggml-small.bin',
+    'resources/local-stt/whisper/ggml-small.bin',
+  ],
+} as const;
+
+function whisperSearchRoots(): string[] {
+  const moduleDir = currentModuleDir();
+  const roots = new Set<string>();
+  const cwd = process.cwd();
+  if (cwd) {
+    roots.add(cwd);
+  }
+
+  // electron-vite 打包后主进程代码落在 dist-electron/，仓库根应为其上一级。
+  if (path.basename(moduleDir) === 'dist-electron') {
+    roots.add(path.resolve(moduleDir, '..'));
+  } else {
+    // 源码路径 electron/sceneforge/remix → 仓库根为三级父目录。
+    roots.add(path.resolve(moduleDir, '../../..'));
+  }
+
+  const envRoot = process.env.LINGJI_REPO_ROOT?.trim();
+  if (envRoot) {
+    roots.add(path.resolve(envRoot));
+  }
+
+  return Array.from(roots);
+}
+
+function buildWhisperAssetCandidates(
+  explicitPaths: Array<string | null | undefined>,
+  relativePaths: readonly string[],
+): string[] {
+  const candidates: string[] = [];
+  const seen = new Set<string>();
+
+  const push = (candidate: string | null | undefined) => {
+    if (!candidate) {
+      return;
+    }
+    const normalized = path.resolve(candidate);
+    if (seen.has(normalized)) {
+      return;
+    }
+    seen.add(normalized);
+    candidates.push(normalized);
+  };
+
+  for (const candidate of explicitPaths) {
+    push(candidate);
+  }
+
+  for (const root of whisperSearchRoots()) {
+    for (const relativePath of relativePaths) {
+      push(path.join(root, relativePath));
+    }
+  }
+
+  return candidates;
 }
 
 async function firstExisting(paths: string[]): Promise<string | null> {
@@ -40,12 +103,16 @@ export async function resolveWhisperAssets(
   options: RemixWhisperProviderOptions = {},
 ): Promise<{ whisperBin: string; modelPath: string }> {
   const whisperBin = await firstExisting(
-    [options.whisperBin, process.env.REMIX_WHISPER_BIN, path.join(repoRoot(), 'tools/local-stt/whisper/main')]
-      .filter(Boolean) as string[],
+    buildWhisperAssetCandidates(
+      [options.whisperBin, process.env.REMIX_WHISPER_BIN],
+      WHISPER_RELATIVE_PATHS.whisperBin,
+    ),
   );
   const modelPath = await firstExisting(
-    [options.modelPath, process.env.REMIX_WHISPER_MODEL, path.join(repoRoot(), 'tools/local-stt/whisper/ggml-small.bin')]
-      .filter(Boolean) as string[],
+    buildWhisperAssetCandidates(
+      [options.modelPath, process.env.REMIX_WHISPER_MODEL],
+      WHISPER_RELATIVE_PATHS.modelPath,
+    ),
   );
 
   if (!whisperBin || !modelPath) {
