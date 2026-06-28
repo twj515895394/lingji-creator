@@ -105,15 +105,28 @@ function buildApiClient(mode: 'success' | 'failure'): RemixIpcContract {
     rerunSegmentUnderstanding: async () => MOCK_ASSET_PROCESSING_SNAPSHOTS['source-library-001'],
     getSourceUnderstandingWorkbench: async () => ({
       ready: true,
+      version: 2 as const,
       isPlaceholder: false,
+      isStale: false,
+      staleSegmentIds: [],
+      staleReasons: [],
+      rollupFallbackUsed: false,
       errors: [],
-      overviewSummary: '全片围绕对峙与情绪升温展开。',
-      storyArc: '压迫开场 → 情绪升温',
-      emotionCurve: '紧张 → 压迫',
-      remixPotential: ['身份替换'],
-      highValueSegmentIds: ['segment-l-001'],
-      understoodSegmentCount: 1,
-      segmentCount: 1,
+      overview: {
+        logline: '天台心理战',
+        storySummaryShort: '天台博弈',
+        storyContent: '全片围绕对峙与情绪升温展开。',
+        eventChain: ['天台对峙开场'],
+        characterMap: [],
+        mainConflict: '心理交锋',
+        emotionCurve: '紧张 → 压迫',
+        visualStyle: '冷调',
+        dialogueStyle: '平稳',
+        remixDirections: [
+          { title: '身份替换', idea: '将天台对手替换为机器人', suitableStyle: '赛博' }
+        ],
+        warnings: [],
+      },
       segments: [
         {
           segmentId: 'segment-l-001',
@@ -121,15 +134,54 @@ function buildApiClient(mode: 'success' | 'failure'): RemixIpcContract {
           title: '天台风声压场',
           timeRangeLabel: '00:00 - 00:08',
           thumbnailPath: null,
-          transcriptSummary: '对白摘要',
-          mainAction: '缓慢抬头',
-          shotSummary: '中近景 / 固定镜头',
-          plotFunction: '推进情绪',
-          speechSummary: '对白摘要',
-          positivePrompt: '固定镜头，缓慢抬头。',
-          keepElements: ['压迫节奏'],
-          replaceableElements: ['角色身份'],
-          confidence: 0.86,
+          transcript: {
+            asrText: '对白摘要',
+            correctedText: '',
+            effectiveText: '对白摘要',
+            correctionStatus: 'raw' as const,
+          },
+          visual: {
+            sceneSummary: '天台',
+            mainAction: '缓慢抬头',
+            characters: ['对手'],
+            environmentDetails: '天台风大',
+            props: [],
+            lighting: '自然光',
+            colorTone: '冷调',
+          },
+          camera: {
+            shotSize: '中近景',
+            movement: '固定镜头',
+          },
+          story: {
+            plotFunction: '推进情绪',
+          },
+          remix: {
+            keepElements: ['压迫节奏'],
+            replaceableElements: ['角色身份'],
+            rewriteIdeas: [],
+            riskNotes: [],
+          },
+          videoPrompt: {
+            version: 2 as const,
+            fullChinesePrompt: '固定镜头，缓慢抬头。',
+            dimensions: [
+              { key: 'subject', label: '主体', text: '缓慢抬头' }
+            ],
+            negativePrompt: '',
+          },
+          frameVision: {
+            available: false,
+            segmentVisualSummary: null,
+            warnings: [],
+          },
+          quality: {
+            confidence: 0.86,
+            needsHumanReview: false,
+            warnings: [],
+          },
+          isStale: true,
+          staleReasons: [],
           understandingPath: 'segment-l-001-analysis.json',
           isPlaceholder: false,
         },
@@ -208,7 +260,7 @@ describe('SceneForge Remix asset processing workspace', () => {
     expect(container.textContent).toContain('真实镜头切片');
     expect(container.textContent).toContain('快速模式');
     expect(container.textContent).toContain('快速模式 · 0 个低置信度镜头段');
-    expect(container.textContent).toContain('文件：source.mp4');
+    expect(container.textContent).toContain('source.mp4');
     expect(container.textContent).toContain('技术信息');
     expect(container.textContent).not.toContain('Seedance 2.0 视频提示词');
   });
@@ -323,7 +375,7 @@ describe('SceneForge Remix asset processing workspace', () => {
       />,
     );
 
-    expect(container.textContent).toContain('全片摘要');
+    expect(container.textContent).toContain('故事内容');
     expect(container.textContent).toContain('固定镜头，缓慢抬头。');
     expect(container.textContent).toContain('复制 video prompt');
     expect(container.querySelector('[data-testid="remix-understanding-workbench"]')).not.toBeNull();

@@ -130,57 +130,93 @@ function buildMockUnderstandingWorkbench(
     title: segment.title,
     timeRangeLabel: '00:00 - 00:10',
     thumbnailPath: segment.keyframes[0]?.imagePath ?? null,
-    transcriptSummary: '对白摘要',
-    mainAction: '缓慢抬头',
-    shotSummary: '中近景 / 固定镜头',
-    plotFunction: '推进情绪',
-    speechSummary: '对白摘要',
-    positivePrompt: `固定镜头，${segment.title} 缓慢抬头。`,
-    chineseVideoPrompt: {
-      language: 'zh-CN' as const,
-      fullChinesePrompt: `固定镜头，${segment.title} 缓慢抬头。人物主体神态严肃，胶片质感。`,
-      subjectPrompt: `${segment.title}中的主角，服装整洁，神态严肃`,
-      scenePrompt: '微暗的室内环境，窗外隐约有光线射入',
-      actionPrompt: '缓慢抬头，视线转向镜头前',
-      performancePrompt: '眼神聚焦，嘴唇微抿，带有压迫感',
-      cameraPrompt: '中近景，平视固定镜头',
-      lightingPrompt: '侧面自然光照，面部阴暗交界明显',
-      colorPrompt: '冷色调，胶片颗粒感，高对比度',
-      emotionPrompt: '紧张，压抑，情绪升温',
-      rhythmPrompt: '舒缓深沉的运动节奏',
-      dialoguePrompt: '台词严肃，中性语气',
-      soundPrompt: '窗外雨声，室内微弱白噪音',
-      stylePrompt: '电影感，写实质感',
-      continuityPrompt: '与前后镜头动作衔接，主体视线一致',
-      remixControlPrompt: '保留压迫表情，可替换窗外背景',
-      negativePrompt: '避免画面闪烁，避免变形，避免卡通动漫风格',
-      modelHints: {},
+    transcript: {
+      asrText: 'Whisper 原始文本',
+      correctedText: '',
+      effectiveText: 'Whisper 原始文本',
+      correctionStatus: 'raw' as const,
     },
-    keepElements: ['压迫节奏'],
-    replaceableElements: ['角色身份'],
-    confidence: 0.86,
+    visual: {
+      sceneSummary: '微暗的室内环境，窗外隐约有光线射入',
+      mainAction: '缓慢抬头',
+      characters: ['角色A'],
+      environmentDetails: '微暗的室内环境',
+      props: ['桌子'],
+      lighting: '侧面自然光照',
+      colorTone: '冷色调',
+    },
+    camera: {
+      shotSize: '中近景',
+      movement: '固定镜头',
+    },
+    story: {
+      plotFunction: '推进情绪',
+    },
+    remix: {
+      keepElements: ['压迫节奏'],
+      replaceableElements: ['角色身份'],
+      rewriteIdeas: ['将角色身份替换为赛博朋克风格'],
+      riskNotes: [],
+    },
+    videoPrompt: {
+      version: 2 as const,
+      fullChinesePrompt: `固定镜头，${segment.title} 缓慢抬头。人物主体神态严肃，胶片质感。`,
+      dimensions: [
+        { key: 'subject', label: '👤 人物主体', text: `${segment.title}中的主角，服装整洁，神态严肃` },
+        { key: 'scene', label: '🏠 空间场景', text: '微暗的室内环境，窗外隐约有光线射入' },
+        { key: 'action', label: '🏃 动作流程', text: '缓慢抬头，视线转向镜头前' },
+        { key: 'camera', label: '🎥 镜头语言', text: '中近景，平视固定镜头' },
+      ],
+      negativePrompt: '避免画面闪烁，避免变形，避免卡通动漫风格',
+    },
+    frameVision: {
+      available: true,
+      segmentVisualSummary: '画面中一个人在微暗的室内低着头，随后慢慢抬起，表情冰冷。',
+      warnings: [],
+    },
+    quality: {
+      confidence: 0.86,
+      needsHumanReview: false,
+      warnings: [],
+    },
+    isStale: false,
+    staleReasons: [],
     understandingPath: segment.analysisJsonPath ?? '',
     isPlaceholder: false,
-    transcriptCorrectionText: '',
-    transcriptCorrectionStatus: 'raw' as const,
-    effectiveTranscript: '对白摘要',
-    isStale: false,
   }));
+
   const hasSavedAnnotation =
     (asset.tags?.length ?? 0) > 0 ||
     Boolean(asset.annotationNote?.trim()) ||
     Boolean(asset.lastAnnotatedAt?.trim());
+
   return {
     ready: true,
+    version: 2 as const,
     isPlaceholder: false,
+    isStale: false,
+    staleSegmentIds: [],
+    staleReasons: [],
+    rollupFallbackUsed: false,
     errors: [],
-    overviewSummary: '全片围绕对峙与情绪升温展开。',
-    storyArc: '压迫开场 → 情绪升温',
-    emotionCurve: '紧张 → 压迫',
-    remixPotential: ['身份替换', '节奏增强'],
-    highValueSegmentIds: segments.map((segment) => segment.segmentId),
-    understoodSegmentCount: segments.length,
-    segmentCount: segments.length,
+    overview: {
+      logline: '这是在阴暗室内展开的心理博弈。',
+      storySummaryShort: '两方角色各怀鬼胎，在一间阴暗狭小的房间中对峙。',
+      storyContent: '全片围绕对峙与情绪升温展开。双方通过简短的台词和眼神交锋，使房间内的压迫感达到顶点。',
+      eventChain: ['角色对峙开场', '台词交锋升温', '情绪爆发结束'],
+      characterMap: [
+        { nameOrRole: '角色A', description: '神态严肃的中年男子', relation: '对峙方' },
+      ],
+      mainConflict: '眼神与语言交锋中的心理防线突破。',
+      emotionCurve: '紧张 → 压迫',
+      visualStyle: '冷调、暗室、高对比胶片感',
+      dialogueStyle: '冰冷、断片式、充满悬疑',
+      remixDirections: [
+        { title: '身份替换', idea: '将角色A替换为科幻人工智能', suitableStyle: '赛博朋克' },
+        { title: '节奏增强', idea: '加快剪辑速度，强化心跳环境音' },
+      ],
+      warnings: [],
+    },
     segments,
     annotationPrefill: hasSavedAnnotation
       ? null
@@ -188,8 +224,6 @@ function buildMockUnderstandingWorkbench(
           suggestedTags: ['压迫节奏', '角色身份'],
           suggestedNote: '【AI 预填，请按真实观感修正】\n片段 01：保留 压迫节奏；可替换 角色身份。',
         },
-    rollupFallbackUsed: false,
-    storyStale: false,
   };
 }
 
@@ -455,12 +489,13 @@ export const remixMockApi: RemixIpcContract = {
     const workbench = buildMockUnderstandingWorkbench(snapshot.sourceAsset);
     const segment = workbench.segments.find((s) => s.segmentId === input.segmentId);
     if (segment) {
-      segment.transcriptCorrectionText = input.correctedText;
-      segment.transcriptCorrectionStatus = input.markConfirmed ? 'confirmed' : 'edited';
-      segment.effectiveTranscript = input.correctedText;
+      segment.transcript.correctedText = input.correctedText;
+      segment.transcript.correctionStatus = input.markConfirmed ? 'confirmed' : 'edited';
+      segment.transcript.effectiveText = input.correctedText;
       segment.isStale = true;
     }
-    workbench.storyStale = true;
+    workbench.isStale = true;
+    workbench.staleSegmentIds.push(input.segmentId);
     return workbench;
   },
 

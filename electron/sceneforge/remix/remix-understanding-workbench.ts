@@ -4,6 +4,7 @@ import type { SourceAsset } from '../../../src/sceneforge/remix/types';
 import {
   getRemixOriginalUnderstandingJsonPath,
   getRemixSegmentUnderstandingJsonPath,
+  getRemixSegmentFrameVisionJsonPath,
 } from './remix-artifact-paths';
 import {
   isPlaceholderSegmentAnalysisItem,
@@ -14,36 +15,10 @@ import type { RemixOriginalUnderstandingDocument } from './remix-source-understa
 import {
   buildSegmentUnderstandingInputHash,
   type RemixSegmentUnderstandingDocument,
-  type RemixChineseVideoPrompt,
 } from './remix-segment-understanding-schema';
 import type { RemixSegmentTranscriptDocument } from './remix-transcript-types';
 import type { RemixSegmentTranscriptCorrectionDocument } from './remix-transcript-correction-service';
 import { resolveProjectFile } from './remix-validators';
-
-export interface RemixUnderstandingWorkbenchSegmentCard {
-  segmentId: string;
-  segmentIndex: number;
-  title: string;
-  timeRangeLabel: string;
-  thumbnailPath: string | null;
-  transcriptSummary: string;
-  mainAction: string;
-  shotSummary: string;
-  plotFunction: string;
-  speechSummary: string;
-  positivePrompt: string;
-  chineseVideoPrompt?: RemixChineseVideoPrompt | null;
-  keepElements: string[];
-  replaceableElements: string[];
-  confidence: number | null;
-  understandingPath: string;
-  isPlaceholder: boolean;
-
-  transcriptCorrectionText: string;
-  transcriptCorrectionStatus: 'raw' | 'edited' | 'confirmed';
-  effectiveTranscript: string;
-  isStale: boolean;
-}
 
 export interface RemixUnderstandingAnnotationPrefill {
   suggestedTags: string[];
@@ -52,19 +27,113 @@ export interface RemixUnderstandingAnnotationPrefill {
 
 export interface RemixUnderstandingWorkbenchSnapshot {
   ready: boolean;
+  version: 2;
   isPlaceholder: boolean;
-  errors: string[];
-  overviewSummary: string | null;
-  storyArc: string | null;
-  emotionCurve: string | null;
-  remixPotential: string[];
-  highValueSegmentIds: string[];
-  understoodSegmentCount: number;
-  segmentCount: number;
-  segments: RemixUnderstandingWorkbenchSegmentCard[];
-  annotationPrefill: RemixUnderstandingAnnotationPrefill | null;
+  isStale: boolean;
+  staleSegmentIds: string[];
+  staleReasons: string[];
   rollupFallbackUsed: boolean;
-  storyStale: boolean;
+  errors: string[];
+
+  overview: {
+    logline: string | null;
+    storySummaryShort: string | null;
+    storyContent: string | null;
+    eventChain: string[];
+    characterMap: Array<{
+      nameOrRole: string;
+      description: string;
+      relation?: string | null;
+    }>;
+    mainConflict: string | null;
+    emotionCurve: string | null;
+    visualStyle: string | null;
+    dialogueStyle: string | null;
+    remixDirections: Array<{
+      title: string;
+      idea: string;
+      suitableStyle?: string | null;
+      risk?: string | null;
+    }>;
+    warnings: string[];
+  };
+
+  segments: Array<{
+    segmentId: string;
+    segmentIndex: number;
+    title: string;
+    timeRangeLabel: string;
+    thumbnailPath: string | null;
+
+    transcript: {
+      asrText: string;
+      correctedText: string;
+      effectiveText: string;
+      correctionStatus: 'raw' | 'edited' | 'confirmed';
+    };
+
+    visual: {
+      sceneSummary: string;
+      mainAction: string;
+      characters: string[];
+      environmentDetails: string;
+      props: string[];
+      lighting: string;
+      colorTone: string;
+    };
+
+    camera: {
+      shotSize: string;
+      movement: string;
+      angle?: string;
+      composition?: string;
+    };
+
+    story: {
+      plotFunction: string;
+      event?: string;
+      conflict?: string;
+      emotion?: string;
+      beforeAfterRelation?: string;
+    };
+
+    remix: {
+      keepElements: string[];
+      replaceableElements: string[];
+      rewriteIdeas: string[];
+      riskNotes: string[];
+    };
+
+    videoPrompt: {
+      version: 2;
+      fullChinesePrompt: string;
+      dimensions: Array<{
+        key: string;
+        label: string;
+        text: string;
+      }>;
+      negativePrompt: string;
+    };
+
+    frameVision: {
+      available: boolean;
+      segmentVisualSummary: string | null;
+      warnings: string[];
+    };
+
+    quality: {
+      confidence: number | null;
+      needsHumanReview: boolean;
+      warnings: string[];
+    };
+
+    isStale: boolean;
+    staleReasons: string[];
+    understandingPath: string;
+    isPlaceholder: boolean;
+  }>;
+
+  annotationPrefill: RemixUnderstandingAnnotationPrefill | null;
 }
 
 async function readJson<T>(absPath: string): Promise<T | null> {
@@ -92,7 +161,7 @@ function pickThumbnail(segment: SourceAsset['segments'][number]): string | null 
 
 export function buildAnnotationPrefillFromUnderstanding(
   asset: SourceAsset,
-  segmentCards: RemixUnderstandingWorkbenchSegmentCard[],
+  segments: RemixUnderstandingWorkbenchSnapshot['segments'],
 ): RemixUnderstandingAnnotationPrefill | null {
   const hasSavedAnnotation =
     (asset.tags?.length ?? 0) > 0 ||
@@ -103,16 +172,16 @@ export function buildAnnotationPrefillFromUnderstanding(
   }
   const suggestedTags = Array.from(
     new Set(
-      segmentCards
-        .flatMap((card) => [...card.keepElements, ...card.replaceableElements])
+      segments
+        .flatMap((seg) => [...seg.remix.keepElements, ...seg.remix.replaceableElements])
         .map((item) => item.trim())
         .filter(Boolean),
     ),
   ).slice(0, 8);
-  const lines = segmentCards.map((card) => {
-    const keep = card.keepElements.length ? card.keepElements.join('、') : '（待补）';
-    const replace = card.replaceableElements.length ? card.replaceableElements.join('、') : '（待补）';
-    return `${card.title}：保留 ${keep}；可替换 ${replace}。动作：${card.mainAction}`;
+  const lines = segments.map((seg) => {
+    const keep = seg.remix.keepElements.length ? seg.remix.keepElements.join('、') : '（待补）';
+    const replace = seg.remix.replaceableElements.length ? seg.remix.replaceableElements.join('、') : '（待补）';
+    return `${seg.title}：保留 ${keep}；可替换 ${replace}。动作：${seg.visual.mainAction}`;
   });
   return {
     suggestedTags,
@@ -125,6 +194,8 @@ export async function loadRemixUnderstandingWorkbench(
   asset: SourceAsset,
 ): Promise<RemixUnderstandingWorkbenchSnapshot> {
   const errors: string[] = [];
+  const warnings: string[] = [];
+  
   const overviewPath = asset.sourceOverviewJsonPath?.trim();
   const overview = overviewPath
     ? await readJson<Record<string, unknown>>(resolveProjectFile(projectDir, overviewPath))
@@ -151,8 +222,9 @@ export async function loadRemixUnderstandingWorkbench(
     ? (segmentAnalysis as RemixUnderstandingGateSegmentItem[])
     : [];
 
-  const cards: RemixUnderstandingWorkbenchSegmentCard[] = [];
-  const correctionUpdatedTimes: number[] = [];
+  const cards: RemixUnderstandingWorkbenchSnapshot['segments'] = [];
+  const staleSegmentIds: string[] = [];
+  const staleReasonsSet = new Set<string>();
 
   for (const segment of asset.segments) {
     const relPath =
@@ -173,6 +245,7 @@ export async function loadRemixUnderstandingWorkbench(
     let transcriptCorrectionStatus: 'raw' | 'edited' | 'confirmed' = 'raw';
     let effectiveTranscript = transcriptSummary;
     let isStale = false;
+    const segStaleReasons: string[] = [];
     let correctionUpdatedAt = '';
 
     if (segment.transcriptCorrectionPath?.trim()) {
@@ -184,15 +257,10 @@ export async function loadRemixUnderstandingWorkbench(
         transcriptCorrectionStatus = correction.transcript.correctionStatus ?? 'raw';
         effectiveTranscript = correction.transcript.effectiveText || transcriptSummary;
         correctionUpdatedAt = correction.updatedAt ?? '';
-        if (correctionUpdatedAt && transcriptCorrectionStatus !== 'raw') {
-          const t = new Date(correctionUpdatedAt).getTime();
-          if (!isNaN(t)) {
-            correctionUpdatedTimes.push(t);
-          }
-        }
       }
     }
 
+    // 1. 台词及关键帧过期判定
     const currentHash = buildSegmentUnderstandingInputHash({
       segment,
       transcript: { plainText: effectiveTranscript } as any,
@@ -203,13 +271,48 @@ export async function loadRemixUnderstandingWorkbench(
       const storedHash = understanding.inputHash;
       if (storedHash && storedHash !== currentHash) {
         isStale = true;
+        segStaleReasons.push('transcript_correction_changed');
+        staleReasonsSet.add('transcript_correction_changed');
       } else if (correctionUpdatedAt && transcriptCorrectionStatus !== 'raw') {
         const correctionTime = new Date(correctionUpdatedAt).getTime();
         const understandingTime = new Date(understanding.generatedAt).getTime();
-        if (!isNaN(correctionTime) && !isNaN(understandingTime)) {
-          isStale = correctionTime > understandingTime;
+        if (!isNaN(correctionTime) && !isNaN(understandingTime) && correctionTime > understandingTime) {
+          isStale = true;
+          segStaleReasons.push('transcript_correction_changed');
+          staleReasonsSet.add('transcript_correction_changed');
         }
       }
+    }
+
+    // 2. 视觉抽取文件更新过期判定
+    const fvPath = resolveProjectFile(projectDir, getRemixSegmentFrameVisionJsonPath(asset.id, segment.id));
+    let frameVisionAvailable = false;
+    let segmentVisualSummary: string | null = null;
+    let frameVisionWarnings: string[] = [];
+
+    try {
+      const fv = await readJson<any>(fvPath);
+      if (fv) {
+        frameVisionAvailable = true;
+        segmentVisualSummary = fv.segmentVisualSummary || null;
+        frameVisionWarnings = fv.quality?.warnings || [];
+
+        if (understanding?.generatedAt && fv.generatedAt) {
+          const fvTime = new Date(fv.generatedAt).getTime();
+          const understandingTime = new Date(understanding.generatedAt).getTime();
+          if (!isNaN(fvTime) && !isNaN(understandingTime) && fvTime > understandingTime) {
+            isStale = true;
+            segStaleReasons.push('frame_vision_changed');
+            staleReasonsSet.add('frame_vision_changed');
+          }
+        }
+      }
+    } catch {
+      // 忽略
+    }
+
+    if (isStale) {
+      staleSegmentIds.push(segment.id);
     }
 
     const gateItem = gateItems.find((item) => item.segmentId === segment.id) ?? null;
@@ -225,53 +328,56 @@ export async function loadRemixUnderstandingWorkbench(
         title: segment.title,
         timeRangeLabel: formatTimeRange(segment.timeRange.startMs, segment.timeRange.endMs),
         thumbnailPath: pickThumbnail(segment),
-        transcriptSummary: effectiveTranscript || '（无台词）',
-        mainAction: '待生成',
-        shotSummary: '待生成',
-        plotFunction: '待生成',
-        speechSummary: '待生成',
-        positivePrompt: '',
-        keepElements: [],
-        replaceableElements: [],
-        confidence: null,
+        transcript: {
+          asrText: transcriptSummary,
+          correctedText: transcriptCorrectionText,
+          effectiveText: effectiveTranscript,
+          correctionStatus: transcriptCorrectionStatus,
+        },
+        visual: {
+          sceneSummary: '待生成',
+          mainAction: '待生成',
+          characters: [],
+          environmentDetails: '待生成',
+          props: [],
+          lighting: '待生成',
+          colorTone: '待生成',
+        },
+        camera: {
+          shotSize: '待生成',
+          movement: '待生成',
+        },
+        story: {
+          plotFunction: '待生成',
+        },
+        remix: {
+          keepElements: [],
+          replaceableElements: [],
+          rewriteIdeas: [],
+          riskNotes: [],
+        },
+        videoPrompt: {
+          version: 2,
+          fullChinesePrompt: '',
+          dimensions: [],
+          negativePrompt: '',
+        },
+        frameVision: {
+          available: frameVisionAvailable,
+          segmentVisualSummary,
+          warnings: frameVisionWarnings,
+        },
+        quality: {
+          confidence: null,
+          needsHumanReview: true,
+          warnings: ['缺少片段分析，需重新理解'],
+        },
+        isStale: false,
+        staleReasons: [],
         understandingPath: relPath,
         isPlaceholder: true,
-        transcriptCorrectionText,
-        transcriptCorrectionStatus,
-        effectiveTranscript,
-        isStale: false,
       });
       continue;
-    }
-
-    const fullChinesePrompt = (understanding.videoPrompt as any).fullChinesePrompt || (understanding.videoPrompt as any).positivePrompt || '';
-    let chineseVideoPrompt: RemixChineseVideoPrompt | null = null;
-    if (understanding.videoPrompt) {
-      if ('fullChinesePrompt' in understanding.videoPrompt) {
-        chineseVideoPrompt = understanding.videoPrompt;
-      } else {
-        const v1Prompt = understanding.videoPrompt as any;
-        chineseVideoPrompt = {
-          language: 'zh-CN',
-          fullChinesePrompt: v1Prompt.positivePrompt || '',
-          subjectPrompt: '（V1 占位）请参考动作与主体说明',
-          scenePrompt: '（V1 占位）请参考场景与道具说明',
-          actionPrompt: v1Prompt.motionPrompt || '（V1 占位）请参考动作与表演说明',
-          performancePrompt: '（V1 占位）请参考表演与表情说明',
-          cameraPrompt: v1Prompt.cameraPrompt || '（V1 占位）请参考机位与运动说明',
-          lightingPrompt: '（V1 占位）请参考光照说明',
-          colorPrompt: '（V1 占位）请参考色彩说明',
-          emotionPrompt: '（V1 占位）请参考情绪说明',
-          rhythmPrompt: '（V1 占位）请参考节奏说明',
-          dialoguePrompt: v1Prompt.dialoguePrompt || '（V1 占位）请参考台词说明',
-          soundPrompt: '（V1 占位）请参考声音说明',
-          stylePrompt: '（V1 占位）请参考写实质感与风格说明',
-          continuityPrompt: '（V1 占位）请参考前后段落的连续性',
-          remixControlPrompt: '（V1 占位）请参考可保留和可替换元素说明',
-          negativePrompt: v1Prompt.negativePrompt || '（V1 占位）避免错误画面',
-          modelHints: {},
-        };
-      }
     }
 
     cards.push({
@@ -280,26 +386,64 @@ export async function loadRemixUnderstandingWorkbench(
       title: segment.title,
       timeRangeLabel: formatTimeRange(segment.timeRange.startMs, segment.timeRange.endMs),
       thumbnailPath: pickThumbnail(segment),
-      transcriptSummary: effectiveTranscript || understanding.audio.speechSummary,
-      mainAction: understanding.visual.mainAction,
-      shotSummary: `${understanding.camera.shotSize} / ${understanding.camera.movement}`,
-      plotFunction: understanding.story.plotFunction,
-      speechSummary: understanding.audio.speechSummary,
-      positivePrompt: fullChinesePrompt,
-      chineseVideoPrompt,
-      keepElements: understanding.remix.keepElements,
-      replaceableElements: understanding.remix.replaceableElements,
-      confidence: understanding.quality.confidence ?? null,
+      transcript: {
+        asrText: transcriptSummary,
+        correctedText: transcriptCorrectionText,
+        effectiveText: effectiveTranscript,
+        correctionStatus: transcriptCorrectionStatus,
+      },
+      visual: {
+        sceneSummary: understanding.visual?.sceneSummary || '',
+        mainAction: understanding.visual?.mainAction || '',
+        characters: understanding.visual?.characters || [],
+        environmentDetails: understanding.visual?.environment || understanding.visual?.environmentDetails || '',
+        props: understanding.visual?.props || [],
+        lighting: understanding.visual?.lighting || '',
+        colorTone: understanding.visual?.colorTone || '',
+      },
+      camera: {
+        shotSize: understanding.camera?.shotSize || '',
+        movement: understanding.camera?.movement || '',
+        angle: understanding.camera?.angle,
+        composition: understanding.camera?.composition,
+      },
+      story: {
+        plotFunction: understanding.story?.plotFunction || '',
+        event: understanding.story?.event,
+        conflict: understanding.story?.conflict,
+        emotion: understanding.story?.emotion,
+        beforeAfterRelation: understanding.story?.beforeAfterRelation,
+      },
+      remix: {
+        keepElements: understanding.remix?.keepElements || understanding.remix?.keepPoints || [],
+        replaceableElements: understanding.remix?.replaceableElements || understanding.remix?.replacePoints || [],
+        rewriteIdeas: understanding.remix?.rewriteIdeas || [],
+        riskNotes: understanding.remix?.riskNotes || [],
+      },
+      videoPrompt: {
+        version: 2,
+        fullChinesePrompt: understanding.videoPrompt?.fullChinesePrompt || (understanding.videoPrompt as any)?.positivePrompt || '',
+        dimensions: understanding.videoPrompt?.dimensions || [],
+        negativePrompt: understanding.videoPrompt?.negativePrompt || '',
+      },
+      frameVision: {
+        available: frameVisionAvailable,
+        segmentVisualSummary,
+        warnings: frameVisionWarnings,
+      },
+      quality: {
+        confidence: understanding.quality?.confidence ?? null,
+        needsHumanReview: understanding.quality?.needsHumanReview ?? false,
+        warnings: understanding.quality?.warnings || [],
+      },
+      isStale,
+      staleReasons: segStaleReasons,
       understandingPath: relPath,
       isPlaceholder: placeholder,
-      transcriptCorrectionText,
-      transcriptCorrectionStatus,
-      effectiveTranscript,
-      isStale,
     });
   }
 
-  const understoodSegmentCount = cards.filter((card) => !card.isPlaceholder && card.positivePrompt).length;
+  const understoodSegmentCount = cards.filter((card) => !card.isPlaceholder).length;
   const isPlaceholder = Boolean(
     !overview ||
       isPlaceholderUnderstandingOverview(overview) ||
@@ -315,42 +459,66 @@ export async function loadRemixUnderstandingWorkbench(
     if (Array.isArray(originalErrors)) {
       errors.push(...originalErrors);
     }
+    const originalWarnings = (original.quality as any).warnings;
+    if (Array.isArray(originalWarnings)) {
+      warnings.push(...originalWarnings);
+    }
   }
 
-  const rawStoryContent = original
-    ? ((original.overall as any).storyContent ?? original.overall.summary ?? null)
-    : (overview && typeof overview.overall === 'object' && overview.overall !== null
-      ? String((overview.overall as any).storyContent ?? (overview.overall as any).summary ?? '').trim() || null
-      : null);
-
-  const overviewSummary = rollupFallbackUsed ? '' : rawStoryContent;
-
+  // 3. 全片故事汇总与过期联动检测
   const hasAnySegmentStale = cards.some((card) => card.isStale);
-  let storyStale = hasAnySegmentStale;
-  if (!storyStale && original?.generatedAt && correctionUpdatedTimes.length > 0) {
+  let isOverviewStale = hasAnySegmentStale;
+  if (!isOverviewStale && original?.generatedAt) {
     const originalTime = new Date(original.generatedAt).getTime();
     if (!isNaN(originalTime)) {
-      const maxCorrectionTime = Math.max(...correctionUpdatedTimes);
-      if (maxCorrectionTime > originalTime) {
-        storyStale = true;
+      // 检查是否有任何纠错的更新时间比 rollup 更加晚
+      for (const segment of asset.segments) {
+        if (segment.transcriptCorrectionPath?.trim()) {
+          try {
+            const corrPath = resolveProjectFile(projectDir, segment.transcriptCorrectionPath);
+            const stats = await fs.stat(corrPath);
+            if (stats.mtimeMs > originalTime) {
+              isOverviewStale = true;
+              break;
+            }
+          } catch {
+            // 忽略
+          }
+        }
       }
     }
   }
 
+  const suggestedTags = original?.remixStrategy?.suggestedTags || [];
+  
   return {
     ready: understoodSegmentCount === asset.segments.length && !isPlaceholderUnderstandingOverview(overview),
+    version: 2,
     isPlaceholder,
+    isStale: isOverviewStale,
+    staleSegmentIds,
+    staleReasons: Array.from(staleReasonsSet),
+    rollupFallbackUsed,
     errors,
-    overviewSummary,
-    storyArc: original?.overall.storyArc ?? null,
-    emotionCurve: original?.overall.emotionCurve ?? null,
-    remixPotential: original?.overall.remixPotential ?? [],
-    highValueSegmentIds: original?.overall.highValueSegmentIds ?? [],
-    understoodSegmentCount,
-    segmentCount: asset.segments.length,
+    overview: {
+      logline: original?.overall?.logline || null,
+      storySummaryShort: original?.overall?.storySummaryShort || null,
+      storyContent: rollupFallbackUsed ? null : (original?.overall?.storyContent || null),
+      eventChain: original?.overall?.eventChain || [],
+      characterMap: original?.overall?.characterMap || [],
+      mainConflict: original?.overall?.mainConflict || null,
+      emotionCurve: original?.overall?.emotionCurve || null,
+      visualStyle: original?.overall?.visualStyle || null,
+      dialogueStyle: original?.overall?.dialogueStyle || null,
+      remixDirections: (original?.remixStrategy?.rewriteDirections || []).map((d) => ({
+        title: d.title,
+        idea: d.idea,
+        suitableStyle: d.suitableStyle,
+        risk: d.risk,
+      })),
+      warnings,
+    },
     segments: cards,
     annotationPrefill: buildAnnotationPrefillFromUnderstanding(asset, cards.filter((c) => !c.isPlaceholder)),
-    rollupFallbackUsed,
-    storyStale,
   };
 }
