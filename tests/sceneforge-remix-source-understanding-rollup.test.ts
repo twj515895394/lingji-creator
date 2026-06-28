@@ -139,7 +139,6 @@ describe('SceneForge Remix source understanding rollup', () => {
       storyContent: '长剧情故事内容',
     });
     expect(original.quality.understoodSegmentCount).toBe(2);
-    expect(original.overall.storyArc).toContain('铺垫');
     expect(original.overall.storyContent).toBe('长剧情故事内容');
     expect(original.overall.storySummaryShort).toBe('短故事');
     expect(original.overall.logline).toBe('这是核心梗概');

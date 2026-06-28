@@ -380,6 +380,16 @@ export const remixMockApi: RemixIpcContract = {
     return snapshot;
   },
 
+  async exportUnderstandingReport(input: {
+    projectDir: string;
+    sourceAssetId: string;
+    format?: 'markdown';
+  }) {
+    return {
+      reportPath: `${input.projectDir}/original_understanding_v2.md`,
+    };
+  },
+
   async getSourceUnderstandingWorkbench(input: RemixSourceAssetRefInput) {
     const snapshot = findProcessingSnapshot(input.sourceAssetId);
     return buildMockUnderstandingWorkbench(snapshot.sourceAsset);

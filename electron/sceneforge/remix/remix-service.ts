@@ -60,6 +60,7 @@ import { loadRemixUnderstandingWorkbench } from './remix-understanding-workbench
 import { RemixUnderstandingOrchestrator } from './remix-understanding-orchestrator';
 import { RemixTranscriptCorrectionService } from './remix-transcript-correction-service';
 import { RemixFrameVisionService } from './remix-frame-vision-service';
+import { RemixUnderstandingReportExportService } from './remix-understanding-report-export-service';
 
 export interface RemixServiceOptions extends RemixSourceAssetServiceOptions {
   transcriptService?: RemixTranscriptService;
@@ -98,6 +99,7 @@ export class RemixService {
   private readonly understandingOrchestrator: RemixUnderstandingOrchestrator;
   private readonly transcriptCorrectionService: RemixTranscriptCorrectionService;
   private readonly frameVisionService: RemixFrameVisionService;
+  private readonly reportExportService: RemixUnderstandingReportExportService;
 
   constructor(options: RemixServiceOptions = {}) {
     this.sourceAssetService = new RemixSourceAssetService(options);
@@ -121,6 +123,7 @@ export class RemixService {
     });
     this.transcriptCorrectionService = new RemixTranscriptCorrectionService();
     this.frameVisionService = new RemixFrameVisionService();
+    this.reportExportService = new RemixUnderstandingReportExportService();
   }
 
   private withCompleteSegmentBoundary(segment: SourceSegment): SourceSegment {
@@ -671,5 +674,13 @@ export class RemixService {
       segment,
       settings,
     });
+  }
+
+  async exportUnderstandingReport(input: {
+    projectDir: string;
+    sourceAssetId: string;
+    format?: 'markdown';
+  }): Promise<{ reportPath: string }> {
+    return this.reportExportService.exportReport(input.projectDir, input.sourceAssetId);
   }
 }

@@ -3,7 +3,6 @@ import {
   getRemixSegmentManifestIndexPath,
   getRemixSegmentUnderstandingJsonPath,
   getRemixSourceManifestPath,
-  getRemixSourceTranscriptJsonPath,
 } from './remix-artifact-paths';
 import { REMIX_UNDERSTANDING_ROLLUP_KIND } from './remix-understanding-gate';
 import type { RemixSegmentUnderstandingDocument } from './remix-segment-understanding-schema';
@@ -17,6 +16,7 @@ export interface RemixOriginalUnderstandingDocument {
   sourceAssetId: string;
   title: string;
   generatedAt: string;
+  inputHash: string;
   inputRefs: {
     sourceManifestPath: string;
     segmentsIndexPath: string;
@@ -26,16 +26,32 @@ export interface RemixOriginalUnderstandingDocument {
   };
   overall: {
     logline: string;
-    storySummaryShort: string; // 300字以内短摘要
-    storyContent: string;      // 600-1200字完整视频内容
-    storyArc: string;
-    visualStyle: string;
+    storySummaryShort: string;
+    storyContent: string;
+    eventChain: string[];
+    characterMap: Array<{
+      nameOrRole: string;
+      description: string;
+      relation?: string | null;
+    }>;
     mainConflict: string;
+    keyTurns: string[];
     emotionCurve: string;
-    remixPotential: string[];
+    visualStyle: string;
+    dialogueStyle: string;
     highValueSegmentIds: string[];
-    characterMap?: Array<{ nameOrRole: string; description: string; relation?: string | null }>;
-    eventChain?: string[];
+  };
+  remixStrategy: {
+    keepMust: string[];
+    canReplace: string[];
+    rewriteDirections: Array<{
+      title: string;
+      idea: string;
+      suitableStyle: string;
+      requiredSegments: string[];
+      risk: string;
+    }>;
+    suggestedTags: string[];
   };
   segmentRefs: Array<{
     segmentId: string;
@@ -50,8 +66,9 @@ export interface RemixOriginalUnderstandingDocument {
     segmentCount: number;
     understoodSegmentCount: number;
     failedSegmentCount: number;
+    rollupConfidence: number;
+    avgSegmentConfidence: number | null;
     needsHumanReview: boolean;
-    avgConfidence: number | null;
     rollupFallbackUsed: boolean;
     errors: string[];
     warnings: string[];
@@ -72,6 +89,7 @@ export interface RemixSourceOverviewIndexDocument {
   failedSegmentCount: number;
   segmentRefs: Array<{ segmentId: string; understandingPath: string }>;
   overall: RemixOriginalUnderstandingDocument['overall'];
+  remixStrategy: RemixOriginalUnderstandingDocument['remixStrategy'];
   quality: RemixOriginalUnderstandingDocument['quality'];
   inputHash: {
     segments: string;
@@ -101,29 +119,51 @@ export function buildOriginalUnderstandingDocument(input: {
   document: StoredSourceAssetDocument;
   segmentDocuments: RemixSegmentUnderstandingDocument[];
   generatedAt: string;
+  inputHash: string;
   failedSegmentCount: number;
   sourceOverviewPath: string;
   segmentAnalysisPath: string;
+  
+  // overall 字段
   logline?: string;
   storySummaryShort?: string;
   storyContent?: string;
   eventChain?: string[];
   characterMap?: Array<{ nameOrRole: string; description: string; relation?: string | null }>;
-  remixIdeas?: string[];
+  mainConflict?: string;
+  keyTurns?: string[];
+  emotionCurve?: string;
+  visualStyle?: string;
+  dialogueStyle?: string;
+  
+  // remixStrategy 字段
+  keepMust?: string[];
+  canReplace?: string[];
+  rewriteDirections?: Array<{
+    title: string;
+    idea: string;
+    suitableStyle: string;
+    requiredSegments: string[];
+    risk: string;
+  }>;
+  suggestedTags?: string[];
+
   rollupFallbackUsed?: boolean;
   errors?: string[];
   warnings?: string[];
   staleReasons?: string[];
 }): RemixOriginalUnderstandingDocument {
-  const { document, segmentDocuments, generatedAt, failedSegmentCount, remixIdeas } = input;
+  const { document, segmentDocuments, generatedAt, inputHash, failedSegmentCount } = input;
   const segmentCount = document.sourceAsset.segments.length;
   const understoodSegmentCount = segmentDocuments.length;
+  const fallbackUsed = input.rollupFallbackUsed ?? false;
+
+  // 兜底推导字段，以防大模型报错或返回空
   const plotFunctions = segmentDocuments.map((doc) => doc.story?.plotFunction).filter(Boolean);
   const emotions = segmentDocuments.map((doc) => doc.story?.emotion).filter(Boolean);
-  const remixIdeasFallback = segmentDocuments.flatMap((doc) => doc.remix?.rewriteIdeas ?? []).slice(0, 6);
   const visualStyles = segmentDocuments.map((doc) => doc.visual?.colorTone).filter(Boolean);
 
-  const fallbackUsed = input.rollupFallbackUsed ?? false;
+  const avgConf = averageConfidence(segmentDocuments);
 
   return {
     schema: REMIX_ORIGINAL_UNDERSTANDING_SCHEMA,
@@ -131,6 +171,7 @@ export function buildOriginalUnderstandingDocument(input: {
     sourceAssetId: document.sourceAsset.id,
     title: document.sourceAsset.title,
     generatedAt,
+    inputHash,
     inputRefs: {
       sourceManifestPath: getRemixSourceManifestPath(document.sourceAsset.id),
       segmentsIndexPath: getRemixSegmentManifestIndexPath(document.sourceAsset.id),
@@ -142,14 +183,20 @@ export function buildOriginalUnderstandingDocument(input: {
       logline: input.logline ?? '',
       storySummaryShort: fallbackUsed ? '' : (input.storySummaryShort ?? ''),
       storyContent: fallbackUsed ? '' : (input.storyContent ?? ''),
-      storyArc: plotFunctions.length ? plotFunctions.join(' → ') : '待人工补充全片剧情线。',
-      visualStyle: visualStyles.length ? [...new Set(visualStyles)].join('、') : '写实中性影像风格。',
-      mainConflict: segmentDocuments.map((doc) => doc.story?.conflict).find(Boolean) ?? '轻度戏剧张力',
-      emotionCurve: emotions.length ? emotions.join(' → ') : '情绪平稳推进',
-      remixPotential: remixIdeas ?? (remixIdeasFallback.length ? remixIdeasFallback : ['保留人物反应镜头', '替换台词做场景改写']),
-      highValueSegmentIds: pickHighValueSegmentIds(segmentDocuments),
-      characterMap: input.characterMap ?? [],
       eventChain: input.eventChain ?? [],
+      characterMap: input.characterMap ?? [],
+      mainConflict: input.mainConflict ?? (segmentDocuments.map((doc) => doc.story?.conflict).find(Boolean) ?? '轻度戏剧张力'),
+      keyTurns: input.keyTurns ?? [],
+      emotionCurve: input.emotionCurve ?? (emotions.length ? emotions.join(' → ') : '情绪平稳推进'),
+      visualStyle: input.visualStyle ?? (visualStyles.length ? [...new Set(visualStyles)].join('、') : '写实中性影像风格'),
+      dialogueStyle: input.dialogueStyle ?? '日常口语风格',
+      highValueSegmentIds: pickHighValueSegmentIds(segmentDocuments),
+    },
+    remixStrategy: {
+      keepMust: input.keepMust ?? [],
+      canReplace: input.canReplace ?? [],
+      rewriteDirections: input.rewriteDirections ?? [],
+      suggestedTags: input.suggestedTags ?? [],
     },
     segmentRefs: document.sourceAsset.segments
       .map((segment) => {
@@ -164,9 +211,9 @@ export function buildOriginalUnderstandingDocument(input: {
           understandingPath:
             segment.analysisJsonPath ??
             getRemixSegmentUnderstandingJsonPath(document.sourceAsset.id, segment.id),
-          plotFunction: doc.story.plotFunction,
-          mainAction: doc.visual.mainAction,
-          confidence: doc.quality.confidence ?? null,
+          plotFunction: doc.story?.plotFunction || '',
+          mainAction: doc.visual?.mainAction || '',
+          confidence: doc.quality?.confidence ?? null,
         };
       })
       .filter((item): item is NonNullable<typeof item> => item !== null),
@@ -174,8 +221,9 @@ export function buildOriginalUnderstandingDocument(input: {
       segmentCount,
       understoodSegmentCount,
       failedSegmentCount,
+      rollupConfidence: fallbackUsed ? 0.3 : 0.85,
+      avgSegmentConfidence: avgConf,
       needsHumanReview: true,
-      avgConfidence: averageConfidence(segmentDocuments),
       rollupFallbackUsed: fallbackUsed,
       errors: input.errors ?? [],
       warnings: input.warnings ?? [],
@@ -207,6 +255,7 @@ export function buildSourceOverviewIndexDocument(input: {
       understandingPath: ref.understandingPath,
     })),
     overall: original.overall,
+    remixStrategy: original.remixStrategy,
     quality: original.quality,
     inputHash,
     partialFailures,
@@ -216,6 +265,18 @@ export function buildSourceOverviewIndexDocument(input: {
 export function buildOriginalUnderstandingSummaryMarkdown(
   original: RemixOriginalUnderstandingDocument,
 ): string {
+  const characterLines = original.overall.characterMap.map(
+    (c) => `- **${c.nameOrRole}**：${c.description}${c.relation ? ` (冲突关系: ${c.relation})` : ''}`,
+  );
+  
+  const eventLines = original.overall.eventChain.map(
+    (e, idx) => `${idx + 1}. ${e}`,
+  );
+
+  const directionLines = original.remixStrategy.rewriteDirections.map(
+    (d) => `### 方向：${d.title}\n- **构想**：${d.idea}\n- **风格建议**：${d.suitableStyle}\n- **风险点**：${d.risk}`,
+  );
+
   return [
     '# Original Understanding Summary',
     '',
@@ -231,7 +292,17 @@ export function buildOriginalUnderstandingSummaryMarkdown(
     '## 故事短摘要',
     original.overall.storySummaryShort || '（无）',
     '',
-    '## 二创方向',
-    ...original.overall.remixPotential.map((item) => `- ${item}`),
+    '## 事件链',
+    eventLines.length ? eventLines.join('\n') : '（无）',
+    '',
+    '## 人物与冲突关系',
+    characterLines.length ? characterLines.join('\n') : '（无）',
+    '',
+    '## 二创剪辑策略',
+    `- **必须保留点**：${original.remixStrategy.keepMust.join('、') || '无'}`,
+    `- **可替换内容**：${original.remixStrategy.canReplace.join('、') || '无'}`,
+    '',
+    '## 二创改造方案',
+    directionLines.length ? directionLines.join('\n\n') : '（无）',
   ].join('\n');
 }

@@ -239,6 +239,11 @@ contextBridge.exposeInMainWorld('electronAPI', {
       ipcRenderer.invoke('sceneForgeRemix:getSourceUnderstandingWorkbench', input),
     validateUnderstandingFreshness: (input: RemixSourceAssetRefInput) =>
       ipcRenderer.invoke('sceneForgeRemix:validateUnderstandingFreshness', input),
+    exportUnderstandingReport: (input: {
+      projectDir: string;
+      sourceAssetId: string;
+      format?: 'markdown';
+    }) => ipcRenderer.invoke('sceneForgeRemix:exportUnderstandingReport', input),
     runSegmentFrameVision: (input: {
       projectDir: string;
       sourceAssetId: string;
