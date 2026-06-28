@@ -181,7 +181,7 @@ export class RemixOriginalStoryRollupService {
           }
 
           const action = doc.visual?.mainAction || (doc as any).mainAction || '（无）';
-          const env = doc.visual?.environment || '（无）';
+          const env = doc.visual?.environmentDetails || '（无）';
           const speech = doc.audio?.speechSummary || (doc.audio as any)?.speechSummary || '（无）';
           const functionStr = doc.story?.plotFunction || doc.story?.plotFunction || '（无）';
           const conflict = doc.story?.conflict || '（无）';

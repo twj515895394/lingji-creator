@@ -221,6 +221,35 @@ export class RemixTranscriptCorrectionService {
     // 重新生成快照并返回
     return loadRemixUnderstandingWorkbench(projectDir, doc.sourceAsset);
   }
+
+  async confirmAllSegmentTranscripts(
+    projectDir: string,
+    sourceAssetId: string,
+  ): Promise<RemixUnderstandingWorkbenchSnapshot> {
+    const doc = await readStoredSourceAsset(projectDir, sourceAssetId);
+    if (!doc) {
+      throw new Error(`未找到源资产：${sourceAssetId}`);
+    }
+
+    for (const segment of doc.sourceAsset.segments) {
+      const current = await this.getSegmentTranscriptCorrection(projectDir, sourceAssetId, segment.id);
+      if (current.transcript.correctionStatus !== 'confirmed') {
+        current.transcript.correctionStatus = 'confirmed';
+        current.updatedAt = new Date().toISOString();
+        current.quality.needsHumanReview = false;
+
+        const correctionRelPath = getRemixSegmentTranscriptCorrectionJsonPath(sourceAssetId, segment.id);
+        const correctionAbsPath = resolveProjectFile(projectDir, correctionRelPath);
+        await fs.mkdir(path.dirname(correctionAbsPath), { recursive: true });
+        await fs.writeFile(correctionAbsPath, `${JSON.stringify(current, null, 2)}\n`, 'utf8');
+
+        segment.transcriptCorrectionPath = correctionRelPath;
+      }
+    }
+
+    await writeStoredSourceAsset(projectDir, doc);
+    return loadRemixUnderstandingWorkbench(projectDir, doc.sourceAsset);
+  }
 }
 
 export function getLevenshteinDistance(s1: string, s2: string): number {

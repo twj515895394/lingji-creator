@@ -206,6 +206,10 @@ export interface RemixIpcContract {
     correctedText: string;
     markConfirmed?: boolean;
   }): Promise<RemixUnderstandingWorkbenchSnapshot>;
+  confirmAllSegmentTranscripts(input: {
+    projectDir: string;
+    sourceAssetId: string;
+  }): Promise<RemixUnderstandingWorkbenchSnapshot>;
   updateSourceSegments(input: UpdateSourceSegmentsInput): Promise<RemixAssetProcessingSnapshot>;
   getSegmentationDiagnostics(input: RemixSourceAssetRefInput): Promise<RemixSegmentationDiagnostics | null>;
   validateSourceAssetMedia(input: RemixSourceAssetRefInput): Promise<RemixSourceAssetMediaValidation>;

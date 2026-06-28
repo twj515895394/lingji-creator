@@ -200,6 +200,19 @@ export function registerSceneForgeRemixIpc(): void {
   );
 
   ipcMain.handle(
+    'sceneForgeRemix:confirmAllSegmentTranscripts',
+    async (
+      _event,
+      input: {
+        projectDir: string;
+        sourceAssetId: string;
+      },
+    ) => {
+      return service.confirmAllSegmentTranscripts(input);
+    },
+  );
+
+  ipcMain.handle(
     'sceneForgeRemix:updateSourceSegments',
     async (_event, input: UpdateSourceSegmentsInput) => {
       return service.updateSourceSegments(input);

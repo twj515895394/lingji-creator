@@ -69,17 +69,11 @@ export function UnderstandingWorkbenchPanel({
     }));
   };
 
-  const handleSave = async (segmentId: string, markConfirmed = false) => {
+  const handleSave = async (segmentId: string, markConfirmed = true) => {
     if (onUpdateTranscript) {
       await onUpdateTranscript(segmentId, editingText, markConfirmed);
     }
     setEditingSegmentId(null);
-  };
-
-  const handleConfirmDirect = async (segmentId: string, currentText: string) => {
-    if (onUpdateTranscript) {
-      await onUpdateTranscript(segmentId, currentText, true);
-    }
   };
 
   if (loading) {
@@ -93,10 +87,12 @@ export function UnderstandingWorkbenchPanel({
     );
   }
   if (workbench.isPlaceholder) {
+    const understoodCount = workbench.segments.filter(s => !s.isPlaceholder).length;
+    const totalCount = workbench.segments.length;
     return (
       <div className={styles.stack} data-testid="remix-understanding-workbench-placeholder">
         <p className={styles.copyFeedback}>
-          当前仍是占位或未完成理解（{workbench.understoodSegmentCount}/{workbench.segmentCount} 段）。
+          当前仍是占位或未完成理解（{understoodCount}/{totalCount} 段）。
           {workbench.errors[0] ? ` ${workbench.errors[0]}` : ''}
         </p>
       </div>
@@ -223,28 +219,30 @@ export function UnderstandingWorkbenchPanel({
         </section>
       ) : (
         <section className={styles.overviewSummary} style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-          <div className={styles.overviewLead}>
-            <div className={styles.overviewLeadLabel}>故事内容</div>
-            <div className={styles.overviewLeadText}>{workbench.overview.storyContent || '正在生成故事内容…'}</div>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(400px, 1fr))', gap: '20px' }}>
+            <div className={styles.overviewLead} style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+              <div className={styles.overviewLeadLabel} style={{ fontWeight: 'bold', fontSize: '14px', color: '#60a5fa' }}>故事内容</div>
+              <div className={styles.overviewLeadText} style={{ fontSize: '13px', color: 'rgba(255, 248, 235, 0.85)', lineHeight: '1.6' }}>{workbench.overview.storyContent || '正在生成故事内容…'}</div>
+            </div>
+
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+              {workbench.overview.logline && (
+                <div>
+                  <strong style={{ fontSize: '13px', color: 'rgba(255,255,255,0.7)' }}>一句话梗概 (Logline)</strong>
+                  <p style={{ fontSize: '13px', color: 'rgba(255,248,235,0.85)', marginTop: '6px', lineHeight: '1.4' }}>{workbench.overview.logline}</p>
+                </div>
+              )}
+              
+              {workbench.overview.storySummaryShort && (
+                <div>
+                  <strong style={{ fontSize: '13px', color: 'rgba(255,255,255,0.7)' }}>故事短摘要 (Summary)</strong>
+                  <p style={{ fontSize: '13px', color: 'rgba(255,248,235,0.85)', marginTop: '6px', lineHeight: '1.4' }}>{workbench.overview.storySummaryShort}</p>
+                </div>
+              )}
+            </div>
           </div>
 
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: '16px', borderTop: '1px solid rgba(255,255,255,0.06)', paddingTop: '16px' }}>
-            {workbench.overview.logline && (
-              <div>
-                <strong style={{ fontSize: '13px', color: 'rgba(255,255,255,0.7)' }}>一句话梗概 (Logline)</strong>
-                <p style={{ fontSize: '13px', color: 'rgba(255,248,235,0.85)', marginTop: '6px', lineHeight: '1.4' }}>{workbench.overview.logline}</p>
-              </div>
-            )}
-            
-            {workbench.overview.storySummaryShort && (
-              <div>
-                <strong style={{ fontSize: '13px', color: 'rgba(255,255,255,0.7)' }}>故事短摘要 (Summary)</strong>
-                <p style={{ fontSize: '13px', color: 'rgba(255,248,235,0.85)', marginTop: '6px', lineHeight: '1.4' }}>{workbench.overview.storySummaryShort}</p>
-              </div>
-            )}
-          </div>
-
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: '16px' }}>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(400px, 1fr))', gap: '20px', borderTop: '1px solid rgba(255,255,255,0.06)', paddingTop: '16px' }}>
             {workbench.overview.eventChain && workbench.overview.eventChain.length > 0 && (
               <div>
                 <strong style={{ fontSize: '13px', color: 'rgba(255,255,255,0.7)' }}>剧情事件链 (Event Chain)</strong>
@@ -308,12 +306,31 @@ export function UnderstandingWorkbenchPanel({
             <article
               key={segment.segmentId}
               className={styles.segmentAnalysisCard}
-              style={cardStyle}
+              style={{
+                ...cardStyle,
+                display: 'flex',
+                flexDirection: 'column',
+                gap: '0px',
+                padding: '0px',
+                overflow: 'hidden',
+              }}
               data-testid={`remix-understanding-card-${segment.segmentId}`}
             >
               <div
                 className={styles.segmentAnalysisHeader}
-                style={{ cursor: 'pointer' }}
+                style={{
+                  cursor: 'pointer',
+                  padding: '12px 16px',
+                  borderRadius: '8px 8px 0 0',
+                  transition: 'background-color 0.15s ease',
+                  borderBottom: '1px solid rgba(255, 255, 255, 0.02)',
+                }}
+                onMouseEnter={(e) => {
+                  e.currentTarget.style.backgroundColor = 'rgba(255, 255, 255, 0.03)';
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.backgroundColor = 'transparent';
+                }}
                 onClick={() => toggleExpand(segment.segmentId)}
               >
                 <div
@@ -324,14 +341,14 @@ export function UnderstandingWorkbenchPanel({
                     width: '100%',
                   }}
                 >
-                  <div className={styles.segmentAnalysisTitle}>
+                  <div className={styles.segmentAnalysisTitle} style={{ fontSize: '13px', fontWeight: 600 }}>
                     {String(segment.segmentIndex).padStart(2, '0')} · {segment.title}
                   </div>
                   <div
                     style={{
                       display: 'flex',
                       alignItems: 'center',
-                      gap: '8px',
+                      gap: '12px',
                     }}
                     onClick={(e) => e.stopPropagation()}
                   >
@@ -342,15 +359,25 @@ export function UnderstandingWorkbenchPanel({
                     <span
                       style={{
                         fontSize: '12px',
-                        transform: isExpanded ? 'rotate(90deg)' : 'rotate(0deg)',
-                        transition: 'transform 0.15s ease',
+                        color: '#60a5fa',
                         cursor: 'pointer',
-                        padding: '4px',
-                        color: 'rgba(255, 255, 255, 0.4)',
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '4px',
+                        userSelect: 'none',
                       }}
                       onClick={() => toggleExpand(segment.segmentId)}
                     >
-                      ▶
+                      <span style={{ fontSize: '11px', fontWeight: 500 }}>{isExpanded ? '收起详情' : '展开详情'}</span>
+                      <span
+                        style={{
+                          transform: isExpanded ? 'rotate(90deg)' : 'rotate(0deg)',
+                          transition: 'transform 0.15s ease',
+                          display: 'inline-block',
+                        }}
+                      >
+                        ▶
+                      </span>
                     </span>
                   </div>
                 </div>
@@ -362,11 +389,11 @@ export function UnderstandingWorkbenchPanel({
                     color: (!segment.visual.mainAction && !segment.videoPrompt.fullChinesePrompt) ? '#ef4444' : '#fb923c',
                     fontSize: '12px',
                     background: (!segment.visual.mainAction && !segment.videoPrompt.fullChinesePrompt) ? 'rgba(239, 68, 68, 0.08)' : 'rgba(249, 115, 22, 0.08)',
-                    padding: '6px 12px',
-                    borderRadius: '6px',
+                    padding: '8px 16px',
                     display: 'flex',
                     alignItems: 'center',
                     gap: '6px',
+                    borderBottom: '1px solid rgba(255, 255, 255, 0.03)',
                   }}
                 >
                   <span>
@@ -377,149 +404,164 @@ export function UnderstandingWorkbenchPanel({
                 </div>
               )}
 
-              <div className={styles.segmentAnalysisFacts}>
-                <span className={styles.segmentAnalysisFact}>动作：{segment.visual.mainAction || '已失效，请重跑'}</span>
-                <span className={styles.segmentAnalysisFact}>镜头：{segment.camera.shotSize ? `${segment.camera.shotSize} / ${segment.camera.movement}` : '已失效，请重跑'}</span>
-              </div>
-
-              {segment.frameVision.available && segment.frameVision.segmentVisualSummary && (
-                <div
-                  style={{
-                    fontSize: '12px',
-                    color: 'rgba(255, 255, 255, 0.55)',
-                    background: 'rgba(255, 255, 255, 0.015)',
-                    padding: '8px 10px',
-                    borderRadius: '6px',
-                    borderLeft: '2px solid rgba(139, 92, 246, 0.4)',
-                    marginTop: '2px',
-                    marginBottom: '6px',
-                  }}
-                >
-                  👁️ <strong>画面视觉描述：</strong>{segment.frameVision.segmentVisualSummary}
-                  {segment.frameVision.warnings.length > 0 && (
-                    <span style={{ color: '#e0a800', marginLeft: '6px', fontSize: '11px' }}>
-                      ({segment.frameVision.warnings.join(', ')})
-                    </span>
-                  )}
-                </div>
-              )}
-
-              {/* 台词编辑区域 */}
+              {/* 去容器化台词编辑展示区 */}
               <div
                 style={{
-                  background: 'rgba(255, 255, 255, 0.02)',
-                  border: '1px solid rgba(255, 255, 255, 0.05)',
-                  borderRadius: '8px',
-                  padding: '10px 12px',
+                  padding: '10px 16px',
                   display: 'flex',
                   flexDirection: 'column',
-                  gap: '8px',
+                  gap: '6px',
+                  background: 'rgba(255, 255, 255, 0.01)',
+                  borderBottom: '1px solid rgba(255, 255, 255, 0.03)',
                 }}
               >
-                <div
-                  style={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'space-between',
-                  }}
-                >
-                  <span style={{ fontSize: '11px', color: 'rgba(255, 255, 255, 0.4)' }}>片段台词</span>
+                <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: '12px' }}>
+                  <div style={{ display: 'flex', alignItems: 'flex-start', gap: '8px', flex: 1 }}>
+                    <span style={{ fontSize: '13px', flexShrink: 0, marginTop: '2px', opacity: 0.8 }} title="台词">🗣️</span>
+                    {isEditing ? (
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', width: '100%' }}>
+                        <textarea
+                          value={editingText}
+                          onChange={(e) => setEditingText(e.target.value)}
+                          rows={2}
+                          style={{
+                            width: '100%',
+                            background: '#0a0d14',
+                            border: '1px solid rgba(255, 255, 255, 0.15)',
+                            borderRadius: '6px',
+                            padding: '6px 8px',
+                            color: 'rgba(255, 248, 235, 0.9)',
+                            fontSize: '13px',
+                            outline: 'none',
+                            resize: 'vertical',
+                          }}
+                          autoFocus
+                        />
+                        <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '6px' }}>
+                          <Button variant="ghost" size="xs" onClick={() => setEditingSegmentId(null)}>取消</Button>
+                          <Button variant="accent" size="xs" onClick={() => handleSave(segment.segmentId, true)}>保存</Button>
+                        </div>
+                      </div>
+                    ) : (
+                      <span
+                        onDoubleClick={() => startEditing(segment.segmentId, segment.transcript.correctedText || segment.transcript.asrText)}
+                        style={{
+                          fontSize: '13px',
+                          color: 'rgba(255, 248, 235, 0.85)',
+                          lineHeight: '1.5',
+                          cursor: 'pointer',
+                        }}
+                        title="双击进行编辑"
+                      >
+                        {segment.transcript.correctedText || segment.transcript.asrText || '（无台词）'}
+                      </span>
+                    )}
+                  </div>
+
                   {!isEditing && (
-                    <div style={{ display: 'flex', gap: '8px' }}>
+                    <div style={{ display: 'flex', gap: '4px', flexShrink: 0 }} onClick={(e) => e.stopPropagation()}>
                       <Button
                         variant="ghost"
                         size="xs"
                         onClick={() => startEditing(segment.segmentId, segment.transcript.correctedText || segment.transcript.asrText)}
+                        style={{ padding: '2px 6px', height: '22px', fontSize: '11px', color: 'rgba(255, 255, 255, 0.45)' }}
                       >
-                        编辑台词
+                        ✏️ 编辑
                       </Button>
-                      {segment.transcript.correctionStatus !== 'confirmed' && (
-                        <Button
-                          variant="ghost"
-                          size="xs"
-                          onClick={() => handleConfirmDirect(segment.segmentId, segment.transcript.correctedText || segment.transcript.asrText)}
-                          style={{ color: '#4ade80' }}
-                        >
-                          确认无误
-                        </Button>
-                      )}
                     </div>
                   )}
                 </div>
-
-                {isEditing ? (
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                    <textarea
-                      value={editingText}
-                      onChange={(e) => setEditingText(e.target.value)}
-                      rows={2}
-                      style={{
-                        width: '100%',
-                        background: '#0a0d14',
-                        border: '1px solid rgba(255, 255, 255, 0.15)',
-                        borderRadius: '6px',
-                        padding: '6px 8px',
-                        color: 'rgba(255, 248, 235, 0.9)',
-                        fontSize: '13px',
-                        outline: 'none',
-                        resize: 'vertical',
-                      }}
-                      autoFocus
-                    />
-                    <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '8px' }}>
-                      <Button
-                        variant="ghost"
-                        size="xs"
-                        onClick={() => setEditingSegmentId(null)}
-                      >
-                        取消
-                      </Button>
-                      <Button
-                        variant="accent"
-                        size="xs"
-                        onClick={() => handleSave(segment.segmentId, false)}
-                      >
-                        保存
-                      </Button>
-                      <Button
-                        variant="ghost"
-                        size="xs"
-                        onClick={() => handleSave(segment.segmentId, true)}
-                        style={{ color: '#4ade80', border: '1px solid rgba(34, 197, 94, 0.2)' }}
-                      >
-                        保存并确认
-                      </Button>
-                    </div>
-                  </div>
-                ) : (
-                  <div
-                    onDoubleClick={() => startEditing(segment.segmentId, segment.transcript.correctedText || segment.transcript.asrText)}
-                    style={{
-                      fontSize: '13px',
-                      color: 'rgba(255, 248, 235, 0.85)',
-                      lineHeight: '1.5',
-                      minHeight: '20px',
-                      cursor: 'pointer',
-                    }}
-                    title="双击进行编辑"
-                  >
-                    {segment.transcript.correctedText || segment.transcript.asrText || '（无台词）'}
-                  </div>
-                )}
               </div>
 
-              {isExpanded && (
-                <div
-                  style={{
-                    display: 'flex',
-                    flexDirection: 'column',
-                    gap: '8px',
-                    borderTop: '1px solid rgba(255, 255, 255, 0.04)',
-                    paddingTop: '8px',
-                  }}
-                >
-                  <div className={styles.segmentAnalysisNote}>剧情功能：{segment.story.plotFunction || '已失效，请重跑'}</div>
-                  <div className={styles.segmentAnalysisNote}>正向 prompt：{segment.videoPrompt.fullChinesePrompt || '已失效，请重跑'}</div>
+              {/* 折叠预览与主要 Facts 区 */}
+              <div style={{ padding: '10px 16px 12px 16px', display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                <div className={styles.segmentAnalysisFacts} style={{ marginTop: '0px', marginBottom: '0px' }}>
+                  <span className={styles.segmentAnalysisFact} style={{ fontSize: '12px' }}>🎬 动作：{segment.visual.mainAction || '已失效，请重跑'}</span>
+                  <span className={styles.segmentAnalysisFact} style={{ fontSize: '12px' }}>🎥 镜头：{segment.camera.shotSize ? `${segment.camera.shotSize} / ${segment.camera.movement}` : '已失效，请重跑'}</span>
+                </div>
+
+                {segment.frameVision.available && segment.frameVision.segmentVisualSummary && (
+                  <div
+                    style={{
+                      fontSize: '12px',
+                      color: 'rgba(255, 255, 255, 0.55)',
+                      background: 'rgba(255, 255, 255, 0.015)',
+                      padding: '8px 10px',
+                      borderRadius: '6px',
+                      borderLeft: '2px solid rgba(139, 92, 246, 0.4)',
+                    }}
+                  >
+                    👁️ <strong>画面视觉描述：</strong>{segment.frameVision.segmentVisualSummary}
+                    {segment.frameVision.warnings.length > 0 && (
+                      <span style={{ color: '#e0a800', marginLeft: '6px', fontSize: '11px' }}>
+                        ({segment.frameVision.warnings.join(', ')})
+                      </span>
+                    )}
+                  </div>
+                )}
+
+                {/* 折叠时提供一行小字 Prompt 预览 */}
+                {!isExpanded && segment.videoPrompt.fullChinesePrompt && (
+                  <div
+                    onClick={() => toggleExpand(segment.segmentId)}
+                    style={{
+                      fontSize: '12px',
+                      color: 'rgba(255, 255, 255, 0.45)',
+                      cursor: 'pointer',
+                      overflow: 'hidden',
+                      textOverflow: 'ellipsis',
+                      whiteSpace: 'nowrap',
+                      padding: '2px 0 0 0',
+                    }}
+                    title="点击展开查看详情"
+                  >
+                    ✍️ <strong>提示词预览：</strong>{segment.videoPrompt.fullChinesePrompt.slice(0, 60)}
+                    {segment.videoPrompt.fullChinesePrompt.length > 60 ? '...' : ''}
+                  </div>
+                )}
+
+                {isExpanded && (
+                  <div
+                    style={{
+                      display: 'flex',
+                      flexDirection: 'column',
+                      gap: '10px',
+                      borderTop: '1px solid rgba(255, 255, 255, 0.04)',
+                      paddingTop: '10px',
+                      marginTop: '4px',
+                    }}
+                  >
+                    <div className={styles.segmentAnalysisNote} style={{ fontSize: '12px', color: 'rgba(255,255,255,0.6)' }}>剧情功能：{segment.story.plotFunction || '已失效，请重跑'}</div>
+
+                    {/* 正向 Prompt 影视代码板高亮渲染 */}
+                    <div
+                      style={{
+                        background: 'rgba(20, 24, 33, 0.65)',
+                        border: '1px solid rgba(96, 165, 250, 0.15)',
+                        borderRadius: '6px',
+                        padding: '10px 12px',
+                        display: 'flex',
+                        flexDirection: 'column',
+                        gap: '6px',
+                      }}
+                    >
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                        <span style={{ fontSize: '11px', color: '#60a5fa', fontWeight: 'bold', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                          ✍️ 正向 Video Prompt
+                        </span>
+                        <Button
+                          variant="ghost"
+                          size="xs"
+                          onClick={() => onCopyPrompt(segment.segmentId, segment.videoPrompt.fullChinesePrompt)}
+                          style={{ fontSize: '10px', height: '18px', padding: '2px 6px', color: '#60a5fa' }}
+                        >
+                          复制
+                        </Button>
+                      </div>
+                      <div style={{ fontSize: '12px', color: 'rgba(255, 248, 235, 0.85)', lineHeight: '1.4' }}>
+                        {segment.videoPrompt.fullChinesePrompt || '已失效，请重跑'}
+                      </div>
+                    </div>
 
                   {segment.videoPrompt.dimensions && segment.videoPrompt.dimensions.length > 0 && (
                     <div style={{ marginTop: '4px' }}>
@@ -608,6 +650,7 @@ export function UnderstandingWorkbenchPanel({
                   )}
                 </div>
               )}
+              </div>
 
               <div className={styles.copyRow}>
                 <Button

@@ -70,6 +70,7 @@ export interface RemixServiceOptions extends RemixSourceAssetServiceOptions {
 }
 
 export class RemixService {
+  private readonly activeLocalJobIds = new Set<string>();
   private readonly sourceAssetService;
 
   private readonly segmentationService;
@@ -158,6 +159,21 @@ export class RemixService {
     const document = await readStoredSourceAsset(projectDir, sourceAssetId);
     await this.mediaValidationService.validate(projectDir, document);
     const jobsDocument = await readStoredSourceAssetJobs(projectDir, sourceAssetId);
+
+    let hasZombie = false;
+    for (const job of jobsDocument.jobs) {
+      if ((job.status === 'running' || job.status === 'queued') && !this.activeLocalJobIds.has(job.id)) {
+        job.status = 'failed';
+        job.finishedAt = new Date().toISOString();
+        job.error = '系统已重启，该任务已自动终止。';
+        job.message = '任务被中断或终止';
+        hasZombie = true;
+      }
+    }
+    if (hasZombie) {
+      await writeStoredSourceAssetJobs(projectDir, jobsDocument);
+    }
+
     return buildSourceAssetSnapshot(document, jobsDocument.jobs);
   }
 
@@ -187,6 +203,7 @@ export class RemixService {
 
     jobsDocument.jobs = [runningJob, ...jobsDocument.jobs.filter((job) => job.id !== jobId)];
     await writeStoredSourceAssetJobs(input.projectDir, jobsDocument);
+    this.activeLocalJobIds.add(jobId);
 
     try {
       const document = await runner();
@@ -223,6 +240,8 @@ export class RemixService {
       failedDocument.sourceAsset.updatedAt = finishedAt;
       await writeStoredSourceAsset(input.projectDir, failedDocument);
       throw error;
+    } finally {
+      this.activeLocalJobIds.delete(jobId);
     }
   }
 
@@ -401,6 +420,16 @@ export class RemixService {
     );
   }
 
+  async confirmAllSegmentTranscripts(input: {
+    projectDir: string;
+    sourceAssetId: string;
+  }) {
+    return this.transcriptCorrectionService.confirmAllSegmentTranscripts(
+      input.projectDir,
+      input.sourceAssetId,
+    );
+  }
+
   private async patchUnderstandingJob(
     projectDir: string,
     sourceAssetId: string,
@@ -451,6 +480,7 @@ export class RemixService {
         message: '正在准备全片台词…',
       },
     });
+    this.activeLocalJobIds.add(jobId);
 
     try {
       const document = await this.understandingOrchestrator.run(
@@ -490,6 +520,8 @@ export class RemixService {
       failedDocument.sourceAsset.updatedAt = finishedAt;
       await writeStoredSourceAsset(input.projectDir, failedDocument);
       throw error;
+    } finally {
+      this.activeLocalJobIds.delete(jobId);
     }
   }
 
@@ -667,7 +699,10 @@ export class RemixService {
     if (!segment) {
       throw new Error(`未找到片段：${input.segmentId}`);
     }
-    const settings = await this.understandingService.loadAISettings();
+    const settings = await this.understandingService.getAISettings();
+    if (!settings) {
+      throw new Error('未配置 LLM，无法生成片段视觉先验。请在应用设置中配置 AI 后再试。');
+    }
     return this.frameVisionService.runSegmentFrameVision({
       projectDir: input.projectDir,
       sourceAssetId: input.sourceAssetId,

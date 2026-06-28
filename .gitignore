@@ -25,3 +25,8 @@ __pycache__/
 tools/local-stt/whisper/ggml-small.bin
 tools/local-stt/whisper/*.bin
 
+# SenseVoice Spike Binaries and Temp Files
+.scratch/funasr-sensevoice-spike/llama-funasr-*
+.scratch/funasr-sensevoice-spike/stdout.txt
+.scratch/funasr-sensevoice-spike/stderr.txt
+

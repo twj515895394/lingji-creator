@@ -103,6 +103,36 @@ function buildApiClient(mode: 'success' | 'failure'): RemixIpcContract {
     runSourceTranscript: async () => MOCK_ASSET_PROCESSING_SNAPSHOTS['source-library-001'],
     runSourceUnderstanding: async () => MOCK_ASSET_PROCESSING_SNAPSHOTS['source-library-001'],
     rerunSegmentUnderstanding: async () => MOCK_ASSET_PROCESSING_SNAPSHOTS['source-library-001'],
+    confirmAllSegmentTranscripts: async () => ({
+      ready: true,
+      version: 2 as const,
+      isPlaceholder: false,
+      isStale: false,
+      staleSegmentIds: [],
+      staleReasons: [],
+      rollupFallbackUsed: false,
+      errors: [],
+      overview: {
+        logline: '天台心理战',
+        storySummaryShort: '天台博弈',
+        storyContent: '全片围绕对峙与情绪升温展开。',
+        eventChain: ['天台对峙开场'],
+        characterMap: [],
+        mainConflict: '心理交锋',
+        emotionCurve: '紧张 → 压迫',
+        visualStyle: '冷调',
+        dialogueStyle: '平稳',
+        remixDirections: [
+          { title: '身份替换', idea: '将天台对手替换为机器人', suitableStyle: '赛博' }
+        ],
+        warnings: [],
+      },
+      segments: [],
+      annotationPrefill: {
+        suggestedTags: [],
+        suggestedNote: '',
+      },
+    }),
     getSourceUnderstandingWorkbench: async () => ({
       ready: true,
       version: 2 as const,

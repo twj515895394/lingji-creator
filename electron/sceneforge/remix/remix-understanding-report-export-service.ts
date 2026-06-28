@@ -79,18 +79,17 @@ export class RemixUnderstandingReportExportService {
 
       const timeStr = `${formatTime(segment.timeRange.startMs)} - ${formatTime(segment.timeRange.endMs)}`;
       const idxStr = (segment.index + 1).toString().padStart(2, '0');
-
       segmentsDetailMarkdown.push([
         `### ${idxStr} · ${timeStr}`,
-        `- 画面：${segDoc?.visual?.environment || '（未知环境）'}`,
+        `- 画面：${segDoc?.visual?.environmentDetails || '（未知环境）'}`,
         `- 动作：${segDoc?.visual?.mainAction || '（无动作）'}`,
         `- 镜头：${segDoc?.camera?.shotSize || '中景'} / ${segDoc?.camera?.movement || '固定'}`,
         `- 台词原文：${plainText}`,
         `- 台词修正版：${correctedText}`,
         `- 剧情功能：${segDoc?.story?.plotFunction || '剧情过渡'}`,
-        `- 保留点：${segDoc?.remix?.keepPoints?.join('、') || '无'}`,
-        `- 替换点：${segDoc?.remix?.replacePoints?.join('、') || '无'}`,
-        `- 中文 Prompt：\`${segDoc?.videoPrompt?.positivePrompt || ''}\``,
+        `- 保留点：${segDoc?.remix?.keepElements?.join('、') || '无'}`,
+        `- 替换点：${segDoc?.remix?.replaceableElements?.join('、') || '无'}`,
+        `- 中文 Prompt：\`${segDoc?.videoPrompt?.fullChinesePrompt || ''}\``,
       ].join('\n'));
     }
 

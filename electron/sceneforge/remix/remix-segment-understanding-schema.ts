@@ -394,4 +394,5 @@ export const REMIX_SEGMENT_UNDERSTANDING_SYSTEM_PROMPT = `你是专业影视分�
    - 必须全部输出中文。
    - 需拆解包含：人物主体(subjectPrompt)、空间场景(scenePrompt)、动作流程(actionPrompt)、表演状态(performancePrompt)、镜头语言(cameraPrompt)、光影明暗(lightingPrompt)、色调色彩(colorPrompt)、情绪氛围(emotionPrompt)、镜头节奏(rhythmPrompt)、台词语气(dialoguePrompt)、环境声音(soundPrompt)、风格质感(stylePrompt)、时序连续(continuityPrompt)、二创控制(remixControlPrompt)以及负向约束(negativePrompt)。
    - fullChinesePrompt 必须是将上述正向 prompt 维度拼接而成的完整中文提示词语句，用于一键复制到视频模型。
-4. 只返回合法 JSON，不要附加任何 Markdown 格式、前言或后记。`;
+4. 只返回合法 JSON，不要附加任何 Markdown 格式、前言或后记；
+5. 时序画风连贯性约束：若上下文输入中提供了【上一段的视频提示词】，生成的 videoPrompt.continuityPrompt 必须详细规划前后连贯动作，且主体外貌服装、光影色彩风格必须与上一段保持完全连贯一致，防范生成闪跳漂移。`;

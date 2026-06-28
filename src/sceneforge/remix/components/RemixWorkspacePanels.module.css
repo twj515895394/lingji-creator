@@ -1409,3 +1409,23 @@
   border-bottom-color: rgba(214, 169, 95, 0.5);
 }
 
+/* Drag width resizer line */
+.widthResizerLine {
+  cursor: col-resize;
+  width: 6px;
+  height: 100%;
+  background: rgba(255, 255, 255, 0.04);
+  border-left: 1px solid rgba(255, 255, 255, 0.08);
+  border-right: 1px solid rgba(255, 255, 255, 0.08);
+  transition: background-color 150ms ease;
+  z-index: 10;
+}
+
+.widthResizerLine:hover,
+.widthResizerLineActive {
+  background: rgba(214, 169, 95, 0.3);
+  border-left-color: rgba(214, 169, 95, 0.5);
+  border-right-color: rgba(214, 169, 95, 0.5);
+}
+
+

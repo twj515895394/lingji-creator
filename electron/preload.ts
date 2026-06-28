@@ -261,6 +261,11 @@ contextBridge.exposeInMainWorld('electronAPI', {
       markConfirmed?: boolean;
     }) =>
       ipcRenderer.invoke('sceneForgeRemix:updateSegmentTranscriptCorrection', input),
+    confirmAllSegmentTranscripts: (input: {
+      projectDir: string;
+      sourceAssetId: string;
+    }) =>
+      ipcRenderer.invoke('sceneForgeRemix:confirmAllSegmentTranscripts', input),
     updateSourceSegments: (input: UpdateSourceSegmentsInput) =>
       ipcRenderer.invoke('sceneForgeRemix:updateSourceSegments', input),
     getSegmentationDiagnostics: (input: RemixSourceAssetRefInput) =>

@@ -61,7 +61,7 @@ describe('SceneForge Remix segment understanding schema', () => {
 
     expect(doc.visual.mainAction).toBe('人物抬头');
     expect(doc.camera.shotSize).toBe('中近景');
-    expect(doc.videoPrompt.positivePrompt).toContain('抬头');
+    expect(doc.videoPrompt.fullChinesePrompt).toContain('抬头');
     expect(validateSegmentUnderstandingDocument(doc)).toEqual([]);
   });
 });

@@ -43,10 +43,11 @@ export interface RemixSegmentGenerationContext {
     next?: string;
   };
   frameVision?: import('./remix-frame-vision-service').RemixSegmentFrameVisionDocument | null;
+  previousSegmentPrompt?: string | null;
 }
 
 function buildSegmentUserPrompt(context: RemixSegmentGenerationContext): string {
-  const { segment, transcript, neighborSummaries, frameVision } = context;
+  const { segment, transcript, neighborSummaries, frameVision, previousSegmentPrompt } = context;
   const keyframeLines = segment.keyframes.map(
     (frame) => `- ${frame.frameRole}: ${frame.imagePath} @ ${frame.timestampMs}ms`,
   );
@@ -70,8 +71,18 @@ function buildSegmentUserPrompt(context: RemixSegmentGenerationContext): string 
     }
   } else {
     visionPromptBlock = [
-      '【画面视觉不足提示】',
+      '// 画面视觉先验未提供',
       '当前无法获取关键帧的真实画面先验，请主要根据台词意图与上下文逻辑合理推测并生成符合影视逻辑的二创提示词。',
+    ].join('\n');
+  }
+
+  let previousPromptBlock = '';
+  if (previousSegmentPrompt?.trim()) {
+    previousPromptBlock = [
+      '【上一段的视频提示词 (仅供参考时序与画画风格连续性)】',
+      previousSegmentPrompt,
+      '注意：当前片段的画面提示词生成在核心主体（如人物服装、面部细节）、空间色彩、画面镜头风格上必须与上一段保持连贯一致，避免突变。',
+      '',
     ].join('\n');
   }
 
@@ -81,6 +92,7 @@ function buildSegmentUserPrompt(context: RemixSegmentGenerationContext): string 
     `时间范围: ${segment.timeRange.startMs}ms - ${segment.timeRange.endMs}ms`,
     `边界类型: ${segment.boundaryType}`,
     '',
+    previousPromptBlock,
     '关键帧:',
     ...(keyframeLines.length ? keyframeLines : ['- （无关键帧路径）']),
     '',
@@ -108,7 +120,7 @@ function buildSegmentAnalysisMarkdown(segments: RemixSegmentUnderstandingDocumen
       `- 镜头：${segment.camera.shotSize} / ${segment.camera.movement}`,
       `- 台词摘要：${segment.audio.speechSummary}`,
       `- 剧情功能：${segment.story.plotFunction}`,
-      `- 正向提示词：${segment.videoPrompt.positivePrompt}`,
+      `- 正向提示词：${segment.videoPrompt.fullChinesePrompt}`,
       '',
     ]),
   ].join('\n');
@@ -223,6 +235,10 @@ export class RemixUnderstandingService {
     });
   }
 
+  async getAISettings(): Promise<AISettings | null> {
+    return this.loadAISettings();
+  }
+
   private async generateForSegment(
     settings: AISettings,
     context: RemixSegmentGenerationContext,
@@ -279,6 +295,14 @@ export class RemixUnderstandingService {
       // 忽略
     }
 
+    let previousSegmentPrompt: string | null = null;
+    if (previous) {
+      const prevUnderstanding = await readExistingSegmentUnderstanding(projectDir, previous);
+      if (prevUnderstanding?.videoPrompt?.fullChinesePrompt) {
+        previousSegmentPrompt = prevUnderstanding.videoPrompt.fullChinesePrompt;
+      }
+    }
+
     const generatedAt = new Date().toISOString();
     const payload = await this.generateForSegment(settings, {
       sourceAssetId: document.sourceAsset.id,
@@ -289,6 +313,7 @@ export class RemixUnderstandingService {
         next: next?.title,
       },
       frameVision,
+      previousSegmentPrompt,
     });
     const understanding = normalizeSegmentUnderstandingPayload(payload, {
       segment,

@@ -499,6 +499,18 @@ export const remixMockApi: RemixIpcContract = {
     return workbench;
   },
 
+  async confirmAllSegmentTranscripts(input: {
+    projectDir: string;
+    sourceAssetId: string;
+  }) {
+    const snapshot = findProcessingSnapshot(input.sourceAssetId);
+    const workbench = buildMockUnderstandingWorkbench(snapshot.sourceAsset);
+    for (const segment of workbench.segments) {
+      segment.transcript.correctionStatus = 'confirmed';
+    }
+    return workbench;
+  },
+
   async updateSourceSegments(input: UpdateSourceSegmentsInput) {
     const snapshot = findProcessingSnapshot(input.sourceAssetId);
     snapshot.sourceAsset.segments = clone(input.segments);

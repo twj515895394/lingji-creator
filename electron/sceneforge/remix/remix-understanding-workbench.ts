@@ -273,14 +273,6 @@ export async function loadRemixUnderstandingWorkbench(
         isStale = true;
         segStaleReasons.push('transcript_correction_changed');
         staleReasonsSet.add('transcript_correction_changed');
-      } else if (correctionUpdatedAt && transcriptCorrectionStatus !== 'raw') {
-        const correctionTime = new Date(correctionUpdatedAt).getTime();
-        const understandingTime = new Date(understanding.generatedAt).getTime();
-        if (!isNaN(correctionTime) && !isNaN(understandingTime) && correctionTime > understandingTime) {
-          isStale = true;
-          segStaleReasons.push('transcript_correction_changed');
-          staleReasonsSet.add('transcript_correction_changed');
-        }
       }
     }
 
@@ -396,8 +388,8 @@ export async function loadRemixUnderstandingWorkbench(
         sceneSummary: understanding.visual?.sceneSummary || '',
         mainAction: understanding.visual?.mainAction || '',
         characters: understanding.visual?.characters || [],
-        environmentDetails: understanding.visual?.environment || understanding.visual?.environmentDetails || '',
-        props: understanding.visual?.props || [],
+        environmentDetails: understanding.visual?.environmentDetails || '',
+        props: [],
         lighting: understanding.visual?.lighting || '',
         colorTone: understanding.visual?.colorTone || '',
       },
@@ -409,21 +401,21 @@ export async function loadRemixUnderstandingWorkbench(
       },
       story: {
         plotFunction: understanding.story?.plotFunction || '',
-        event: understanding.story?.event,
+        event: (understanding.story as any)?.event,
         conflict: understanding.story?.conflict,
         emotion: understanding.story?.emotion,
         beforeAfterRelation: understanding.story?.beforeAfterRelation,
       },
       remix: {
-        keepElements: understanding.remix?.keepElements || understanding.remix?.keepPoints || [],
-        replaceableElements: understanding.remix?.replaceableElements || understanding.remix?.replacePoints || [],
+        keepElements: understanding.remix?.keepElements || (understanding.remix as any)?.keepPoints || [],
+        replaceableElements: understanding.remix?.replaceableElements || (understanding.remix as any)?.replacePoints || [],
         rewriteIdeas: understanding.remix?.rewriteIdeas || [],
         riskNotes: understanding.remix?.riskNotes || [],
       },
       videoPrompt: {
         version: 2,
         fullChinesePrompt: understanding.videoPrompt?.fullChinesePrompt || (understanding.videoPrompt as any)?.positivePrompt || '',
-        dimensions: understanding.videoPrompt?.dimensions || [],
+        dimensions: (understanding.videoPrompt as any)?.dimensions || [],
         negativePrompt: understanding.videoPrompt?.negativePrompt || '',
       },
       frameVision: {

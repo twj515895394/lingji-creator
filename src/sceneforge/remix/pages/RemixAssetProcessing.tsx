@@ -255,6 +255,8 @@ export function RemixAssetProcessing({
   const [minDurationForMiddleFrameSec, setMinDurationForMiddleFrameSec] = useState<number>(8);
   const [upperHeight, setUpperHeight] = useState(260);
   const [isDragging, setIsDragging] = useState(false);
+  const [leftWidthPercent, setLeftWidthPercent] = useState(42);
+  const [isDraggingWidth, setIsDraggingWidth] = useState(false);
 
   useEffect(() => {
     if (!isDragging) return;
@@ -279,6 +281,31 @@ export function RemixAssetProcessing({
       document.removeEventListener('mouseup', handleMouseUp);
     };
   }, [isDragging]);
+
+  useEffect(() => {
+    if (!isDraggingWidth) return;
+
+    const handleMouseMove = (e: MouseEvent) => {
+      const section = document.querySelector(`.${panelStyles.upperStickySection}`);
+      if (!section) return;
+      const rect = section.getBoundingClientRect();
+      // 计算鼠标相对于 upperStickySection 左侧的百分比
+      const newPercent = ((e.clientX - rect.left) / rect.width) * 100;
+      // 限制在 20% 到 80% 之间，防止过窄或过宽
+      setLeftWidthPercent(Math.max(20, Math.min(newPercent, 80)));
+    };
+
+    const handleMouseUp = () => {
+      setIsDraggingWidth(false);
+    };
+
+    document.addEventListener('mousemove', handleMouseMove);
+    document.addEventListener('mouseup', handleMouseUp);
+    return () => {
+      document.removeEventListener('mousemove', handleMouseMove);
+      document.removeEventListener('mouseup', handleMouseUp);
+    };
+  }, [isDraggingWidth]);
 
   useEffect(() => {
     async function loadSnapshot() {
@@ -588,6 +615,31 @@ export function RemixAssetProcessing({
     } catch (error) {
       setErrorMessage(error instanceof Error ? error.message : '保存台词失败');
     }
+  }
+
+  async function handleConfirmAllTranscripts() {
+    if (!projectDir || !asset) {
+      return;
+    }
+    await runAction(
+      'confirm-all-transcripts',
+      null,
+      async () => {
+        const nextWorkbench = await resolveClient().confirmAllSegmentTranscripts({
+          projectDir,
+          sourceAssetId: asset.id,
+        });
+        setUnderstandingWorkbench(nextWorkbench);
+        
+        // 拉取最新物理状态的 snapshot，确保前端数据跟后端完全同步，消除状态延迟
+        const nextSnapshot = await resolveClient().getSourceAsset({
+          projectDir,
+          sourceAssetId: asset.id,
+        });
+        return nextSnapshot;
+      },
+      '正在确认所有片段台词',
+    );
   }
 
   function reindexSegments(segments: SourceSegment[]): SourceSegment[] {
@@ -1296,9 +1348,20 @@ export function RemixAssetProcessing({
           </Button>
           {understandingWorkbench && (
             <span style={{ fontSize: '13px', color: 'rgba(255, 255, 255, 0.6)' }}>
-              已完成段数：<strong>{understandingWorkbench.understoodSegmentCount}/{understandingWorkbench.segmentCount}</strong>
+              已完成段数：<strong>{understandingWorkbench.segments.filter(s => !s.isPlaceholder).length}/{understandingWorkbench.segments.length}</strong>
             </span>
           )}
+          {understandingWorkbench &&
+            understandingWorkbench.segments.length > 0 && (
+              <Button
+                variant="outline"
+                disabled={Boolean(pendingActionId)}
+                onClick={handleConfirmAllTranscripts}
+                style={{ color: '#4ade80', borderColor: 'rgba(74, 222, 128, 0.3)', marginLeft: '12px' }}
+              >
+                ✓ 一键确认所有片段台词
+              </Button>
+            )}
         </div>
         <UnderstandingWorkbenchPanel
           workbench={understandingWorkbench}
@@ -1430,10 +1493,17 @@ export function RemixAssetProcessing({
             </div>
           )}
 
-          {/* 上半部分 (置顶固定，高度可通过拖拽动态调整) */}
-          <section className={panelStyles.upperStickySection} style={{ height: `${upperHeight}px` }}>
+          {/* 上半部分 (置顶固定，高度与宽度均可通过拖拽动态调整) */}
+          <section
+            className={panelStyles.upperStickySection}
+            style={{
+              height: `${upperHeight}px`,
+              gridTemplateColumns: `${leftWidthPercent}% 6px 1fr`,
+              gap: '0px',
+            }}
+          >
             {/* 左侧：视频播放组件 */}
-            <div className={panelStyles.playerColumn}>
+            <div className={panelStyles.playerColumn} style={{ marginRight: '8px' }}>
               <SourceVideoPreview
                 asset={asset}
                 activeSegment={activePreviewSegment}
@@ -1446,8 +1516,20 @@ export function RemixAssetProcessing({
               />
             </div>
 
+            {/* 左右拖拽条 */}
+            <div
+              className={[
+                panelStyles.widthResizerLine,
+                isDraggingWidth ? panelStyles.widthResizerLineActive : '',
+              ].join(' ')}
+              onMouseDown={(e) => {
+                e.preventDefault();
+                setIsDraggingWidth(true);
+              }}
+            />
+
             {/* 右侧：当前步骤与片段信息 */}
-            <div className={panelStyles.stageMetaColumn}>
+            <div className={panelStyles.stageMetaColumn} style={{ marginLeft: '8px' }}>
               {/* 当前步骤说明卡片 */}
               <div className={panelStyles.stageMetaCard}>
                 <div className={panelStyles.stageTitleRow}>

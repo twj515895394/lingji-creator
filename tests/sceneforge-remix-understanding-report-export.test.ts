@@ -65,7 +65,7 @@ describe('RemixUnderstandingReportExportService', () => {
       version: 2,
       segmentId: 'seg-01',
       visual: {
-        environment: '昏暗地下室',
+        environmentDetails: '昏暗地下室',
         mainAction: '反派坐在椅上狂笑',
       },
       camera: {
@@ -79,11 +79,11 @@ describe('RemixUnderstandingReportExportService', () => {
         plotFunction: '展现反派危机',
       },
       remix: {
-        keepPoints: ['大笑镜头'],
-        replacePoints: ['背景杂音'],
+        keepElements: ['大笑镜头'],
+        replaceableElements: ['背景杂音'],
       },
       videoPrompt: {
-        positivePrompt: '特写，逆光',
+        fullChinesePrompt: '特写，逆光',
       },
     };
     await fs.writeFile(
@@ -160,5 +160,6 @@ describe('RemixUnderstandingReportExportService', () => {
     expect(mdContent).toContain('台词原文：原始自动识别台词');
     expect(mdContent).toContain('台词修正版：人工校对后的台词');
     expect(mdContent).toContain('特写，逆光');
+    expect(mdContent).toContain('昏暗地下室');
   });
 });
