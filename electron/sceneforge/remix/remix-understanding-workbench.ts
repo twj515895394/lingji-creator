@@ -11,7 +11,11 @@ import {
   type RemixUnderstandingGateSegmentItem,
 } from './remix-understanding-gate';
 import type { RemixOriginalUnderstandingDocument } from './remix-source-understanding-rollup';
-import { buildSegmentUnderstandingInputHash, type RemixSegmentUnderstandingDocument } from './remix-segment-understanding-schema';
+import {
+  buildSegmentUnderstandingInputHash,
+  type RemixSegmentUnderstandingDocument,
+  type RemixChineseVideoPrompt,
+} from './remix-segment-understanding-schema';
 import type { RemixSegmentTranscriptDocument } from './remix-transcript-types';
 import type { RemixSegmentTranscriptCorrectionDocument } from './remix-transcript-correction-service';
 import { resolveProjectFile } from './remix-validators';
@@ -28,6 +32,7 @@ export interface RemixUnderstandingWorkbenchSegmentCard {
   plotFunction: string;
   speechSummary: string;
   positivePrompt: string;
+  chineseVideoPrompt?: RemixChineseVideoPrompt | null;
   keepElements: string[];
   replaceableElements: string[];
   confidence: number | null;
@@ -239,6 +244,36 @@ export async function loadRemixUnderstandingWorkbench(
       continue;
     }
 
+    const fullChinesePrompt = (understanding.videoPrompt as any).fullChinesePrompt || (understanding.videoPrompt as any).positivePrompt || '';
+    let chineseVideoPrompt: RemixChineseVideoPrompt | null = null;
+    if (understanding.videoPrompt) {
+      if ('fullChinesePrompt' in understanding.videoPrompt) {
+        chineseVideoPrompt = understanding.videoPrompt;
+      } else {
+        const v1Prompt = understanding.videoPrompt as any;
+        chineseVideoPrompt = {
+          language: 'zh-CN',
+          fullChinesePrompt: v1Prompt.positivePrompt || '',
+          subjectPrompt: '（V1 占位）请参考动作与主体说明',
+          scenePrompt: '（V1 占位）请参考场景与道具说明',
+          actionPrompt: v1Prompt.motionPrompt || '（V1 占位）请参考动作与表演说明',
+          performancePrompt: '（V1 占位）请参考表演与表情说明',
+          cameraPrompt: v1Prompt.cameraPrompt || '（V1 占位）请参考机位与运动说明',
+          lightingPrompt: '（V1 占位）请参考光照说明',
+          colorPrompt: '（V1 占位）请参考色彩说明',
+          emotionPrompt: '（V1 占位）请参考情绪说明',
+          rhythmPrompt: '（V1 占位）请参考节奏说明',
+          dialoguePrompt: v1Prompt.dialoguePrompt || '（V1 占位）请参考台词说明',
+          soundPrompt: '（V1 占位）请参考声音说明',
+          stylePrompt: '（V1 占位）请参考写实质感与风格说明',
+          continuityPrompt: '（V1 占位）请参考前后段落的连续性',
+          remixControlPrompt: '（V1 占位）请参考可保留和可替换元素说明',
+          negativePrompt: v1Prompt.negativePrompt || '（V1 占位）避免错误画面',
+          modelHints: {},
+        };
+      }
+    }
+
     cards.push({
       segmentId: segment.id,
       segmentIndex: segment.index,
@@ -250,7 +285,8 @@ export async function loadRemixUnderstandingWorkbench(
       shotSummary: `${understanding.camera.shotSize} / ${understanding.camera.movement}`,
       plotFunction: understanding.story.plotFunction,
       speechSummary: understanding.audio.speechSummary,
-      positivePrompt: understanding.videoPrompt.positivePrompt,
+      positivePrompt: fullChinesePrompt,
+      chineseVideoPrompt,
       keepElements: understanding.remix.keepElements,
       replaceableElements: understanding.remix.replaceableElements,
       confidence: understanding.quality.confidence ?? null,

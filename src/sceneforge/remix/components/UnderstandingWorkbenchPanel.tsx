@@ -35,6 +35,23 @@ export function UnderstandingWorkbenchPanel({
   const [expandedCardIds, setExpandedCardIds] = useState<Record<string, boolean>>({});
   const [editingSegmentId, setEditingSegmentId] = useState<string | null>(null);
   const [editingText, setEditingText] = useState('');
+  const [showDimensions, setShowDimensions] = useState<Record<string, boolean>>({});
+  const [copiedDimension, setCopiedDimension] = useState<{ segmentId: string; dimName: string } | null>(null);
+
+  const toggleDimensions = (segmentId: string) => {
+    setShowDimensions((prev) => ({
+      ...prev,
+      [segmentId]: !prev[segmentId],
+    }));
+  };
+
+  const handleCopyDim = (segmentId: string, dimName: string, text: string) => {
+    onCopyPrompt(segmentId, text);
+    setCopiedDimension({ segmentId, dimName });
+    setTimeout(() => {
+      setCopiedDimension(null);
+    }, 1500);
+  };
 
   const toggleExpand = (segmentId: string) => {
     setExpandedCardIds((prev) => ({
@@ -430,6 +447,110 @@ export function UnderstandingWorkbenchPanel({
                 >
                   <div className={styles.segmentAnalysisNote}>剧情功能：{segment.plotFunction || '已失效，请重跑'}</div>
                   <div className={styles.segmentAnalysisNote}>正向 prompt：{segment.positivePrompt || '已失效，请重跑'}</div>
+
+                  {segment.chineseVideoPrompt && (
+                    <div style={{ marginTop: '4px' }}>
+                      <div
+                        onClick={() => toggleDimensions(segment.segmentId)}
+                        style={{
+                          fontSize: '12px',
+                          color: '#60a5fa',
+                          cursor: 'pointer',
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: '4px',
+                          userSelect: 'none',
+                          padding: '4px 0',
+                        }}
+                      >
+                        <span>{showDimensions[segment.segmentId] ? '▼ 收起影视级 Prompt 维度' : '▶ 展开影视级 Prompt 维度'}</span>
+                      </div>
+
+                      {showDimensions[segment.segmentId] && (
+                        <div
+                          style={{
+                            display: 'grid',
+                            gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))',
+                            gap: '8px',
+                            marginTop: '8px',
+                            background: 'rgba(255, 255, 255, 0.01)',
+                            border: '1px solid rgba(255, 255, 255, 0.03)',
+                            borderRadius: '8px',
+                            padding: '10px',
+                          }}
+                        >
+                          {[
+                            { label: '👤 人物主体', text: segment.chineseVideoPrompt.subjectPrompt },
+                            { label: '🏠 空间场景', text: segment.chineseVideoPrompt.scenePrompt },
+                            { label: '🏃 动作流程', text: segment.chineseVideoPrompt.actionPrompt },
+                            { label: '🎭 表演状态', text: segment.chineseVideoPrompt.performancePrompt },
+                            { label: '🎥 镜头语言', text: segment.chineseVideoPrompt.cameraPrompt },
+                            { label: '☀️ 光影明暗', text: segment.chineseVideoPrompt.lightingPrompt },
+                            { label: '🎨 色调色彩', text: segment.chineseVideoPrompt.colorPrompt },
+                            { label: '❤️ 情绪氛围', text: segment.chineseVideoPrompt.emotionPrompt },
+                            { label: '⏱️ 动作节奏', text: segment.chineseVideoPrompt.rhythmPrompt },
+                            { label: '💬 台词语气', text: segment.chineseVideoPrompt.dialoguePrompt },
+                            { label: '🔊 环境声音', text: segment.chineseVideoPrompt.soundPrompt },
+                            { label: '🌟 风格质感', text: segment.chineseVideoPrompt.stylePrompt },
+                            { label: '⛓️ 时序连续', text: segment.chineseVideoPrompt.continuityPrompt },
+                            { label: '🎛️ 二创控制', text: segment.chineseVideoPrompt.remixControlPrompt },
+                            { label: '🚫 负向约束', text: segment.chineseVideoPrompt.negativePrompt },
+                          ]
+                            .filter((d) => d.text)
+                            .map((dim) => (
+                              <div
+                                key={dim.label}
+                                style={{
+                                  background: 'rgba(255, 255, 255, 0.02)',
+                                  border: '1px solid rgba(255, 255, 255, 0.04)',
+                                  borderRadius: '6px',
+                                  padding: '8px',
+                                  display: 'flex',
+                                  flexDirection: 'column',
+                                  gap: '4px',
+                                }}
+                              >
+                                <div
+                                  style={{
+                                    display: 'flex',
+                                    justifyContent: 'space-between',
+                                    alignItems: 'center',
+                                  }}
+                                >
+                                  <span style={{ fontSize: '11px', color: 'rgba(255, 255, 255, 0.45)', fontWeight: 500 }}>
+                                    {dim.label}
+                                  </span>
+                                  <Button
+                                    variant="ghost"
+                                    size="xs"
+                                    disabled={disabled}
+                                    onClick={() => handleCopyDim(segment.segmentId, dim.label, dim.text)}
+                                    style={{
+                                      padding: '2px 6px',
+                                      height: '18px',
+                                      fontSize: '10px',
+                                      color:
+                                        copiedDimension?.segmentId === segment.segmentId &&
+                                        copiedDimension.dimName === dim.label
+                                          ? '#4ade80'
+                                          : 'rgba(255, 255, 255, 0.4)',
+                                    }}
+                                  >
+                                    {copiedDimension?.segmentId === segment.segmentId &&
+                                    copiedDimension.dimName === dim.label
+                                      ? '已复制'
+                                      : '复制'}
+                                  </Button>
+                                </div>
+                                <div style={{ fontSize: '12px', color: 'rgba(255, 248, 235, 0.8)', lineHeight: '1.4' }}>
+                                  {dim.text}
+                                </div>
+                              </div>
+                            ))}
+                        </div>
+                      )}
+                    </div>
+                  )}
                 </div>
               )}
 

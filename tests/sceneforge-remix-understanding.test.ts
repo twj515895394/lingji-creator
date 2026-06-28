@@ -27,11 +27,23 @@ function mockUnderstandingPayload(segmentId: string) {
     story: { plotFunction: '推进情节' },
     remix: { keepElements: ['节奏'] },
     videoPrompt: {
-      positivePrompt: `固定镜头，${segmentId} 缓慢抬头。`,
-      negativePrompt: '避免卡通风格。',
-      motionPrompt: '先停顿再抬头。',
-      cameraPrompt: '平视固定镜头。',
-      dialoguePrompt: '语气迟疑。',
+      language: 'zh-CN',
+      fullChinesePrompt: `固定镜头，${segmentId} 缓慢抬头。人物主体神态严肃，胶片质感。`,
+      subjectPrompt: '人物主体神态严肃',
+      scenePrompt: '微暗的室内环境',
+      actionPrompt: `${segmentId} 缓慢抬头`,
+      performancePrompt: '神态严肃，视线聚焦',
+      cameraPrompt: '平视固定镜头',
+      lightingPrompt: '微弱室内自然光',
+      colorPrompt: '冷色调，胶片颗粒感',
+      emotionPrompt: '紧张，压抑',
+      rhythmPrompt: '舒缓深沉',
+      dialoguePrompt: '对白语气中性',
+      soundPrompt: '无明显音效',
+      stylePrompt: '电影写实风格',
+      continuityPrompt: '镜头衔接逻辑连贯',
+      remixControlPrompt: '保留面部神态',
+      negativePrompt: '避免卡通风格，画面保持稳定。',
     },
     quality: { confidence: 0.88, needsHumanReview: true, missingInputs: [], warnings: [] },
   };
@@ -109,7 +121,8 @@ describe('SceneForge Remix understanding service', () => {
       const rel = getRemixSegmentUnderstandingJsonPath(imported.sourceAsset.id, segment.id);
       const perSegment = JSON.parse(await fs.readFile(path.join(projectDir, rel), 'utf8'));
       expect(perSegment.visual.mainAction).toContain(segment.id);
-      expect(perSegment.videoPrompt.positivePrompt.length).toBeGreaterThan(0);
+      expect(perSegment.videoPrompt.fullChinesePrompt.length).toBeGreaterThan(0);
+      expect(perSegment.videoPrompt.subjectPrompt).toContain('神态严肃');
       expect(perSegment.inputHash.length).toBeGreaterThan(10);
     }
 
