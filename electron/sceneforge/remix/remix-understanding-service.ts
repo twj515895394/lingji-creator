@@ -7,6 +7,7 @@ import {
   getRemixOriginalUnderstandingJsonPath,
   getRemixSegmentManifestPath,
   getRemixSegmentUnderstandingJsonPath,
+  getRemixSegmentFrameVisionJsonPath,
 } from './remix-artifact-paths';
 import { buildRemixUnderstandingInputFingerprint } from './remix-understanding-gate';
 import { assertSourceAssetStageReady, resolveProjectFile } from './remix-validators';
@@ -41,13 +42,39 @@ export interface RemixSegmentGenerationContext {
     previous?: string;
     next?: string;
   };
+  frameVision?: import('./remix-frame-vision-service').RemixSegmentFrameVisionDocument | null;
 }
 
 function buildSegmentUserPrompt(context: RemixSegmentGenerationContext): string {
-  const { segment, transcript, neighborSummaries } = context;
+  const { segment, transcript, neighborSummaries, frameVision } = context;
   const keyframeLines = segment.keyframes.map(
     (frame) => `- ${frame.frameRole}: ${frame.imagePath} @ ${frame.timestampMs}ms`,
   );
+
+  let visionPromptBlock = '';
+  if (frameVision) {
+    const hasWarnings = frameVision.quality?.warnings?.some((w) => w.includes('不支持多模态'));
+    if (hasWarnings) {
+      visionPromptBlock = [
+        '【画面视觉不足提示】',
+        '当前无法获取关键帧的真实画面先验，请主要根据台词意图与上下文逻辑合理推测并生成符合影视逻辑的二创提示词。',
+      ].join('\n');
+    } else {
+      const frameDescLines = frameVision.frames.map(
+        (f) => `* ${f.frameRole}帧(${f.timestampMs}ms): ${f.caption} (环境: ${f.environment}, 构图: ${f.composition})`
+      );
+      visionPromptBlock = [
+        '【画面视觉先验描述】',
+        ...frameDescLines,
+      ].join('\n');
+    }
+  } else {
+    visionPromptBlock = [
+      '【画面视觉不足提示】',
+      '当前无法获取关键帧的真实画面先验，请主要根据台词意图与上下文逻辑合理推测并生成符合影视逻辑的二创提示词。',
+    ].join('\n');
+  }
+
   return [
     `片段 ID: ${segment.id}`,
     `标题: ${segment.title}`,
@@ -56,6 +83,8 @@ function buildSegmentUserPrompt(context: RemixSegmentGenerationContext): string 
     '',
     '关键帧:',
     ...(keyframeLines.length ? keyframeLines : ['- （无关键帧路径）']),
+    '',
+    visionPromptBlock,
     '',
     '分段台词:',
     transcript?.plainText?.trim() || '（无台词）',
@@ -239,6 +268,17 @@ export class RemixUnderstandingService {
         // 读取失败则默默回退 ASR
       }
     }
+    const frameVisionPath = resolveProjectFile(
+      projectDir,
+      getRemixSegmentFrameVisionJsonPath(document.sourceAsset.id, segmentId),
+    );
+    let frameVision: import('./remix-frame-vision-service').RemixSegmentFrameVisionDocument | null = null;
+    try {
+      frameVision = JSON.parse(await fs.readFile(frameVisionPath, 'utf8'));
+    } catch {
+      // 忽略
+    }
+
     const generatedAt = new Date().toISOString();
     const payload = await this.generateForSegment(settings, {
       sourceAssetId: document.sourceAsset.id,
@@ -248,6 +288,7 @@ export class RemixUnderstandingService {
         previous: previous?.title,
         next: next?.title,
       },
+      frameVision,
     });
     const understanding = normalizeSegmentUnderstandingPayload(payload, {
       segment,
@@ -495,6 +536,27 @@ export class RemixUnderstandingService {
           isStale = true;
           segStaleReasons.push('transcript_correction_changed');
           staleReasons.add('transcript_correction_changed');
+        } else {
+          // 比较 frame vision 更新时间判定过期
+          const fvPath = resolveProjectFile(
+            projectDir,
+            getRemixSegmentFrameVisionJsonPath(document.sourceAsset.id, segment.id),
+          );
+          try {
+            const fvRaw = await fs.readFile(fvPath, 'utf8');
+            const fv = JSON.parse(fvRaw);
+            if (fv && fv.generatedAt && existing.generatedAt) {
+              const fvTime = new Date(fv.generatedAt).getTime();
+              const existingTime = new Date(existing.generatedAt).getTime();
+              if (!isNaN(fvTime) && !isNaN(existingTime) && fvTime > existingTime) {
+                isStale = true;
+                segStaleReasons.push('frame_vision_changed');
+                staleReasons.add('frame_vision_changed');
+              }
+            }
+          } catch {
+            // 忽略
+          }
         }
       }
 

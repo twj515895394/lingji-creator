@@ -179,6 +179,11 @@ export interface RemixIpcContract {
   validateUnderstandingFreshness(
     input: RemixSourceAssetRefInput,
   ): Promise<RemixUnderstandingFreshnessReport>;
+  runSegmentFrameVision(input: {
+    projectDir: string;
+    sourceAssetId: string;
+    segmentId: string;
+  }): Promise<import('./remix-frame-vision-service').RemixSegmentFrameVisionDocument>;
   rerunStaleSegmentUnderstandings(input: {
     projectDir: string;
     sourceAssetId: string;

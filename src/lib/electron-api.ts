@@ -505,6 +505,11 @@ export interface ElectronAPI {
     getSourceUnderstandingWorkbench: (
       input: RemixSourceAssetRefInput,
     ) => Promise<import('../../electron/sceneforge/remix/remix-understanding-workbench').RemixUnderstandingWorkbenchSnapshot>;
+    runSegmentFrameVision: (input: {
+      projectDir: string;
+      sourceAssetId: string;
+      segmentId: string;
+    }) => Promise<import('../../electron/sceneforge/remix/remix-frame-vision-service').RemixSegmentFrameVisionDocument>;
     getSegmentTranscriptCorrection: (input: {
       projectDir: string;
       sourceAssetId: string;

@@ -142,6 +142,20 @@ export function registerSceneForgeRemixIpc(): void {
   );
 
   ipcMain.handle(
+    'sceneForgeRemix:runSegmentFrameVision',
+    async (
+      _event,
+      input: {
+        projectDir: string;
+        sourceAssetId: string;
+        segmentId: string;
+      },
+    ) => {
+      return service.runSegmentFrameVision(input);
+    },
+  );
+
+  ipcMain.handle(
     'sceneForgeRemix:rerunStaleSegmentUnderstandings',
     async (_event, input: RemixSourceAssetRefInput) => {
       return service.rerunStaleSegmentUnderstandings(input);

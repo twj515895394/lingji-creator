@@ -239,6 +239,11 @@ contextBridge.exposeInMainWorld('electronAPI', {
       ipcRenderer.invoke('sceneForgeRemix:getSourceUnderstandingWorkbench', input),
     validateUnderstandingFreshness: (input: RemixSourceAssetRefInput) =>
       ipcRenderer.invoke('sceneForgeRemix:validateUnderstandingFreshness', input),
+    runSegmentFrameVision: (input: {
+      projectDir: string;
+      sourceAssetId: string;
+      segmentId: string;
+    }) => ipcRenderer.invoke('sceneForgeRemix:runSegmentFrameVision', input),
     rerunStaleSegmentUnderstandings: (input: RemixSourceAssetRefInput) =>
       ipcRenderer.invoke('sceneForgeRemix:rerunStaleSegmentUnderstandings', input),
     getSegmentTranscriptCorrection: (input: { projectDir: string; sourceAssetId: string; segmentId: string }) =>

@@ -331,6 +331,49 @@ export const remixMockApi: RemixIpcContract = {
     return snapshot;
   },
 
+  async runSegmentFrameVision(input: {
+    projectDir: string;
+    sourceAssetId: string;
+    segmentId: string;
+  }): Promise<import('../../../../electron/sceneforge/remix/remix-frame-vision-service').RemixSegmentFrameVisionDocument> {
+    const snapshot = findProcessingSnapshot(input.sourceAssetId);
+    const segment = snapshot.sourceAsset.segments.find((s) => s.id === input.segmentId);
+    const targetRoles = ['first', 'middle', 'last'];
+    const targetFrames = segment ? segment.keyframes.filter((f) => targetRoles.includes(f.frameRole)) : [];
+
+    return {
+      schema: 'sceneforge-remix-segment-frame-vision',
+      version: 1,
+      sourceAssetId: input.sourceAssetId,
+      segmentId: input.segmentId,
+      generatedAt: new Date().toISOString(),
+      inputHash: 'mock-vision-input-hash',
+      provider: 'mock-provider',
+      model: 'mock-model',
+      frames: targetFrames.map((f) => ({
+        frameId: f.id,
+        frameRole: f.frameRole,
+        timestampMs: f.timestampMs,
+        imagePath: f.imagePath,
+        imageHash: 'mock-image-hash',
+        caption: `（Mock 视觉分析）${f.frameRole}帧的主体动作。`,
+        visibleCharacters: ['主角'],
+        visibleActions: ['移动', '抬头'],
+        environment: 'Mock 场景空间',
+        props: ['服装'],
+        lighting: '自然光照',
+        composition: '主体居中',
+        confidence: 0.9,
+        warnings: [],
+      })),
+      segmentVisualSummary: `【first帧】（Mock 视觉分析）首帧的主体动作；【middle帧】（Mock 视觉分析）中帧的主体动作`,
+      quality: {
+        needsHumanReview: false,
+        warnings: [],
+      },
+    };
+  },
+
   async rerunOriginalStoryRollup(input: RemixSourceAssetRefInput) {
     const snapshot = findProcessingSnapshot(input.sourceAssetId);
     setProcessingStage(snapshot, 'remix_understanding', 'approved');

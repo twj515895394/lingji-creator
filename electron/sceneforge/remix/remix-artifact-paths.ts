@@ -313,3 +313,8 @@ export function getRemixVariantPromptBundlePath(variantId: string): string {
   return joinRemixPath(getRemixVariantDir(variantId), 'prompt_bundle.zip');
 }
 
+export function getRemixSegmentFrameVisionJsonPath(sourceAssetId: string, segmentId: string): string {
+  return joinRemixPath(getRemixSegmentDir(sourceAssetId, segmentId), 'frame_vision.json');
+}
+
+

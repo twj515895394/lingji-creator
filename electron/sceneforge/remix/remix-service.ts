@@ -59,6 +59,7 @@ import { assertPublishReady } from './remix-validators';
 import { loadRemixUnderstandingWorkbench } from './remix-understanding-workbench';
 import { RemixUnderstandingOrchestrator } from './remix-understanding-orchestrator';
 import { RemixTranscriptCorrectionService } from './remix-transcript-correction-service';
+import { RemixFrameVisionService } from './remix-frame-vision-service';
 
 export interface RemixServiceOptions extends RemixSourceAssetServiceOptions {
   transcriptService?: RemixTranscriptService;
@@ -96,6 +97,7 @@ export class RemixService {
 
   private readonly understandingOrchestrator: RemixUnderstandingOrchestrator;
   private readonly transcriptCorrectionService: RemixTranscriptCorrectionService;
+  private readonly frameVisionService: RemixFrameVisionService;
 
   constructor(options: RemixServiceOptions = {}) {
     this.sourceAssetService = new RemixSourceAssetService(options);
@@ -118,6 +120,7 @@ export class RemixService {
       understandingConcurrency: options.understandingConcurrency ?? 2,
     });
     this.transcriptCorrectionService = new RemixTranscriptCorrectionService();
+    this.frameVisionService = new RemixFrameVisionService();
   }
 
   private withCompleteSegmentBoundary(segment: SourceSegment): SourceSegment {
@@ -646,5 +649,27 @@ export class RemixService {
 
   async exportPromptBundle(input: ExportPromptBundleInput): Promise<ExportPromptBundleResult> {
     return this.seedancePromptService.exportBundle(input.projectDir, input.variantId, input.outputPath);
+  }
+
+  async runSegmentFrameVision(input: {
+    projectDir: string;
+    sourceAssetId: string;
+    segmentId: string;
+  }): Promise<import('./remix-frame-vision-service').RemixSegmentFrameVisionDocument> {
+    const doc = await readStoredSourceAsset(input.projectDir, input.sourceAssetId);
+    if (!doc) {
+      throw new Error(`未找到源资产：${input.sourceAssetId}`);
+    }
+    const segment = doc.sourceAsset.segments.find((s) => s.id === input.segmentId);
+    if (!segment) {
+      throw new Error(`未找到片段：${input.segmentId}`);
+    }
+    const settings = await this.understandingService.loadAISettings();
+    return this.frameVisionService.runSegmentFrameVision({
+      projectDir: input.projectDir,
+      sourceAssetId: input.sourceAssetId,
+      segment,
+      settings,
+    });
   }
 }

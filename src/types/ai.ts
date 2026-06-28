@@ -299,6 +299,12 @@ export interface LLMProvider {
   thinkingBudgetTokens?: number;
   /** 内置 pi agent 的 provider / model 投影参数，不影响当前 LangChain 调用路径 */
   pi?: PiProviderProjectionOptions;
+  /** 模型所具备的多模态、结构化输出等能力参数 */
+  capabilities?: {
+    structuredJson?: boolean;
+    visionInput?: boolean;
+    localFileImageInput?: boolean;
+  };
 }
 
 export type TTSProviderType = 'minimax' | 'xiaomi_mimo' | 'custom_openai_audio';
