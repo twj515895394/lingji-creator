@@ -22,6 +22,60 @@ import { getAssetProcessingStepStatuses } from '../src/sceneforge/remix/lib/remi
       dispatchEvent: () => false,
     }) as MediaQueryList);
 
+(
+  window as typeof window & {
+    electronAPI?: {
+      loadGlobalSettings: () => Promise<{
+        aiSettings: {
+          llmProviders: [];
+          defaultProviderId: null;
+          defaultModel: string;
+          llmBaseUrl: string;
+          llmApiKey: string;
+          llmModel: string;
+          jimengApiUrl: string;
+          jimengSessionId: string;
+          ttsProviders: [];
+          defaultTtsProviderId: null;
+          defaultTtsVoiceId: null;
+          ttsVoices: [];
+          imageProviders: [];
+          defaultImageProviderId: null;
+          defaultImageModel: null;
+          videoProviders: [];
+          defaultVideoProviderId: null;
+          defaultVideoModel: null;
+          promptBindings: {};
+        };
+      }>;
+    };
+  }
+).electronAPI = {
+  loadGlobalSettings: async () => ({
+    aiSettings: {
+      llmProviders: [],
+      defaultProviderId: null,
+      defaultModel: 'gpt-4o-mini',
+      llmBaseUrl: 'http://localhost:1234/v1',
+      llmApiKey: 'test-key',
+      llmModel: 'gpt-4o-mini',
+      jimengApiUrl: '',
+      jimengSessionId: '',
+      ttsProviders: [],
+      defaultTtsProviderId: null,
+      defaultTtsVoiceId: null,
+      ttsVoices: [],
+      imageProviders: [],
+      defaultImageProviderId: null,
+      defaultImageModel: null,
+      videoProviders: [],
+      defaultVideoProviderId: null,
+      defaultVideoModel: null,
+      promptBindings: {},
+    },
+  }),
+};
+
 const containerRecords: Array<{ container: HTMLDivElement; root: Root }> = [];
 
 function clone<T>(value: T): T {
@@ -103,6 +157,7 @@ function buildApiClient(mode: 'success' | 'failure'): RemixIpcContract {
     runSourceTranscript: async () => MOCK_ASSET_PROCESSING_SNAPSHOTS['source-library-001'],
     runSourceUnderstanding: async () => MOCK_ASSET_PROCESSING_SNAPSHOTS['source-library-001'],
     rerunSegmentUnderstanding: async () => MOCK_ASSET_PROCESSING_SNAPSHOTS['source-library-001'],
+    rerunSegmentTranscript: async () => MOCK_ASSET_PROCESSING_SNAPSHOTS['source-library-001'],
     confirmAllSegmentTranscripts: async () => ({
       ready: true,
       version: 2 as const,
@@ -169,6 +224,10 @@ function buildApiClient(mode: 'success' | 'failure'): RemixIpcContract {
             correctedText: '',
             effectiveText: '对白摘要',
             correctionStatus: 'raw' as const,
+            source: 'segment_audio_sensevoice_gguf',
+            engine: 'funasr_sensevoice_gguf',
+            timestampLevel: 'segment_range',
+            warnings: [],
           },
           visual: {
             sceneSummary: '天台',
@@ -258,6 +317,30 @@ function buildApiClient(mode: 'success' | 'failure'): RemixIpcContract {
     updateEditedKeyframeStatus: async () => { throw new Error('not implemented'); },
     runSeedancePrompts: async () => { throw new Error('not implemented'); },
     exportPromptBundle: async () => { throw new Error('not implemented'); },
+  };
+}
+
+function buildApiClientWithUnderstandingRecorder(record: {
+  preferredAsrEngine?: string | null;
+  transcriptPreferredAsrEngine?: string | null;
+  transcriptSegmentId?: string | null;
+}): RemixIpcContract {
+  const base = buildApiClient('success');
+  return {
+    ...base,
+    runSourceUnderstanding: async (input) => {
+      record.preferredAsrEngine = input.preferredAsrEngine ?? null;
+      return MOCK_ASSET_PROCESSING_SNAPSHOTS['source-library-001'];
+    },
+    runSourceTranscript: async (input) => {
+      record.transcriptPreferredAsrEngine = input.preferredAsrEngine ?? null;
+      return MOCK_ASSET_PROCESSING_SNAPSHOTS['source-library-001'];
+    },
+    rerunSegmentTranscript: async (input) => {
+      record.transcriptPreferredAsrEngine = input.preferredAsrEngine ?? null;
+      record.transcriptSegmentId = input.segmentId;
+      return MOCK_ASSET_PROCESSING_SNAPSHOTS['source-library-001'];
+    },
   };
 }
 
@@ -409,6 +492,110 @@ describe('SceneForge Remix asset processing workspace', () => {
     expect(container.textContent).toContain('固定镜头，缓慢抬头。');
     expect(container.textContent).toContain('复制 video prompt');
     expect(container.querySelector('[data-testid="remix-understanding-workbench"]')).not.toBeNull();
+  });
+
+  it('原片理解页支持选择 ASR 引擎并透传到后端调用', async () => {
+    const record: { preferredAsrEngine?: string | null } = {};
+    const container = await renderProcessing(
+      <RemixAssetProcessing
+        projectDir="/tmp/remix-project"
+        apiClient={buildApiClientWithUnderstandingRecorder(record)}
+        sourceAssetId="source-library-001"
+        initialStepId="understanding"
+      />,
+    );
+
+    const select = container.querySelector('[data-testid="remix-understanding-asr-select"] button');
+    await act(async () => {
+      if (select) {
+        select.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+      }
+    });
+    await act(async () => {
+      const option = Array.from(document.querySelectorAll('[role="option"]')).find((element) =>
+        element.textContent?.includes('Whisper'),
+      );
+      option?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    });
+
+    const button = Array.from(container.querySelectorAll('button')).find((element) =>
+      element.textContent?.includes('生成原片理解'),
+    );
+    await act(async () => {
+      button?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    });
+    await act(async () => {
+      await Promise.resolve();
+    });
+
+    expect(record.preferredAsrEngine).toBe('local_whisper_cpp');
+  });
+
+  it('切片后阶段点击片段卡片会切换当前预览片段', async () => {
+    const container = await renderProcessing(
+      <RemixAssetProcessing
+        projectDir="/tmp/remix-project"
+        apiClient={buildApiClient('success')}
+        sourceAssetId="source-library-001"
+        initialStepId="keyframes"
+      />,
+    );
+
+    expect(container.textContent).toContain('当前播放片段');
+    expect(container.textContent).toContain('天台风声压场');
+
+    const target = container.textContent?.includes('反打与沉默')
+      ? Array.from(container.querySelectorAll('section')).find((element) => element.textContent?.includes('反打与沉默'))
+      : null;
+    await act(async () => {
+      target?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    });
+
+    expect(container.textContent).toContain('反打与沉默');
+  });
+
+  it('原片理解页的台词重跑入口会复用当前 ASR 选择', async () => {
+    const record: {
+      transcriptPreferredAsrEngine?: string | null;
+      transcriptSegmentId?: string | null;
+    } = {};
+    const container = await renderProcessing(
+      <RemixAssetProcessing
+        projectDir="/tmp/remix-project"
+        apiClient={buildApiClientWithUnderstandingRecorder(record)}
+        sourceAssetId="source-library-001"
+        initialStepId="understanding"
+      />,
+    );
+
+    const select = container.querySelector('[data-testid="remix-understanding-asr-select"] button');
+    await act(async () => {
+      select?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    });
+    await act(async () => {
+      const option = Array.from(document.querySelectorAll('[role="option"]')).find((element) =>
+        element.textContent?.includes('Whisper'),
+      );
+      option?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    });
+
+    const rerunAllButton = Array.from(container.querySelectorAll('button')).find((element) =>
+      element.textContent?.includes('重跑全部台词'),
+    );
+    await act(async () => {
+      rerunAllButton?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    });
+    expect(record.transcriptPreferredAsrEngine).toBe('local_whisper_cpp');
+
+    const rerunSegmentButton = Array.from(container.querySelectorAll('button')).find((element) =>
+      element.textContent?.includes('重跑 ASR'),
+    );
+    await act(async () => {
+      rerunSegmentButton?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    });
+
+    expect(record.transcriptPreferredAsrEngine).toBe('local_whisper_cpp');
+    expect(record.transcriptSegmentId).toBe('segment-l-001');
   });
 
   it('进入人工标注时会应用理解预填且不覆盖已保存标注', async () => {

@@ -48,6 +48,26 @@ export interface RemixTranscriptServiceOptions {
   preferredEngine?: RemixAsrEngine | null;
 }
 
+export interface RemixTranscriptRunOptions {
+  preferredEngine?: RemixAsrEngine | null;
+}
+
+async function readSourceTranscript(
+  projectDir: string,
+  transcriptPath: string | null | undefined,
+): Promise<RemixSourceTranscriptDocument | null> {
+  if (!transcriptPath?.trim()) {
+    return null;
+  }
+  try {
+    return JSON.parse(
+      await fs.readFile(resolveProjectFile(projectDir, transcriptPath), 'utf8'),
+    ) as RemixSourceTranscriptDocument;
+  } catch {
+    return null;
+  }
+}
+
 async function readSegmentTranscript(
   projectDir: string,
   transcriptPath: string | null | undefined,
@@ -153,7 +173,108 @@ export class RemixTranscriptService {
     this.preferredEngine = options.preferredEngine ?? null;
   }
 
-  async run(projectDir: string, sourceAssetId: string): Promise<StoredSourceAssetDocument> {
+  private async writeSourceTranscriptArtifacts(
+    projectDir: string,
+    sourceAssetId: string,
+    sourceTranscript: RemixSourceTranscriptDocument,
+  ) {
+    const transcriptJsonRel = getRemixSourceTranscriptJsonPath(sourceAssetId);
+    const transcriptMdRel = getRemixSourceTranscriptMarkdownPath(sourceAssetId);
+    await fs.mkdir(resolveProjectFile(projectDir, transcriptJsonRel.replace(/[^/]+$/, '')), { recursive: true }).catch(() => undefined);
+    await fs.writeFile(
+      resolveProjectFile(projectDir, transcriptJsonRel),
+      `${JSON.stringify(sourceTranscript, null, 2)}\n`,
+      'utf8',
+    );
+    await fs.writeFile(
+      resolveProjectFile(projectDir, transcriptMdRel),
+      buildTranscriptMarkdown(sourceTranscript),
+      'utf8',
+    );
+  }
+
+  private async writeWhisperSegmentTranscript(input: {
+    projectDir: string;
+    sourceAssetId: string;
+    segment: StoredSourceAssetDocument['sourceAsset']['segments'][number];
+    segmentAudioPath: string;
+  }): Promise<RemixSegmentTranscriptDocument> {
+    const { projectDir, sourceAssetId, segment, segmentAudioPath } = input;
+    const transcriptRel = getRemixSegmentTranscriptJsonPath(sourceAssetId, segment.id);
+    const transcriptAbs = resolveProjectFile(projectDir, transcriptRel);
+    const { utterances } = await this.whisperProvider.transcribeAudio(
+      resolveProjectFile(projectDir, segmentAudioPath),
+      path.dirname(transcriptAbs),
+    );
+
+    return {
+      schema: 'sceneforge-remix-segment-transcript',
+      version: 2,
+      segmentId: segment.id,
+      sourceAssetId,
+      timeRange: {
+        sourceStartMs: segment.timeRange.startMs,
+        sourceEndMs: segment.timeRange.endMs,
+        durationMs: segment.timeRange.durationMs,
+      },
+      source: 'aligned_from_source_transcript',
+      engine: 'local_whisper_cpp',
+      mode: 'segment_asr_rerun',
+      timestampLevel: 'sentence',
+      segmentAudioPath,
+      utterances: utterances.map((utterance, index) => ({
+        sourceUtteranceId: `whisper_${segment.id}_${String(index + 1).padStart(3, '0')}`,
+        text: utterance.text,
+        sourceStartMs: segment.timeRange.startMs + utterance.startMs,
+        sourceEndMs: segment.timeRange.startMs + utterance.endMs,
+        relativeStartMs: utterance.startMs,
+        relativeEndMs: utterance.endMs,
+        confidence: utterance.confidence ?? null,
+      })),
+      plainText: utterances.map((item) => item.text).join('\n'),
+      rawText: utterances.map((item) => item.text).join('\n'),
+      quality: {
+        hasSpeech: utterances.length > 0,
+        avgConfidence: null,
+        needsReview: true,
+        warnings:
+          utterances.length > 0
+            ? ['当前为单片段 Whisper 重跑结果，source transcript 与精准 SRT 未同步重建。']
+            : [
+                '当前为单片段 Whisper 重跑结果，source transcript 与精准 SRT 未同步重建。',
+                'Whisper 未识别到明确台词，请人工复核该片段。',
+              ],
+      },
+    };
+  }
+
+  private async writeSegmentTranscriptArtifacts(input: {
+    projectDir: string;
+    sourceAssetId: string;
+    segment: StoredSourceAssetDocument['sourceAsset']['segments'][number];
+    transcript: RemixSegmentTranscriptDocument;
+  }) {
+    const { projectDir, sourceAssetId, segment, transcript } = input;
+    const segmentTranscriptRel = getRemixSegmentTranscriptJsonPath(sourceAssetId, segment.id);
+    await fs.mkdir(path.dirname(resolveProjectFile(projectDir, segmentTranscriptRel)), { recursive: true });
+    await fs.writeFile(
+      resolveProjectFile(projectDir, segmentTranscriptRel),
+      `${JSON.stringify(transcript, null, 2)}\n`,
+      'utf8',
+    );
+    segment.segmentTranscriptJsonPath = segmentTranscriptRel;
+    await fs.writeFile(
+      resolveProjectFile(projectDir, getRemixSegmentManifestPath(sourceAssetId, segment.id)),
+      `${JSON.stringify(segment, null, 2)}\n`,
+      'utf8',
+    );
+  }
+
+  async run(
+    projectDir: string,
+    sourceAssetId: string,
+    options: RemixTranscriptRunOptions = {},
+  ): Promise<StoredSourceAssetDocument> {
     let document = await readStoredSourceAsset(projectDir, sourceAssetId);
     const generatedAt = new Date().toISOString();
     const transcriptJsonRel = getRemixSourceTranscriptJsonPath(sourceAssetId);
@@ -195,7 +316,7 @@ export class RemixTranscriptService {
         await assertFileExists(resolveProjectFile(projectDir, sourceAudioMetaPath), '全片音频元数据');
       }
       const asrPlan = await resolveRemixAsrProviderPlan({
-        preferredEngine: this.preferredEngine,
+        preferredEngine: options.preferredEngine ?? this.preferredEngine,
         hasAudio: true,
         probes: {
           sensevoice: () => this.sensevoiceProvider.probeAvailability(),
@@ -260,17 +381,7 @@ export class RemixTranscriptService {
       }
     }
 
-    await fs.mkdir(resolveProjectFile(projectDir, transcriptJsonRel.replace(/[^/]+$/, '')), { recursive: true }).catch(() => undefined);
-    await fs.writeFile(
-      resolveProjectFile(projectDir, transcriptJsonRel),
-      `${JSON.stringify(sourceTranscript, null, 2)}\n`,
-      'utf8',
-    );
-    await fs.writeFile(
-      resolveProjectFile(projectDir, transcriptMdRel),
-      buildTranscriptMarkdown(sourceTranscript),
-      'utf8',
-    );
+    await this.writeSourceTranscriptArtifacts(projectDir, sourceAssetId, sourceTranscript);
 
     document.sourceAsset.transcriptPath = transcriptJsonRel;
     document.sourceAsset.srtPath = sourceTranscript.srtPath ?? null;
@@ -306,6 +417,74 @@ export class RemixTranscriptService {
 
     document.sourceAsset.updatedAt = generatedAt;
     await writeStoredSourceAsset(projectDir, document);
+    return document;
+  }
+
+  async rerunSegment(
+    projectDir: string,
+    sourceAssetId: string,
+    segmentId: string,
+    options: RemixTranscriptRunOptions = {},
+  ): Promise<StoredSourceAssetDocument> {
+    const document = await readStoredSourceAsset(projectDir, sourceAssetId);
+    const segment = document.sourceAsset.segments.find((item) => item.id === segmentId);
+    if (!segment) {
+      throw new Error(`未找到片段：${segmentId}`);
+    }
+
+    const segmentAudioPath = segment.segmentAudioPath?.trim();
+    if (!segmentAudioPath) {
+      throw new Error(`片段 ${segmentId} 缺少可用音频，无法重跑 ASR。`);
+    }
+
+    await assertFileExists(resolveProjectFile(projectDir, segmentAudioPath), `片段音频(${segment.id})`);
+    const asrPlan = await resolveRemixAsrProviderPlan({
+      preferredEngine: options.preferredEngine ?? this.preferredEngine,
+      hasAudio: true,
+      probes: {
+        sensevoice: () => this.sensevoiceProvider.probeAvailability(),
+        whisper: () => this.whisperProvider.probeAvailability(),
+      },
+    });
+
+    const transcript =
+      asrPlan.engine === 'funasr_sensevoice_gguf'
+        ? await this.segmentTranscriptService.runSegment(projectDir, sourceAssetId, segment.id)
+        : await this.writeWhisperSegmentTranscript({
+            projectDir,
+            sourceAssetId,
+            segment,
+            segmentAudioPath,
+          });
+
+    if (asrPlan.engine !== 'funasr_sensevoice_gguf') {
+      await this.writeSegmentTranscriptArtifacts({
+        projectDir,
+        sourceAssetId,
+        segment,
+        transcript,
+      });
+    }
+
+    document.sourceAsset.updatedAt = new Date().toISOString();
+    await writeStoredSourceAsset(projectDir, document);
+
+    const sourceTranscript = await readSourceTranscript(
+      projectDir,
+      document.sourceAsset.transcriptPath,
+    );
+    if (
+      asrPlan.engine === 'funasr_sensevoice_gguf' &&
+      sourceTranscript?.mode === 'segment_audio_asr'
+    ) {
+      const rebuilt = await buildSenseVoiceSourceTranscript(
+        projectDir,
+        document,
+        document.sourceAsset.updatedAt,
+      );
+      await this.writeSourceTranscriptArtifacts(projectDir, sourceAssetId, rebuilt);
+    }
+
     return document;
   }
 }

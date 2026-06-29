@@ -121,6 +121,13 @@ export function registerSceneForgeRemixIpc(): void {
   );
 
   ipcMain.handle(
+    'sceneForgeRemix:rerunSegmentTranscript',
+    async (_event, input: SegmentKeyframeActionInput) => {
+      return service.rerunSegmentTranscript(input);
+    },
+  );
+
+  ipcMain.handle(
     'sceneForgeRemix:rerunOriginalStoryRollup',
     async (_event, input: RemixSourceAssetRefInput) => {
       return service.rerunOriginalStoryRollup(input);

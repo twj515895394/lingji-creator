@@ -8,9 +8,13 @@ interface UnderstandingWorkbenchPanelProps {
   loading?: boolean;
   copiedSegmentId: string | null;
   pendingSegmentId: string | null;
+  pendingTranscriptSegmentId?: string | null;
+  activeSegmentId?: string | null;
   disabled?: boolean;
   onCopyPrompt: (segmentId: string, text: string) => void;
   onRerunSegment: (segmentId: string) => void;
+  onRerunSegmentTranscript?: (segmentId: string) => void;
+  onSelectSegment?: (segmentId: string) => void;
   onRerunRollup?: () => void;
   onRerunStaleSegments?: () => void;
   onUpdateTranscript?: (
@@ -25,9 +29,13 @@ export function UnderstandingWorkbenchPanel({
   loading = false,
   copiedSegmentId,
   pendingSegmentId,
+  pendingTranscriptSegmentId = null,
+  activeSegmentId = null,
   disabled = false,
   onCopyPrompt,
   onRerunSegment,
+  onRerunSegmentTranscript,
+  onSelectSegment,
   onRerunRollup,
   onRerunStaleSegments,
   onUpdateTranscript,
@@ -308,6 +316,12 @@ export function UnderstandingWorkbenchPanel({
               className={styles.segmentAnalysisCard}
               style={{
                 ...cardStyle,
+                ...(activeSegmentId === segment.segmentId
+                  ? {
+                      borderColor: 'rgba(96, 165, 250, 0.5)',
+                      boxShadow: '0 0 0 1px rgba(96, 165, 250, 0.18) inset',
+                    }
+                  : null),
                 display: 'flex',
                 flexDirection: 'column',
                 gap: '0px',
@@ -315,6 +329,7 @@ export function UnderstandingWorkbenchPanel({
                 overflow: 'hidden',
               }}
               data-testid={`remix-understanding-card-${segment.segmentId}`}
+              onClick={() => onSelectSegment?.(segment.segmentId)}
             >
               <div
                 className={styles.segmentAnalysisHeader}
@@ -331,7 +346,10 @@ export function UnderstandingWorkbenchPanel({
                 onMouseLeave={(e) => {
                   e.currentTarget.style.backgroundColor = 'transparent';
                 }}
-                onClick={() => toggleExpand(segment.segmentId)}
+                onClick={() => {
+                  onSelectSegment?.(segment.segmentId);
+                  toggleExpand(segment.segmentId);
+                }}
               >
                 <div
                   style={{
@@ -366,7 +384,10 @@ export function UnderstandingWorkbenchPanel({
                         gap: '4px',
                         userSelect: 'none',
                       }}
-                      onClick={() => toggleExpand(segment.segmentId)}
+                      onClick={() => {
+                        onSelectSegment?.(segment.segmentId);
+                        toggleExpand(segment.segmentId);
+                      }}
                     >
                       <span style={{ fontSize: '11px', fontWeight: 500 }}>{isExpanded ? '收起详情' : '展开详情'}</span>
                       <span
@@ -503,7 +524,10 @@ export function UnderstandingWorkbenchPanel({
                 {/* 折叠时提供一行小字 Prompt 预览 */}
                 {!isExpanded && segment.videoPrompt.fullChinesePrompt && (
                   <div
-                    onClick={() => toggleExpand(segment.segmentId)}
+                    onClick={() => {
+                      onSelectSegment?.(segment.segmentId);
+                      toggleExpand(segment.segmentId);
+                    }}
                     style={{
                       fontSize: '12px',
                       color: 'rgba(255, 255, 255, 0.45)',
@@ -654,10 +678,24 @@ export function UnderstandingWorkbenchPanel({
 
               <div className={styles.copyRow}>
                 <Button
+                  variant="ghost"
+                  size="sm"
+                  disabled={disabled || pendingTranscriptSegmentId === segment.segmentId}
+                  onClick={(event) => {
+                    event.stopPropagation();
+                    onRerunSegmentTranscript?.(segment.segmentId);
+                  }}
+                >
+                  {pendingTranscriptSegmentId === segment.segmentId ? 'ASR 重跑中…' : '重跑 ASR'}
+                </Button>
+                <Button
                   variant="outline"
                   size="sm"
                   disabled={disabled || !segment.videoPrompt.fullChinesePrompt}
-                  onClick={() => onCopyPrompt(segment.segmentId, segment.videoPrompt.fullChinesePrompt)}
+                  onClick={(event) => {
+                    event.stopPropagation();
+                    onCopyPrompt(segment.segmentId, segment.videoPrompt.fullChinesePrompt);
+                  }}
                 >
                   复制 video prompt
                 </Button>
@@ -665,7 +703,10 @@ export function UnderstandingWorkbenchPanel({
                   variant="ghost"
                   size="sm"
                   disabled={disabled || pendingSegmentId === segment.segmentId}
-                  onClick={() => onRerunSegment(segment.segmentId)}
+                  onClick={(event) => {
+                    event.stopPropagation();
+                    onRerunSegment(segment.segmentId);
+                  }}
                 >
                   {pendingSegmentId === segment.segmentId ? '重跑中…' : '重跑本段'}
                 </Button>

@@ -163,6 +163,10 @@ function pickThumbnail(segment: SourceAsset['segments'][number]): string | null 
   return preferred?.imagePath ?? null;
 }
 
+function normalizeTranscriptText(text: string | null | undefined): string {
+  return (text ?? '').replace(/\s+/g, ' ').trim();
+}
+
 export function buildAnnotationPrefillFromUnderstanding(
   asset: SourceAsset,
   segments: RemixUnderstandingWorkbenchSnapshot['segments'],
@@ -258,8 +262,6 @@ export async function loadRemixUnderstandingWorkbench(
     let effectiveTranscript = transcriptSummary;
     let isStale = false;
     const segStaleReasons: string[] = [];
-    let correctionUpdatedAt = '';
-
     if (segment.transcriptCorrectionPath?.trim()) {
       const correction = await readJson<RemixSegmentTranscriptCorrectionDocument>(
         resolveProjectFile(projectDir, segment.transcriptCorrectionPath),
@@ -268,7 +270,6 @@ export async function loadRemixUnderstandingWorkbench(
         transcriptCorrectionText = correction.transcript.correctedText ?? '';
         transcriptCorrectionStatus = correction.transcript.correctionStatus ?? 'raw';
         effectiveTranscript = correction.transcript.effectiveText || transcriptSummary;
-        correctionUpdatedAt = correction.updatedAt ?? '';
       }
     }
 
@@ -483,13 +484,22 @@ export async function loadRemixUnderstandingWorkbench(
   if (!isOverviewStale && original?.generatedAt) {
     const originalTime = new Date(original.generatedAt).getTime();
     if (!isNaN(originalTime)) {
-      // 检查是否有任何纠错的更新时间比 rollup 更加晚
       for (const segment of asset.segments) {
         if (segment.transcriptCorrectionPath?.trim()) {
           try {
-            const corrPath = resolveProjectFile(projectDir, segment.transcriptCorrectionPath);
-            const stats = await fs.stat(corrPath);
-            if (stats.mtimeMs > originalTime) {
+            const correction = await readJson<RemixSegmentTranscriptCorrectionDocument>(
+              resolveProjectFile(projectDir, segment.transcriptCorrectionPath),
+            );
+            const effectiveText = normalizeTranscriptText(correction?.transcript.effectiveText);
+            const asrText = normalizeTranscriptText(correction?.transcript.asrText);
+            const correctionUpdatedAt = correction?.updatedAt?.trim() ?? '';
+            const correctionTime = correctionUpdatedAt ? new Date(correctionUpdatedAt).getTime() : NaN;
+            const hasMeaningfulTranscriptOverride =
+              Boolean(effectiveText) &&
+              effectiveText !== asrText &&
+              correction?.transcript.correctionStatus !== 'raw';
+
+            if (hasMeaningfulTranscriptOverride && !isNaN(correctionTime) && correctionTime > originalTime) {
               isOverviewStale = true;
               break;
             }

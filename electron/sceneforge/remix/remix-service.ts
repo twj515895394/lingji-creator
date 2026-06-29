@@ -347,7 +347,10 @@ export class RemixService {
     return this.runProcessingStage(
       input,
       'remix_transcript',
-      () => this.transcriptService.run(input.projectDir, input.sourceAssetId),
+      () =>
+        this.transcriptService.run(input.projectDir, input.sourceAssetId, {
+          preferredEngine: input.preferredAsrEngine ?? null,
+        }),
       '台词识别任务',
     );
   }
@@ -363,6 +366,22 @@ export class RemixService {
         }),
       '单段原片理解任务',
     );
+  }
+
+  async rerunSegmentTranscript(input: SegmentKeyframeActionInput) {
+    const document = await this.transcriptService.rerunSegment(
+      input.projectDir,
+      input.sourceAssetId,
+      input.segmentId,
+      {
+        preferredEngine: input.preferredAsrEngine ?? null,
+      },
+    );
+    await this.mediaValidationService.validate(input.projectDir, document);
+    const jobsDocument = await readStoredSourceAssetJobs(input.projectDir, input.sourceAssetId);
+    const snapshot = buildSourceAssetSnapshot(document, jobsDocument.jobs);
+    snapshot.variants = await this.variantService.listForSourceAsset(input.projectDir, input.sourceAssetId);
+    return snapshot;
   }
 
   async rerunOriginalStoryRollup(input: RemixSourceAssetRefInput) {
@@ -496,6 +515,9 @@ export class RemixService {
               patch,
             );
           },
+        },
+        {
+          preferredAsrEngine: input.preferredAsrEngine ?? null,
         },
       );
       await this.mediaValidationService.validate(input.projectDir, document);

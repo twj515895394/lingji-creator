@@ -2,6 +2,7 @@ import fs from 'node:fs/promises';
 import type { RemixProcessingJob } from '../../../src/sceneforge/remix/types';
 import { getRemixSourceTranscriptJsonPath } from './remix-artifact-paths';
 import { RemixAudioExtractionService } from './remix-audio-extraction-service';
+import type { RemixAsrEngine } from './remix-asr-types';
 import { hashAudioFile } from './remix-whisper-provider';
 import { RemixTranscriptService } from './remix-transcript-service';
 import { RemixUnderstandingService } from './remix-understanding-service';
@@ -19,6 +20,10 @@ export interface RemixUnderstandingOrchestratorOptions {
 
 export interface RemixUnderstandingOrchestratorHooks {
   onJobUpdate: (job: Partial<RemixProcessingJob>) => Promise<void>;
+}
+
+export interface RemixUnderstandingRunOptions {
+  preferredAsrEngine?: RemixAsrEngine | null;
 }
 
 const DEFAULT_CONCURRENCY = 2;
@@ -104,6 +109,7 @@ export class RemixUnderstandingOrchestrator {
     projectDir: string,
     sourceAssetId: string,
     hooks: RemixUnderstandingOrchestratorHooks,
+    options: RemixUnderstandingRunOptions = {},
   ): Promise<StoredSourceAssetDocument> {
     let document = await readStoredSourceAsset(projectDir, sourceAssetId);
     assertSourceAssetStageReady(document, 'remix_keyframes');
@@ -127,7 +133,9 @@ export class RemixUnderstandingOrchestrator {
       this.skipTranscriptIfFresh && (await isSourceTranscriptFresh(projectDir, document));
 
     if (!transcriptFresh) {
-      document = await this.transcriptService.run(projectDir, sourceAssetId);
+      document = await this.transcriptService.run(projectDir, sourceAssetId, {
+        preferredEngine: options.preferredAsrEngine ?? null,
+      });
     }
 
     await this.patchJob(hooks, {

@@ -369,6 +369,12 @@ export const remixMockApi: RemixIpcContract = {
     return snapshot;
   },
 
+  async rerunSegmentTranscript(input: SegmentKeyframeActionInput) {
+    const snapshot = findProcessingSnapshot(input.sourceAssetId);
+    setProcessingStage(snapshot, 'remix_understanding', 'approved');
+    return snapshot;
+  },
+
   async runSegmentFrameVision(input: {
     projectDir: string;
     sourceAssetId: string;

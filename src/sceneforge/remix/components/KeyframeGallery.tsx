@@ -12,16 +12,20 @@ import styles from './RemixWorkspacePanels.module.css';
 interface KeyframeGalleryProps {
   asset: SourceAsset;
   projectDir?: string | null;
+  activeSegmentId?: string | null;
   onAddMiddleFrame?: (segmentId: string) => Promise<void>;
   onDeleteMiddleFrame?: (segmentId: string) => Promise<void>;
+  onSelectSegment?: (segmentId: string) => void;
   disabled?: boolean;
 }
 
 export function KeyframeGallery({
   asset,
   projectDir,
+  activeSegmentId = null,
   onAddMiddleFrame,
   onDeleteMiddleFrame,
+  onSelectSegment,
   disabled,
 }: KeyframeGalleryProps) {
   if (asset.segments.length === 0) {
@@ -41,7 +45,12 @@ export function KeyframeGallery({
         const last = segment.keyframes.find((f) => f.frameRole === 'last');
 
         return (
-          <section key={segment.id} className={styles.keyframeSegmentSection}>
+          <section
+            key={segment.id}
+            className={styles.keyframeSegmentSection}
+            style={activeSegmentId === segment.id ? { borderColor: 'rgba(96, 165, 250, 0.45)', boxShadow: '0 0 0 1px rgba(96, 165, 250, 0.16) inset' } : undefined}
+            onClick={() => onSelectSegment?.(segment.id)}
+          >
             <div className={styles.keyframeSegmentHeader}>
               <span className={styles.keyframeSegmentBadge}>#{segment.index}</span>
               <span className={styles.keyframeSegmentTitle}>{segment.title || `镜头段 ${segment.index}`}</span>
@@ -76,7 +85,10 @@ export function KeyframeGallery({
                         <button
                           type="button"
                           className={styles.deleteButton}
-                          onClick={() => onDeleteMiddleFrame(segment.id)}
+                          onClick={(event) => {
+                            event.stopPropagation();
+                            void onDeleteMiddleFrame(segment.id);
+                          }}
                           title="删除中间帧"
                         >
                           <Trash2 size={14} />
@@ -90,7 +102,12 @@ export function KeyframeGallery({
                   <article
                     key={`${segment.id}-middle-placeholder`}
                     className={[styles.galleryCard, styles.galleryCardPlaceholder].join(' ')}
-                    onClick={() => !disabled && onAddMiddleFrame?.(segment.id)}
+                    onClick={(event) => {
+                      event.stopPropagation();
+                      if (!disabled) {
+                        void onAddMiddleFrame?.(segment.id);
+                      }
+                    }}
                     style={{ cursor: disabled ? 'not-allowed' : 'pointer' }}
                     title="手动提取中间帧"
                   >

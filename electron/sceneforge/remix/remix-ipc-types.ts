@@ -18,6 +18,7 @@ import type {
 } from '../../../src/sceneforge/remix/types';
 import type { RemixUnderstandingWorkbenchSnapshot } from './remix-understanding-workbench';
 import type { RemixSegmentTranscriptCorrectionDocument } from './remix-transcript-correction-service';
+import type { RemixAsrEngine } from './remix-asr-types';
 
 export interface RemixSourceAssetRefInput {
   projectDir: string;
@@ -47,6 +48,7 @@ export interface CreateSourceAssetFromImportInput {
 
 export interface RunSourceAssetStageInput extends RemixSourceAssetRefInput {
   minDurationForMiddleFrameSec?: number;
+  preferredAsrEngine?: RemixAsrEngine;
 }
 
 export interface RunSourceSegmentationInput extends RemixSourceAssetRefInput {
@@ -57,6 +59,7 @@ export interface RunSourceSegmentationInput extends RemixSourceAssetRefInput {
 
 export interface SegmentKeyframeActionInput extends RemixSourceAssetRefInput {
   segmentId: string;
+  preferredAsrEngine?: RemixAsrEngine;
 }
 
 export interface UpdateSourceSegmentsInput extends RemixSourceAssetRefInput {
@@ -168,6 +171,9 @@ export interface RemixIpcContract {
     input: RunSourceAssetStageInput,
   ): Promise<RemixAssetProcessingSnapshot>;
   rerunSegmentUnderstanding(
+    input: SegmentKeyframeActionInput,
+  ): Promise<RemixAssetProcessingSnapshot>;
+  rerunSegmentTranscript(
     input: SegmentKeyframeActionInput,
   ): Promise<RemixAssetProcessingSnapshot>;
   rerunOriginalStoryRollup(

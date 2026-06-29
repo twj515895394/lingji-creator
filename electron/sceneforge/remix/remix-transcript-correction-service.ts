@@ -235,7 +235,6 @@ export class RemixTranscriptCorrectionService {
       const current = await this.getSegmentTranscriptCorrection(projectDir, sourceAssetId, segment.id);
       if (current.transcript.correctionStatus !== 'confirmed') {
         current.transcript.correctionStatus = 'confirmed';
-        current.updatedAt = new Date().toISOString();
         current.quality.needsHumanReview = false;
 
         const correctionRelPath = getRemixSegmentTranscriptCorrectionJsonPath(sourceAssetId, segment.id);

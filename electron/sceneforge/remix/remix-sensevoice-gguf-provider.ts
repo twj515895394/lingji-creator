@@ -16,7 +16,7 @@ import { hashAudioFile } from './remix-whisper-provider';
 const DEFAULT_SEGMENT_TIMEOUT_MS = 60_000;
 
 const LANGUAGE_TAGS = new Set(['zh', 'en', 'ja', 'ko', 'yue']);
-const EMOTION_TAGS = new Set(['NEUTRAL', 'HAPPY', 'ANGRY', 'SAD']);
+const EMOTION_TAGS = new Set(['NEUTRAL', 'HAPPY', 'ANGRY', 'SAD', 'EMO_UNKNOWN']);
 const EVENT_TAGS = new Set(['Speech', 'Sing', 'Laughter', 'Crying']);
 const ITN_TAGS = new Set(['woitn', 'itn']);
 
@@ -203,8 +203,10 @@ export function parseSenseVoiceOutput(output: string): RemixSenseVoiceParsedSegm
   const segmentRegex = /((?:<\|[^>]+\|>)+)([^<]*)/g;
   const parsed: RemixSenseVoiceParsedSegment[] = [];
   let match: RegExpExecArray | null = null;
+  let sawTaggedOutput = false;
 
   while ((match = segmentRegex.exec(normalizedOutput)) !== null) {
+    sawTaggedOutput = true;
     const text = normalizeSenseVoiceText(match[2] ?? '');
     if (!text) {
       continue;
@@ -217,6 +219,10 @@ export function parseSenseVoiceOutput(output: string): RemixSenseVoiceParsedSegm
 
   if (parsed.length > 0) {
     return parsed;
+  }
+
+  if (sawTaggedOutput) {
+    return [];
   }
 
   return [

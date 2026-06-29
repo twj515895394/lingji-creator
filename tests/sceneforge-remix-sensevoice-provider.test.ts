@@ -32,6 +32,25 @@ describe('SceneForge Remix SenseVoice provider parsing', () => {
     const parsed = parseSenseVoiceOutput('  这是一段没有标签的输出  ');
     expect(parsed).toEqual([{ text: '这是一段没有标签的输出', tags: {} }]);
   });
+
+  it('treats tag-only output as empty text instead of leaking raw tags', () => {
+    const parsed = parseSenseVoiceOutput('<|ko|><|EMO_UNKNOWN|><|Speech|>');
+    expect(parsed).toEqual([]);
+  });
+
+  it('keeps EMO_UNKNOWN as a recognized emotion tag when text exists', () => {
+    const parsed = parseSenseVoiceOutput('<|ko|><|EMO_UNKNOWN|><|Speech|>测试内容');
+    expect(parsed).toEqual([
+      {
+        text: '测试内容',
+        tags: {
+          language: 'ko',
+          emotion: 'EMO_UNKNOWN',
+          event: 'Speech',
+        },
+      },
+    ]);
+  });
 });
 
 describe('resolveSenseVoiceAssets', () => {

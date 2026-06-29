@@ -1,7 +1,8 @@
 import { useEffect, useMemo, useState, type ReactElement } from 'react';
-import { Badge, Button, Checkbox, Dialog, DialogBody, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '../../../ui';
+import { Badge, Button, Checkbox, Dialog, DialogBody, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, Select } from '../../../ui';
 import { PanelHeader } from '../../../ui/patterns/PanelHeader';
 import type { RemixIpcContract } from '../../../../electron/sceneforge/remix/remix-ipc-types';
+import type { RemixAsrEngine } from '../../../../electron/sceneforge/remix/remix-asr-types';
 import { AnnotationEditor } from '../components/AnnotationEditor';
 import { getAISettingsIssue } from '../../../lib/ai-settings';
 import { KeyframeGallery } from '../components/KeyframeGallery';
@@ -205,6 +206,12 @@ const STAGE_DESCRIPTIONS: Record<AssetProcessingStepId, string> = {
   'publish-source': '只有前置步骤和人工标注都完成，这份素材才能进入资产库。',
 };
 
+const ASR_ENGINE_OPTIONS: Array<{ value: RemixAsrEngine; label: string }> = [
+  { value: 'auto', label: '自动（SenseVoice 优先）' },
+  { value: 'funasr_sensevoice_gguf', label: 'SenseVoice' },
+  { value: 'local_whisper_cpp', label: 'Whisper' },
+];
+
 export function RemixAssetProcessing({
   projectDir = null,
   apiClient,
@@ -223,8 +230,10 @@ export function RemixAssetProcessing({
   const [understandingLoading, setUnderstandingLoading] = useState(false);
   const [copiedUnderstandingSegmentId, setCopiedUnderstandingSegmentId] = useState<string | null>(null);
   const [rerunUnderstandingSegmentId, setRerunUnderstandingSegmentId] = useState<string | null>(null);
+  const [rerunTranscriptSegmentId, setRerunTranscriptSegmentId] = useState<string | null>(null);
   const [annotationPrefillApplied, setAnnotationPrefillApplied] = useState(false);
   const [aiSettingsIssue, setAiSettingsIssue] = useState<string | null>(null);
+  const [preferredAsrEngine, setPreferredAsrEngine] = useState<RemixAsrEngine>('auto');
 
   useEffect(() => {
     if (activeStepId !== 'understanding') {
@@ -248,6 +257,8 @@ export function RemixAssetProcessing({
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [previewCurrentTimeMs, setPreviewCurrentTimeMs] = useState(0);
   const [previewSeekMs, setPreviewSeekMs] = useState<number | null>(null);
+  const [previewPlayRequestToken, setPreviewPlayRequestToken] = useState(0);
+  const [selectedSegmentId, setSelectedSegmentId] = useState<string | null>(null);
   const [exitGuardMode, setExitGuardMode] = useState<ExitGuardMode | null>(null);
   const [segmentationMode, setSegmentationMode] = useState<'fast' | 'accurate'>('fast');
   const [preserveManualEdits, setPreserveManualEdits] = useState(true);
@@ -349,7 +360,13 @@ export function RemixAssetProcessing({
   const stepStatuses = snapshot
     ? getAssetProcessingStepStatuses(snapshot, hasUnsavedAnnotationChanges)
     : EMPTY_STEP_STATUSES;
-  const activePreviewSegment = asset ? findSourceSegmentAtTime(asset, previewCurrentTimeMs) : null;
+  const activePreviewSegment = asset
+    ? (
+        selectedSegmentId
+          ? asset.segments.find((segment) => segment.id === selectedSegmentId) ?? null
+          : findSourceSegmentAtTime(asset, previewCurrentTimeMs)
+      )
+    : null;
   const workspaceState = snapshot
     ? buildAssetProcessingWorkspaceState(snapshot, {
         activeStepId,
@@ -361,7 +378,19 @@ export function RemixAssetProcessing({
   useEffect(() => {
     setPreviewCurrentTimeMs(0);
     setPreviewSeekMs(0);
+    setPreviewPlayRequestToken(0);
+    setSelectedSegmentId(asset?.segments[0]?.id ?? null);
   }, [asset?.id]);
+
+  useEffect(() => {
+    if (!asset) {
+      return;
+    }
+    const segmentAtTime = findSourceSegmentAtTime(asset, previewCurrentTimeMs);
+    if (segmentAtTime && segmentAtTime.id !== selectedSegmentId) {
+      setSelectedSegmentId(segmentAtTime.id);
+    }
+  }, [asset, previewCurrentTimeMs, selectedSegmentId]);
 
   useEffect(() => {
     setAnnotationPrefillApplied(false);
@@ -465,9 +494,24 @@ export function RemixAssetProcessing({
     setTags((current) => current.filter((item) => item !== tag));
   }
 
-  function syncPreviewTo(timeMs: number) {
+  function syncPreviewTo(timeMs: number, options: { autoplay?: boolean } = {}) {
     setPreviewSeekMs(timeMs);
     setPreviewCurrentTimeMs(timeMs);
+    if (options.autoplay) {
+      setPreviewPlayRequestToken((current) => current + 1);
+    }
+  }
+
+  function focusSegmentPreview(segmentId: string, options: { autoplay?: boolean } = {}) {
+    if (!asset) {
+      return;
+    }
+    const segment = asset.segments.find((item) => item.id === segmentId);
+    if (!segment) {
+      return;
+    }
+    setSelectedSegmentId(segment.id);
+    syncPreviewTo(segment.timeRange.startMs, options);
   }
 
   async function reloadSnapshot() {
@@ -560,6 +604,45 @@ export function RemixAssetProcessing({
       setErrorMessage(error instanceof Error ? error.message : '单段理解重跑失败');
     } finally {
       setRerunUnderstandingSegmentId(null);
+    }
+  }
+
+  async function handleRerunAllSegmentTranscripts() {
+    if (!projectDir) {
+      return;
+    }
+    await runAction(
+      'transcript',
+      'remix_transcript',
+      () =>
+        resolveClient().runSourceTranscript({
+          projectDir,
+          sourceAssetId,
+          preferredAsrEngine,
+        }),
+      '正在重跑全部片段台词',
+    );
+    await refreshUnderstandingWorkbench();
+  }
+
+  async function handleRerunSegmentTranscript(segmentId: string) {
+    if (!projectDir || !asset) {
+      return;
+    }
+    setRerunTranscriptSegmentId(segmentId);
+    try {
+      const nextSnapshot = await resolveClient().rerunSegmentTranscript({
+        projectDir,
+        sourceAssetId: asset.id,
+        segmentId,
+        preferredAsrEngine,
+      });
+      applySnapshot(nextSnapshot);
+      await refreshUnderstandingWorkbench(nextSnapshot.sourceAsset);
+    } catch (error) {
+      setErrorMessage(error instanceof Error ? error.message : '单段台词重跑失败');
+    } finally {
+      setRerunTranscriptSegmentId(null);
     }
   }
 
@@ -1222,25 +1305,13 @@ export function RemixAssetProcessing({
           asset={asset}
           activeSegmentId={activePreviewSegment?.id ?? null}
           currentTimeMs={previewCurrentTimeMs}
-          onSeek={syncPreviewTo}
-          onSelectSegment={(segmentId) => {
-            const segment = asset.segments.find((item) => item.id === segmentId);
-            if (!segment) {
-              return;
-            }
-            syncPreviewTo(segment.timeRange.startMs);
-          }}
+          onSeek={(timeMs) => syncPreviewTo(timeMs)}
+          onSelectSegment={(segmentId) => focusSegmentPreview(segmentId, { autoplay: true })}
         />
         <SegmentTable
           asset={asset}
           activeSegmentId={activePreviewSegment?.id ?? null}
-          onSelectSegment={(segmentId) => {
-            const segment = asset.segments.find((item) => item.id === segmentId);
-            if (!segment) {
-              return;
-            }
-            syncPreviewTo(segment.timeRange.startMs);
-          }}
+          onSelectSegment={(segmentId) => focusSegmentPreview(segmentId, { autoplay: true })}
         />
       </section>
     ),
@@ -1292,8 +1363,10 @@ export function RemixAssetProcessing({
         <KeyframeGallery
           asset={asset}
           projectDir={projectDir}
+          activeSegmentId={activePreviewSegment?.id ?? null}
           onAddMiddleFrame={handleAddMiddleKeyframe}
           onDeleteMiddleFrame={handleDeleteMiddleKeyframe}
+          onSelectSegment={(segmentId) => focusSegmentPreview(segmentId, { autoplay: true })}
           disabled={Boolean(pendingActionId)}
         />
       </section>
@@ -1328,6 +1401,29 @@ export function RemixAssetProcessing({
         ) : null}
 
         <div className={panelStyles.copyRow} style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
+          <div style={{ minWidth: '260px', display: 'flex', flexDirection: 'column', gap: '6px' }}>
+            <span style={{ fontSize: '12px', color: 'rgba(255,255,255,0.6)' }}>ASR 引擎</span>
+            <div data-testid="remix-understanding-asr-select">
+              <Select
+                value={preferredAsrEngine}
+                options={ASR_ENGINE_OPTIONS}
+                onChange={(event) => setPreferredAsrEngine(event.target.value as RemixAsrEngine)}
+                controlClassName={panelStyles.customSelect}
+              />
+            </div>
+            <span style={{ fontSize: '12px', color: 'rgba(255,255,255,0.45)', lineHeight: 1.4 }}>
+              `自动` 会优先使用 SenseVoice；`Whisper` 仍保留精准 SRT。
+            </span>
+          </div>
+          <Button
+            variant="outline"
+            disabled={Boolean(pendingActionId)}
+            onClick={() => {
+              void handleRerunAllSegmentTranscripts();
+            }}
+          >
+            {pendingActionId === 'transcript' ? '重跑中…' : '重跑全部台词'}
+          </Button>
           <Button
             variant="accent"
             disabled={Boolean(pendingActionId) || Boolean(aiSettingsIssue)}
@@ -1339,6 +1435,7 @@ export function RemixAssetProcessing({
                 resolveClient().runSourceUnderstanding({
                   projectDir: projectDir,
                   sourceAssetId,
+                  preferredAsrEngine,
                 }),
                 '正在生成原片理解',
               );
@@ -1368,9 +1465,15 @@ export function RemixAssetProcessing({
           loading={understandingLoading}
           copiedSegmentId={copiedUnderstandingSegmentId}
           pendingSegmentId={rerunUnderstandingSegmentId}
+          pendingTranscriptSegmentId={rerunTranscriptSegmentId}
+          activeSegmentId={activePreviewSegment?.id ?? null}
           disabled={Boolean(pendingActionId)}
           onCopyPrompt={(segmentId, prompt) => {
             void handleCopyUnderstandingPrompt(segmentId, prompt);
+          }}
+          onSelectSegment={(segmentId) => focusSegmentPreview(segmentId, { autoplay: true })}
+          onRerunSegmentTranscript={(segmentId) => {
+            void handleRerunSegmentTranscript(segmentId);
           }}
           onRerunSegment={(segmentId) => {
             void handleRerunSegmentUnderstanding(segmentId);
@@ -1509,6 +1612,7 @@ export function RemixAssetProcessing({
                 activeSegment={activePreviewSegment}
                 currentTimeMs={previewCurrentTimeMs}
                 seekToMs={previewSeekMs}
+                playRequestToken={previewPlayRequestToken}
                 onTimeUpdate={(timeMs) => {
                   setPreviewCurrentTimeMs(timeMs);
                 }}
