@@ -60,6 +60,8 @@ export interface RunSourceSegmentationInput extends RemixSourceAssetRefInput {
 export interface SegmentKeyframeActionInput extends RemixSourceAssetRefInput {
   segmentId: string;
   preferredAsrEngine?: RemixAsrEngine;
+  /** 单次重跑本段理解时用户补充建议，不持久化 */
+  understandingRerunHint?: string | null;
 }
 
 export interface UpdateSourceSegmentsInput extends RemixSourceAssetRefInput {

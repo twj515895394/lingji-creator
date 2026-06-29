@@ -363,6 +363,7 @@ export class RemixService {
       () =>
         this.understandingService.run(input.projectDir, input.sourceAssetId, {
           segmentIds: [input.segmentId],
+          understandingRerunHint: input.understandingRerunHint ?? null,
         }),
       '单段原片理解任务',
     );

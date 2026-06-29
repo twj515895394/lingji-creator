@@ -1036,6 +1036,24 @@
   border-color: rgba(255, 255, 255, 0.15);
 }
 
+/* 用于统一 Select 组件：仅皮肤，不重复绘制下拉箭头（箭头由 Select 内置 Chevron 提供） */
+.remixSelectSkin {
+  background: rgba(18, 22, 28, 0.9);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: var(--radius-sm);
+  color: var(--color-text-primary);
+  font-size: var(--font-size-xs);
+  font-weight: 600;
+  padding: 3px 8px;
+  min-height: 28px;
+  transition: border-color 120ms ease, background 120ms ease;
+}
+
+.remixSelectSkin:hover {
+  background: rgba(255, 255, 255, 0.05);
+  border-color: rgba(255, 255, 255, 0.15);
+}
+
 .keyframeSegmentsList {
   display: grid;
   gap: 16px;

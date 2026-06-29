@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, type ReactElement } from 'react';
+import { useEffect, useMemo, useRef, useState, type ReactElement } from 'react';
 import { Badge, Button, Checkbox, Dialog, DialogBody, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, Select } from '../../../ui';
 import { PanelHeader } from '../../../ui/patterns/PanelHeader';
 import type { RemixIpcContract } from '../../../../electron/sceneforge/remix/remix-ipc-types';
@@ -230,6 +230,10 @@ export function RemixAssetProcessing({
   const [understandingLoading, setUnderstandingLoading] = useState(false);
   const [copiedUnderstandingSegmentId, setCopiedUnderstandingSegmentId] = useState<string | null>(null);
   const [rerunUnderstandingSegmentId, setRerunUnderstandingSegmentId] = useState<string | null>(null);
+  const [understandingRerunDialog, setUnderstandingRerunDialog] = useState<{
+    segmentId: string;
+    hint: string;
+  } | null>(null);
   const [rerunTranscriptSegmentId, setRerunTranscriptSegmentId] = useState<string | null>(null);
   const [annotationPrefillApplied, setAnnotationPrefillApplied] = useState(false);
   const [aiSettingsIssue, setAiSettingsIssue] = useState<string | null>(null);
@@ -257,8 +261,8 @@ export function RemixAssetProcessing({
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [previewCurrentTimeMs, setPreviewCurrentTimeMs] = useState(0);
   const [previewSeekMs, setPreviewSeekMs] = useState<number | null>(null);
-  const [previewPlayRequestToken, setPreviewPlayRequestToken] = useState(0);
   const [selectedSegmentId, setSelectedSegmentId] = useState<string | null>(null);
+  const lowerScrollableSectionRef = useRef<HTMLElement | null>(null);
   const [exitGuardMode, setExitGuardMode] = useState<ExitGuardMode | null>(null);
   const [segmentationMode, setSegmentationMode] = useState<'fast' | 'accurate'>('fast');
   const [preserveManualEdits, setPreserveManualEdits] = useState(true);
@@ -378,7 +382,6 @@ export function RemixAssetProcessing({
   useEffect(() => {
     setPreviewCurrentTimeMs(0);
     setPreviewSeekMs(0);
-    setPreviewPlayRequestToken(0);
     setSelectedSegmentId(asset?.segments[0]?.id ?? null);
   }, [asset?.id]);
 
@@ -494,15 +497,12 @@ export function RemixAssetProcessing({
     setTags((current) => current.filter((item) => item !== tag));
   }
 
-  function syncPreviewTo(timeMs: number, options: { autoplay?: boolean } = {}) {
+  function syncPreviewTo(timeMs: number) {
     setPreviewSeekMs(timeMs);
     setPreviewCurrentTimeMs(timeMs);
-    if (options.autoplay) {
-      setPreviewPlayRequestToken((current) => current + 1);
-    }
   }
 
-  function focusSegmentPreview(segmentId: string, options: { autoplay?: boolean } = {}) {
+  function focusSegmentPreview(segmentId: string) {
     if (!asset) {
       return;
     }
@@ -511,7 +511,7 @@ export function RemixAssetProcessing({
       return;
     }
     setSelectedSegmentId(segment.id);
-    syncPreviewTo(segment.timeRange.startMs, options);
+    syncPreviewTo(segment.timeRange.startMs);
   }
 
   async function reloadSnapshot() {
@@ -555,6 +555,19 @@ export function RemixAssetProcessing({
     }
   }
 
+  async function runWithPreservedWorkbenchScroll<T>(runner: () => Promise<T>) {
+    const container = lowerScrollableSectionRef.current;
+    const previousScrollTop = container?.scrollTop ?? 0;
+    const result = await runner();
+    requestAnimationFrame(() => {
+      if (!container) {
+        return;
+      }
+      container.scrollTop = previousScrollTop;
+    });
+    return result;
+  }
+
   async function refreshUnderstandingWorkbench(nextAsset = asset) {
     if (!projectDir || !nextAsset) {
       setUnderstandingWorkbench(null);
@@ -587,19 +600,22 @@ export function RemixAssetProcessing({
     }
   }
 
-  async function handleRerunSegmentUnderstanding(segmentId: string) {
+  async function handleRerunSegmentUnderstanding(segmentId: string, understandingRerunHint?: string | null) {
     if (!projectDir || !asset) {
       return;
     }
     setRerunUnderstandingSegmentId(segmentId);
     try {
-      const nextSnapshot = await resolveClient().rerunSegmentUnderstanding({
-        projectDir,
-        sourceAssetId: asset.id,
-        segmentId,
+      await runWithPreservedWorkbenchScroll(async () => {
+        const nextSnapshot = await resolveClient().rerunSegmentUnderstanding({
+          projectDir,
+          sourceAssetId: asset.id,
+          segmentId,
+          understandingRerunHint: understandingRerunHint?.trim() || null,
+        });
+        applySnapshot(nextSnapshot);
+        await refreshUnderstandingWorkbench(nextSnapshot.sourceAsset);
       });
-      applySnapshot(nextSnapshot);
-      await refreshUnderstandingWorkbench(nextSnapshot.sourceAsset);
     } catch (error) {
       setErrorMessage(error instanceof Error ? error.message : '单段理解重跑失败');
     } finally {
@@ -631,14 +647,16 @@ export function RemixAssetProcessing({
     }
     setRerunTranscriptSegmentId(segmentId);
     try {
-      const nextSnapshot = await resolveClient().rerunSegmentTranscript({
-        projectDir,
-        sourceAssetId: asset.id,
-        segmentId,
-        preferredAsrEngine,
+      await runWithPreservedWorkbenchScroll(async () => {
+        const nextSnapshot = await resolveClient().rerunSegmentTranscript({
+          projectDir,
+          sourceAssetId: asset.id,
+          segmentId,
+          preferredAsrEngine,
+        });
+        applySnapshot(nextSnapshot);
+        await refreshUnderstandingWorkbench(nextSnapshot.sourceAsset);
       });
-      applySnapshot(nextSnapshot);
-      await refreshUnderstandingWorkbench(nextSnapshot.sourceAsset);
     } catch (error) {
       setErrorMessage(error instanceof Error ? error.message : '单段台词重跑失败');
     } finally {
@@ -1306,12 +1324,12 @@ export function RemixAssetProcessing({
           activeSegmentId={activePreviewSegment?.id ?? null}
           currentTimeMs={previewCurrentTimeMs}
           onSeek={(timeMs) => syncPreviewTo(timeMs)}
-          onSelectSegment={(segmentId) => focusSegmentPreview(segmentId, { autoplay: true })}
+          onSelectSegment={(segmentId) => focusSegmentPreview(segmentId)}
         />
         <SegmentTable
           asset={asset}
           activeSegmentId={activePreviewSegment?.id ?? null}
-          onSelectSegment={(segmentId) => focusSegmentPreview(segmentId, { autoplay: true })}
+          onSelectSegment={(segmentId) => focusSegmentPreview(segmentId)}
         />
       </section>
     ),
@@ -1366,7 +1384,7 @@ export function RemixAssetProcessing({
           activeSegmentId={activePreviewSegment?.id ?? null}
           onAddMiddleFrame={handleAddMiddleKeyframe}
           onDeleteMiddleFrame={handleDeleteMiddleKeyframe}
-          onSelectSegment={(segmentId) => focusSegmentPreview(segmentId, { autoplay: true })}
+          onSelectSegment={(segmentId) => focusSegmentPreview(segmentId)}
           disabled={Boolean(pendingActionId)}
         />
       </section>
@@ -1408,7 +1426,7 @@ export function RemixAssetProcessing({
                 value={preferredAsrEngine}
                 options={ASR_ENGINE_OPTIONS}
                 onChange={(event) => setPreferredAsrEngine(event.target.value as RemixAsrEngine)}
-                controlClassName={panelStyles.customSelect}
+                controlClassName={panelStyles.remixSelectSkin}
               />
             </div>
             <span style={{ fontSize: '12px', color: 'rgba(255,255,255,0.45)', lineHeight: 1.4 }}>
@@ -1471,12 +1489,12 @@ export function RemixAssetProcessing({
           onCopyPrompt={(segmentId, prompt) => {
             void handleCopyUnderstandingPrompt(segmentId, prompt);
           }}
-          onSelectSegment={(segmentId) => focusSegmentPreview(segmentId, { autoplay: true })}
+          onSelectSegment={(segmentId) => focusSegmentPreview(segmentId)}
           onRerunSegmentTranscript={(segmentId) => {
             void handleRerunSegmentTranscript(segmentId);
           }}
           onRerunSegment={(segmentId) => {
-            void handleRerunSegmentUnderstanding(segmentId);
+            setUnderstandingRerunDialog({ segmentId, hint: '' });
           }}
           onRerunRollup={handleRerunOriginalStoryRollup}
           onRerunStaleSegments={handleRerunStaleSegmentUnderstandings}
@@ -1612,7 +1630,6 @@ export function RemixAssetProcessing({
                 activeSegment={activePreviewSegment}
                 currentTimeMs={previewCurrentTimeMs}
                 seekToMs={previewSeekMs}
-                playRequestToken={previewPlayRequestToken}
                 onTimeUpdate={(timeMs) => {
                   setPreviewCurrentTimeMs(timeMs);
                 }}
@@ -1689,7 +1706,7 @@ export function RemixAssetProcessing({
           />
 
           {/* 下半部分 (60% 高度, 独立滚动操作区) */}
-          <section className={panelStyles.lowerScrollableSection}>
+          <section ref={lowerScrollableSectionRef} className={panelStyles.lowerScrollableSection}>
             {stepPanels[activeStepId]}
 
             <details className={shellStyles.technicalDetails} style={{ marginTop: '24px' }}>
@@ -1708,6 +1725,71 @@ export function RemixAssetProcessing({
           </section>
         </div>
       </main>
+
+      <Dialog
+        open={understandingRerunDialog !== null}
+        onOpenChange={(open) => {
+          if (!open) {
+            setUnderstandingRerunDialog(null);
+          }
+        }}
+      >
+        <DialogContent size="sm">
+          <DialogHeader>
+            <DialogTitle>重跑本段理解</DialogTitle>
+            <DialogDescription>
+              仅重跑该段的 LLM / 多模态结构化理解，不会重跑 ASR 或台词识别。可填写补充建议（可为空）。
+            </DialogDescription>
+          </DialogHeader>
+          <DialogBody>
+            <label style={{ display: 'grid', gap: '6px', fontSize: '13px' }}>
+              <span style={{ color: 'rgba(255,255,255,0.65)' }}>用户补充建议（可选）</span>
+              <textarea
+                value={understandingRerunDialog?.hint ?? ''}
+                onChange={(event) => {
+                  const segmentId = understandingRerunDialog?.segmentId;
+                  if (!segmentId) {
+                    return;
+                  }
+                  setUnderstandingRerunDialog({ segmentId, hint: event.target.value });
+                }}
+                rows={4}
+                placeholder="例如：本段重点强调人物情绪，镜头保持与上一段相同的冷色调。"
+                style={{
+                  width: '100%',
+                  resize: 'vertical',
+                  background: 'rgba(255,255,255,0.05)',
+                  border: '1px solid rgba(255,255,255,0.12)',
+                  borderRadius: '6px',
+                  color: 'inherit',
+                  padding: '8px 10px',
+                  fontSize: '13px',
+                  lineHeight: 1.45,
+                }}
+              />
+            </label>
+          </DialogBody>
+          <DialogFooter>
+            <Button variant="ghost" onClick={() => setUnderstandingRerunDialog(null)}>
+              取消
+            </Button>
+            <Button
+              variant="primary"
+              disabled={!understandingRerunDialog || Boolean(pendingActionId)}
+              onClick={() => {
+                const dialog = understandingRerunDialog;
+                if (!dialog) {
+                  return;
+                }
+                setUnderstandingRerunDialog(null);
+                void handleRerunSegmentUnderstanding(dialog.segmentId, dialog.hint);
+              }}
+            >
+              开始重跑
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       <Dialog open={exitGuardMode !== null} onOpenChange={(open) => {
         if (!open) {

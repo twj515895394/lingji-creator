@@ -44,10 +44,19 @@ export interface RemixSegmentGenerationContext {
   };
   frameVision?: import('./remix-frame-vision-service').RemixSegmentFrameVisionDocument | null;
   previousSegmentPrompt?: string | null;
+  /** 用户本次重跑时补充的理解提示，一次性、不写入工程 */
+  understandingRerunHint?: string | null;
 }
 
-function buildSegmentUserPrompt(context: RemixSegmentGenerationContext): string {
-  const { segment, transcript, neighborSummaries, frameVision, previousSegmentPrompt } = context;
+export function buildSegmentUserPrompt(context: RemixSegmentGenerationContext): string {
+  const {
+    segment,
+    transcript,
+    neighborSummaries,
+    frameVision,
+    previousSegmentPrompt,
+    understandingRerunHint,
+  } = context;
   const keyframeLines = segment.keyframes.map(
     (frame) => `- ${frame.frameRole}: ${frame.imagePath} @ ${frame.timestampMs}ms`,
   );
@@ -105,6 +114,9 @@ function buildSegmentUserPrompt(context: RemixSegmentGenerationContext): string 
     `- 前一段: ${neighborSummaries.previous ?? '无'}`,
     `- 后一段: ${neighborSummaries.next ?? '无'}`,
     '',
+    ...(understandingRerunHint?.trim()
+      ? ['【用户补充建议】', understandingRerunHint.trim(), '']
+      : []),
     '请输出单个片段的结构化理解 JSON。',
   ].join('\n');
 }
@@ -196,6 +208,7 @@ export interface RemixUnderstandingRunWithProgressOptions {
   segmentIds?: string[];
   concurrency?: number;
   onProgress?: (progress: RemixUnderstandingRunProgress) => void | Promise<void>;
+  understandingRerunHint?: string | null;
 }
 
 async function mapWithConcurrency<T>(
@@ -260,6 +273,7 @@ export class RemixUnderstandingService {
     document: StoredSourceAssetDocument,
     segmentId: string,
     settings: AISettings,
+    options: { understandingRerunHint?: string | null } = {},
   ): Promise<RemixSegmentUnderstandingDocument> {
     const segment = document.sourceAsset.segments.find((item) => item.id === segmentId);
     if (!segment) {
@@ -314,6 +328,7 @@ export class RemixUnderstandingService {
       },
       frameVision,
       previousSegmentPrompt,
+      understandingRerunHint: options.understandingRerunHint ?? null,
     });
     const understanding = normalizeSegmentUnderstandingPayload(payload, {
       segment,
@@ -361,11 +376,12 @@ export class RemixUnderstandingService {
   async run(
     projectDir: string,
     sourceAssetId: string,
-    options: { segmentIds?: string[] } = {},
+    options: { segmentIds?: string[]; understandingRerunHint?: string | null } = {},
   ): Promise<StoredSourceAssetDocument> {
     return this.runWithProgress(projectDir, sourceAssetId, {
       segmentIds: options.segmentIds,
       concurrency: 1,
+      understandingRerunHint: options.understandingRerunHint,
     });
   }
 
@@ -393,9 +409,13 @@ export class RemixUnderstandingService {
     let completed = 0;
     const total = targetIds.length;
 
+    const rerunHint = options.understandingRerunHint ?? null;
+
     await mapWithConcurrency(targetIds, concurrency, async (segmentId) => {
       try {
-        const understanding = await this.generateSegment(projectDir, document, segmentId, settings);
+        const understanding = await this.generateSegment(projectDir, document, segmentId, settings, {
+          understandingRerunHint: rerunHint,
+        });
         await this.writeSegmentUnderstanding(
           projectDir,
           sourceAssetId,

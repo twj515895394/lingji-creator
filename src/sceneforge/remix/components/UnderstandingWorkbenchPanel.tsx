@@ -708,7 +708,7 @@ export function UnderstandingWorkbenchPanel({
                     onRerunSegment(segment.segmentId);
                   }}
                 >
-                  {pendingSegmentId === segment.segmentId ? '重跑中…' : '重跑本段'}
+                  {pendingSegmentId === segment.segmentId ? '理解重跑中…' : '重跑本段理解'}
                 </Button>
                 {copiedSegmentId === segment.segmentId ? (
                   <span className={styles.copyFeedback}>已复制</span>
