@@ -4,6 +4,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { parseSrt, serializeSrtEntries } from '../../../src/lib/srt-parser';
 import type { RemixTranscriptUtterance } from './remix-transcript-types';
+import type { RemixAsrAvailability } from './remix-asr-provider-resolver';
 
 export interface RemixWhisperProviderOptions {
   whisperBin?: string | null;
@@ -151,6 +152,18 @@ export async function hashAudioFile(audioPath: string): Promise<string> {
 
 export class RemixLocalWhisperProvider {
   constructor(private readonly options: RemixWhisperProviderOptions = {}) {}
+
+  async probeAvailability(): Promise<RemixAsrAvailability> {
+    try {
+      await resolveWhisperAssets(this.options);
+      return { available: true };
+    } catch (error) {
+      return {
+        available: false,
+        reason: error instanceof Error ? error.message : String(error),
+      };
+    }
+  }
 
   async transcribeAudio(audioPath: string, outputDir: string): Promise<{
     utterances: RemixTranscriptUtterance[];
