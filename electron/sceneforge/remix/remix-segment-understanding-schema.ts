@@ -1,10 +1,15 @@
 import { createHash } from 'node:crypto';
 import type { SourceKeyframe, SourceSegment } from '../../../src/sceneforge/remix/types';
 import type { RemixSegmentTranscriptDocument } from './remix-transcript-types';
+import {
+  mergeOnScreenSubtitlesFromFrameVision,
+  resolvePrimarySpokenTextForVideoPrompt,
+} from './remix-on-screen-subtitle';
+import type { RemixSegmentFrameVisionDocument } from './remix-frame-vision-service';
 
 export const REMIX_SEGMENT_UNDERSTANDING_SCHEMA = 'sceneforge-remix-segment-understanding' as const;
 export const REMIX_SEGMENT_UNDERSTANDING_VERSION = 2 as const;
-export const REMIX_SEGMENT_UNDERSTANDING_PROMPT_VERSION = 'balanced-mvp-v2.1' as const;
+export const REMIX_SEGMENT_UNDERSTANDING_PROMPT_VERSION = 'balanced-mvp-v2.2' as const;
 
 export interface RemixChineseVideoPrompt {
   language: 'zh-CN';
@@ -208,24 +213,27 @@ export function buildVideoPromptDimensionsFromChinesePrompt(
 }
 
 function buildDialoguePerformanceVideoHints(input: {
-  effectiveTranscript: string;
-  asrTranscript?: string;
+  primarySpokenText: string;
+  spokenSource: 'on_screen_subtitle' | 'transcript_effective' | 'transcript_asr' | 'none';
+  authorityNote: string;
   dialogueFromModel: string;
   performanceFromModel: string;
 }): { dialoguePrompt: string; performancePrompt: string } {
-  const effective = input.effectiveTranscript.trim();
-  const asr = input.asrTranscript?.trim() ?? '';
+  const text = input.primarySpokenText.trim();
   const modelDialogue = input.dialogueFromModel.trim();
   const modelPerformance = input.performanceFromModel.trim();
 
   let dialoguePrompt = modelDialogue;
-  if (effective) {
-    const asrNote =
-      asr && asr !== effective ? `（已相对 ASR 纠偏；ASR 原文：${asr}）` : '';
+  if (text) {
+    const lead =
+      input.spokenSource === 'on_screen_subtitle'
+        ? '画面存在烧录字幕，对白与口型必须以字幕原文为准（优先于 ASR/听感）。'
+        : '画面中人物正在说话或旁白配音，口型与语气需与对白一致。';
     dialoguePrompt = [
-      '画面中人物正在说话或旁白配音，口型与语气需与台词一致。',
-      `本段台词：「${effective}」${asrNote}`,
-      modelDialogue && !modelDialogue.includes(effective) ? `生成补充：${modelDialogue}` : '',
+      lead,
+      `本段对白：「${text}」`,
+      input.authorityNote ? `（${input.authorityNote}）` : '',
+      modelDialogue && !modelDialogue.includes(text) ? `生成补充：${modelDialogue}` : '',
     ]
       .filter(Boolean)
       .join(' ');
@@ -234,9 +242,11 @@ function buildDialoguePerformanceVideoHints(input: {
   }
 
   let performancePrompt = modelPerformance;
-  if (effective) {
+  if (text) {
     const speakPerf =
-      '人物口型随台词开合，唇部与下颌有自然说话动作，眼神与表情配合语句情绪。';
+      input.spokenSource === 'on_screen_subtitle'
+        ? '人物口型与画面烧录字幕逐字同步，唇部动作与字幕切换一致，表情配合字幕语气。'
+        : '人物口型随对白开合，唇部与下颌有自然说话动作，眼神与表情配合语句情绪。';
     performancePrompt = performancePrompt ? `${performancePrompt}；${speakPerf}` : speakPerf;
   }
 
@@ -307,6 +317,7 @@ export function normalizeSegmentUnderstandingPayload(
     effectiveTranscriptText?: string | null;
     /** 原始 ASR 文本，用于纠偏说明 */
     asrTranscriptText?: string | null;
+    frameVision?: RemixSegmentFrameVisionDocument | null;
     keyframes: SourceKeyframe[];
     generatedAt: string;
   },
@@ -341,8 +352,14 @@ export function normalizeSegmentUnderstandingPayload(
     context.transcript?.plainText?.trim() ||
     '';
   const asrTranscript = context.asrTranscriptText?.trim() ?? context.transcript?.plainText?.trim() ?? '';
+  const onScreenSubtitles = mergeOnScreenSubtitlesFromFrameVision(context.frameVision);
+  const primarySpoken = resolvePrimarySpokenTextForVideoPrompt({
+    onScreenSubtitles,
+    effectiveTranscript,
+    asrTranscript,
+  });
 
-  const transcriptFallback = effectiveTranscript;
+  const transcriptFallback = primarySpoken.text || effectiveTranscript;
   const missingInputs: string[] = [];
   if (!transcriptFallback) {
     missingInputs.push('segment_transcript');
@@ -367,8 +384,9 @@ export function normalizeSegmentUnderstandingPayload(
   const finalRhythmPrompt = rhythmPrompt || '镜头节奏平稳，动作与对白同步';
   let finalDialoguePrompt = dialoguePrompt;
   const dialoguePerf = buildDialoguePerformanceVideoHints({
-    effectiveTranscript: effectiveTranscript,
-    asrTranscript: asrTranscript !== effectiveTranscript ? asrTranscript : undefined,
+    primarySpokenText: primarySpoken.text,
+    spokenSource: primarySpoken.source,
+    authorityNote: primarySpoken.authorityNote,
     dialogueFromModel: dialoguePrompt,
     performanceFromModel: finalPerformancePrompt,
   });
@@ -376,7 +394,9 @@ export function normalizeSegmentUnderstandingPayload(
   finalPerformancePrompt = dialoguePerf.performancePrompt;
   const finalSoundPrompt =
     soundPrompt ||
-    (effectiveTranscript ? `对白清晰可闻：${effectiveTranscript.slice(0, 80)}${effectiveTranscript.length > 80 ? '…' : ''}；环境声与对白平衡` : '环境原声');
+    (primarySpoken.text
+      ? `对白清晰可闻：${primarySpoken.text.slice(0, 80)}${primarySpoken.text.length > 80 ? '…' : ''}；环境声与对白平衡`
+      : '环境原声');
   const finalStylePrompt = stylePrompt || '影视级别，超写实高清';
   const finalContinuityPrompt = continuityPrompt || '与上下文镜头逻辑连贯';
   const finalRemixControlPrompt = remixControlPrompt || '保留主体动作和镜头构图';
@@ -546,7 +566,8 @@ export const REMIX_SEGMENT_UNDERSTANDING_SYSTEM_PROMPT = `你是专业影视分�
 3. videoPrompt 必须是符合影视级多维度中文提示词的 RemixChineseVideoPrompt 结构：
    - 必须全部输出中文。
    - 需拆解包含：人物主体(subjectPrompt)、空间场景(scenePrompt)、动作流程(actionPrompt)、表演状态(performancePrompt)、镜头语言(cameraPrompt)、光影明暗(lightingPrompt)、色调色彩(colorPrompt)、情绪氛围(emotionPrompt)、镜头节奏(rhythmPrompt)、台词语气(dialoguePrompt)、环境声音(soundPrompt)、风格质感(stylePrompt)、时序连续(continuityPrompt)、二创控制(remixControlPrompt)以及负向约束(negativePrompt)。
-   - 若【分段台词】非空：dialoguePrompt 必须写明本段台词原文（使用输入中的有效台词，可结合语气与字幕建议）；performancePrompt 必须描述人物说话状态、口型与表情；禁止忽略对白。
+   - 若上下文提供【画面烧录字幕】：对白与 videoPrompt.dialoguePrompt **必须以烧录字幕为准**，ASR/分段台词仅作参考，禁止改写字幕用词。
+   - 若无烧录字幕且【分段台词】非空：dialoguePrompt 使用有效台词，并描述说话与口型。
    - 若画面有人物但无台词：dialoguePrompt 应说明无对白/闭口，勿编造台词。
    - fullChinesePrompt 必须将上述全部正向维度（含台词、表演、情绪、节奏、声音）拼接为完整中文提示词，禁止只拼接前 8 项。
 4. 只返回合法 JSON，不要附加任何 Markdown 格式、前言或后记；

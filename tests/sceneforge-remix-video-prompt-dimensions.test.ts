@@ -60,4 +60,36 @@ describe('video prompt dimensions and dialogue', () => {
     const dims = buildVideoPromptDimensionsFromChinesePrompt(doc.videoPrompt);
     expect(dims.some((d) => d.key === 'dialogue' && d.text.includes('校对后的台词'))).toBe(true);
   });
+
+  it('uses on-screen subtitles over effective transcript in dialoguePrompt', () => {
+    const doc = normalizeSegmentUnderstandingPayload(
+      { videoPrompt: { subjectPrompt: '男主' } },
+      {
+        segment,
+        sourceAssetId: 'src-1',
+        transcript: null,
+        effectiveTranscriptText: 'ASR或校对台词',
+        asrTranscriptText: 'ASR原文',
+        frameVision: {
+          schema: 'sceneforge-remix-segment-frame-vision',
+          version: 1,
+          sourceAssetId: 'src-1',
+          segmentId: 'seg-1',
+          generatedAt: '',
+          inputHash: '',
+          provider: null,
+          model: null,
+          frames: [],
+          segmentVisualSummary: '',
+          onScreenSubtitles: ['烧录字幕为准'],
+          quality: { needsHumanReview: false, warnings: [] },
+        },
+        keyframes: [],
+        generatedAt: new Date().toISOString(),
+      },
+    );
+    expect(doc.videoPrompt.dialoguePrompt).toContain('烧录字幕');
+    expect(doc.videoPrompt.dialoguePrompt).toContain('烧录字幕为准');
+    expect(doc.videoPrompt.fullChinesePrompt).toContain('烧录字幕为准');
+  });
 });

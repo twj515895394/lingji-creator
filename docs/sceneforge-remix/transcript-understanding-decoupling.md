@@ -13,6 +13,10 @@ Status: ready-for-human
 - `buildSegmentUnderstandingInputHash` 不再包含 `transcriptPlainText`；存量 legacy hash 通过 `segmentUnderstandingInputHashMatchesStored` 兼容。
 - `RemixTranscriptCorrectionService` 移除 major 修改时清空 understanding 的逻辑。
 
-## 评论
+## 对白权威顺序（video prompt）
 
-- 2026-06-29：按用户明确产品语义落地，取代 Issue 08/09 的「分层 stale」方案。
+1. **画面烧录字幕**（关键帧多模态识别 `onScreenSubtitles`）— 有则必须为准  
+2. 人工校对后的有效台词  
+3. ASR 原文  
+
+改台词不触发理解过期；但若画面有硬字幕，重跑理解后 prompt 仍以字幕为准。

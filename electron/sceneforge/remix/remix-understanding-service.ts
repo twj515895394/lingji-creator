@@ -24,6 +24,10 @@ import {
   type RemixSegmentUnderstandingDocument,
 } from './remix-segment-understanding-schema';
 import type { RemixUnderstandingFreshnessReport } from './remix-ipc-types';
+import {
+  mergeOnScreenSubtitlesFromFrameVision,
+  resolvePrimarySpokenTextForVideoPrompt,
+} from './remix-on-screen-subtitle';
 import { RemixOriginalStoryRollupService } from './remix-original-story-rollup-service';
 
 export interface RemixUnderstandingServiceOptions {
@@ -63,6 +67,7 @@ export function buildSegmentUserPrompt(context: RemixSegmentGenerationContext): 
   );
 
   let visionPromptBlock = '';
+  const onScreenLines = mergeOnScreenSubtitlesFromFrameVision(frameVision ?? null);
   if (frameVision) {
     const hasWarnings = frameVision.quality?.warnings?.some((w) => w.includes('不支持多模态'));
     if (hasWarnings) {
@@ -108,7 +113,14 @@ export function buildSegmentUserPrompt(context: RemixSegmentGenerationContext): 
     '',
     visionPromptBlock,
     '',
-    '分段台词（有效文本，已含人工校对；生成 videoPrompt.dialoguePrompt / performancePrompt 时必须体现说话与口型）:',
+    ...(onScreenLines.length
+      ? [
+          '【画面烧录字幕（对白权威来源，优先于 ASR/分段台词）】',
+          ...onScreenLines.map((line) => `- ${line}`),
+          '',
+        ]
+      : []),
+    '分段台词（无烧录字幕时参考；已含人工校对）:',
     transcript?.plainText?.trim() || '（无台词）',
     '',
     '相邻片段摘要:',
@@ -340,6 +352,7 @@ export class RemixUnderstandingService {
       transcript,
       effectiveTranscriptText,
       asrTranscriptText: asrPlainText,
+      frameVision,
       keyframes: segment.keyframes,
       generatedAt,
     });

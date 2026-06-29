@@ -9,6 +9,7 @@ import { resolveDefaultLlmBinding } from '../../../src/lib/llm/provider-utils';
 import { createChatModelFromProvider } from '../../../src/lib/llm/model';
 import { extractTextContent } from '../../../src/lib/llm/content';
 import { getRemixSegmentFrameVisionJsonPath } from './remix-artifact-paths';
+import { mergeOnScreenSubtitlesFromFrameVision, normalizeSubtitleLines } from './remix-on-screen-subtitle';
 import { resolveProjectFile } from './remix-validators';
 
 export interface RemixSegmentFrameVisionDocument {
@@ -28,6 +29,8 @@ export interface RemixSegmentFrameVisionDocument {
     imagePath: string;
     imageHash?: string | null;
     caption: string;
+    /** 画面内烧录字幕原文（逐行），无则 [] */
+    onScreenSubtitles: string[];
     visibleCharacters: string[];
     visibleActions: string[];
     environment: string;
@@ -39,6 +42,8 @@ export interface RemixSegmentFrameVisionDocument {
   }>;
 
   segmentVisualSummary: string;
+  /** 本片段各帧烧录字幕合并（去重） */
+  onScreenSubtitles: string[];
   quality: {
     needsHumanReview: boolean;
     warnings: string[];
@@ -87,7 +92,7 @@ function buildSegmentFrameVisionInputHash(
       imageHash: f.imageHash,
       timestampMs: f.timestampMs,
     })),
-    promptVersion: 'vision-v1',
+    promptVersion: 'vision-v1.1',
   };
   return createHash('sha256').update(JSON.stringify(payload)).digest('hex');
 }
@@ -103,8 +108,11 @@ export function isVisionInputSupported(provider?: LLMProvider): boolean {
 const VISION_SYSTEM_PROMPT = `你是一个专业的影视分镜画面分析师。
 请针对给出的影视关键帧图像，进行客观、准确的视觉描述，禁止凭空捏造不可见的情节、角色身份或剧情意图。
 
-请必须只返回一个合法的 JSON 格式对象，不要包含任何 Markdown 代码块标签、前言或后记。JSON 的属性必须且只能包含以下 7 个字段（大小写敏感）：
-- caption: 对这一帧画面的整体视觉文字描述（包含主体人物、动作、主要道具和环境细节）。
+若画面中存在**烧录在画面上的字幕/文字条**（硬字幕、对白字幕、旁白字幕等），必须逐字摘录到 onScreenSubtitles 数组中，**以画面所见为准**，不要改用听感或猜测改写。无烧录字幕则返回空数组 []。
+
+请必须只返回一个合法的 JSON 格式对象，不要包含任何 Markdown 代码块标签、前言或后记。JSON 的属性必须且只能包含以下 8 个字段（大小写敏感）：
+- caption: 对这一帧画面的整体视觉文字描述（包含主体人物、动作、主要道具和环境细节；若字幕已写入 onScreenSubtitles，caption 可简述字幕存在但勿重复全文）。
+- onScreenSubtitles: 画面内可见的烧录字幕原文列表（字符串数组，按画面上从上到下或出现顺序；无字幕则为 []）。
 - visibleCharacters: 画面中明确可见的人物列表（字符串数组，如果没有则为空数组 []）。
 - visibleActions: 人物正在进行的明确动作或肢体状态（字符串数组，如果没有则为空数组 []）。
 - environment: 场景环境描述（如“微暗的室内书房”、“明亮的户外街道”等）。
@@ -114,6 +122,7 @@ const VISION_SYSTEM_PROMPT = `你是一个专业的影视分镜画面分析师�
 
 interface RawVisionResult {
   caption?: string;
+  onScreenSubtitles?: string[];
   visibleCharacters?: string[];
   visibleActions?: string[];
   environment?: string;
@@ -198,6 +207,7 @@ export class RemixFrameVisionService {
           imagePath: rf.frame.imagePath,
           imageHash: rf.imageHash,
           caption: '',
+          onScreenSubtitles: [],
           visibleCharacters: [],
           visibleActions: [],
           environment: '',
@@ -208,6 +218,7 @@ export class RemixFrameVisionService {
           warnings: ['当前模型不支持多模态视觉识别，使用文本上下文 fallback'],
         })),
         segmentVisualSummary: '（降级模式，无视觉总结）',
+        onScreenSubtitles: [],
         quality: {
           needsHumanReview: true,
           warnings: ['当前模型不支持多模态视觉识别，使用文本上下文 fallback'],
@@ -243,6 +254,7 @@ export class RemixFrameVisionService {
           imagePath: frame.imagePath,
           imageHash,
           caption: cached.caption,
+          onScreenSubtitles: cached.onScreenSubtitles ?? [],
           visibleCharacters: cached.visibleCharacters ?? [],
           visibleActions: cached.visibleActions ?? [],
           environment: cached.environment ?? '',
@@ -304,6 +316,7 @@ export class RemixFrameVisionService {
         // 多模态调用失败时，此帧走降级警告，不中断其余帧分析
         return {
           caption: `（获取视觉描述失败: ${err instanceof Error ? err.message : String(err)}）`,
+          onScreenSubtitles: [],
           visibleCharacters: [],
           visibleActions: [],
           environment: '',
@@ -320,6 +333,9 @@ export class RemixFrameVisionService {
         imagePath: frame.imagePath,
         imageHash,
         caption: frameAnalysis.caption || '（无描述）',
+        onScreenSubtitles: Array.isArray(frameAnalysis.onScreenSubtitles)
+          ? frameAnalysis.onScreenSubtitles.map((s) => String(s).trim()).filter(Boolean)
+          : [],
         visibleCharacters: frameAnalysis.visibleCharacters || [],
         visibleActions: frameAnalysis.visibleActions || [],
         environment: frameAnalysis.environment || '',
@@ -334,6 +350,9 @@ export class RemixFrameVisionService {
     // 拼接整体视觉总结
     const captions = finalFrames.map((f) => `【${f.frameRole}帧】${f.caption}`).join('；');
     const segmentVisualSummary = captions || '（无关键帧描述）';
+    const onScreenSubtitles = normalizeSubtitleLines(
+      finalFrames.flatMap((f) => f.onScreenSubtitles ?? []),
+    );
 
     const warnings = finalFrames.flatMap((f) => f.warnings);
     const resultDoc: RemixSegmentFrameVisionDocument = {
@@ -347,6 +366,7 @@ export class RemixFrameVisionService {
       model: modelName,
       frames: finalFrames,
       segmentVisualSummary,
+      onScreenSubtitles,
       quality: {
         needsHumanReview: warnings.length > 0,
         warnings,
