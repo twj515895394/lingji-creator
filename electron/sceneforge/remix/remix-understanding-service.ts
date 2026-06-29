@@ -20,6 +20,7 @@ import {
   toGateSegmentUnderstandingItem,
   validateSegmentUnderstandingDocument,
   buildSegmentUnderstandingInputHash,
+  segmentUnderstandingInputHashMatchesStored,
   type RemixSegmentUnderstandingDocument,
 } from './remix-segment-understanding-schema';
 import type { RemixUnderstandingFreshnessReport } from './remix-ipc-types';
@@ -544,9 +545,11 @@ export class RemixUnderstandingService {
 
     for (const segment of document.sourceAsset.segments) {
       let effectiveTranscript = '';
+      let asrPlainText = '';
       if (segment.segmentTranscriptJsonPath?.trim()) {
         const transcriptDoc = await readSegmentTranscript(projectDir, segment);
-        effectiveTranscript = transcriptDoc?.plainText ?? '';
+        asrPlainText = transcriptDoc?.plainText ?? '';
+        effectiveTranscript = asrPlainText;
       }
       if (segment.transcriptCorrectionPath?.trim()) {
         try {
@@ -561,47 +564,54 @@ export class RemixUnderstandingService {
         }
       }
 
-      const currentInputHash = buildSegmentUnderstandingInputHash({
-        segment,
-        transcript: { plainText: effectiveTranscript } as any,
-        keyframes: segment.keyframes,
-      });
+      const transcriptPlainTextsToTry = [effectiveTranscript, asrPlainText].filter(
+        (text, index, arr) => Boolean(text?.trim()) && arr.indexOf(text) === index,
+      );
 
       const existing = await readExistingSegmentUnderstanding(projectDir, segment);
       let isStale = false;
       const segStaleReasons: string[] = [];
       const previousInputHash = existing?.inputHash ?? null;
+      const currentInputHash = buildSegmentUnderstandingInputHash({
+        segment,
+        keyframes: segment.keyframes,
+      });
 
       if (!existing) {
         isStale = true;
         segStaleReasons.push('missing_analysis');
         staleReasons.add('missing_analysis');
+      } else if (
+        existing.inputHash &&
+        !segmentUnderstandingInputHashMatchesStored({
+          storedHash: existing.inputHash,
+          segment,
+          keyframes: segment.keyframes,
+          transcriptPlainTextsToTry,
+        })
+      ) {
+        isStale = true;
+        segStaleReasons.push('keyframes_changed');
+        staleReasons.add('keyframes_changed');
       } else {
-        if (previousInputHash !== currentInputHash) {
-          isStale = true;
-          segStaleReasons.push('transcript_correction_changed');
-          staleReasons.add('transcript_correction_changed');
-        } else {
-          // 比较 frame vision 更新时间判定过期
-          const fvPath = resolveProjectFile(
-            projectDir,
-            getRemixSegmentFrameVisionJsonPath(document.sourceAsset.id, segment.id),
-          );
-          try {
-            const fvRaw = await fs.readFile(fvPath, 'utf8');
-            const fv = JSON.parse(fvRaw);
-            if (fv && fv.generatedAt && existing.generatedAt) {
-              const fvTime = new Date(fv.generatedAt).getTime();
-              const existingTime = new Date(existing.generatedAt).getTime();
-              if (!isNaN(fvTime) && !isNaN(existingTime) && fvTime > existingTime) {
-                isStale = true;
-                segStaleReasons.push('frame_vision_changed');
-                staleReasons.add('frame_vision_changed');
-              }
+        const fvPath = resolveProjectFile(
+          projectDir,
+          getRemixSegmentFrameVisionJsonPath(document.sourceAsset.id, segment.id),
+        );
+        try {
+          const fvRaw = await fs.readFile(fvPath, 'utf8');
+          const fv = JSON.parse(fvRaw);
+          if (fv && fv.generatedAt && existing.generatedAt) {
+            const fvTime = new Date(fv.generatedAt).getTime();
+            const existingTime = new Date(existing.generatedAt).getTime();
+            if (!isNaN(fvTime) && !isNaN(existingTime) && fvTime > existingTime) {
+              isStale = true;
+              segStaleReasons.push('frame_vision_changed');
+              staleReasons.add('frame_vision_changed');
             }
-          } catch {
-            // 忽略
           }
+        } catch {
+          // 忽略
         }
       }
 

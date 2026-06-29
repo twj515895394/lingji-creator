@@ -14,6 +14,7 @@ import {
 import type { RemixOriginalUnderstandingDocument } from './remix-source-understanding-rollup';
 import {
   buildSegmentUnderstandingInputHash,
+  segmentUnderstandingInputHashMatchesStored,
   type RemixSegmentUnderstandingDocument,
 } from './remix-segment-understanding-schema';
 import type { RemixSegmentTranscriptDocument } from './remix-transcript-types';
@@ -273,19 +274,24 @@ export async function loadRemixUnderstandingWorkbench(
       }
     }
 
-    // 1. 台词及关键帧过期判定
-    const currentHash = buildSegmentUnderstandingInputHash({
-      segment,
-      transcript: { plainText: effectiveTranscript } as any,
-      keyframes: segment.keyframes,
-    });
+    // 1. 仅关键帧 / 时间范围变更可令理解过期（台词纠偏或 ASR 变更不影响画面理解与 video prompt）
+    const transcriptPlainTextsToTry = [
+      effectiveTranscript,
+      transcriptSummary,
+      transcriptCorrectionText,
+    ].filter((text, index, arr) => Boolean(text?.trim()) && arr.indexOf(text) === index);
 
-    if (understanding) {
-      const storedHash = understanding.inputHash;
-      if (storedHash && storedHash !== currentHash) {
+    if (understanding?.inputHash) {
+      const stillMatchesInputs = segmentUnderstandingInputHashMatchesStored({
+        storedHash: understanding.inputHash,
+        segment,
+        keyframes: segment.keyframes,
+        transcriptPlainTextsToTry,
+      });
+      if (!stillMatchesInputs) {
         isStale = true;
-        segStaleReasons.push('transcript_correction_changed');
-        staleReasonsSet.add('transcript_correction_changed');
+        segStaleReasons.push('keyframes_changed');
+        staleReasonsSet.add('keyframes_changed');
       }
     }
 
@@ -478,38 +484,9 @@ export async function loadRemixUnderstandingWorkbench(
     }
   }
 
-  // 3. 全片故事汇总与过期联动检测
+  // 3. 全片故事汇总过期：仅随片段理解过期联动（台词变更不触发）
   const hasAnySegmentStale = cards.some((card) => card.isStale);
-  let isOverviewStale = hasAnySegmentStale;
-  if (!isOverviewStale && original?.generatedAt) {
-    const originalTime = new Date(original.generatedAt).getTime();
-    if (!isNaN(originalTime)) {
-      for (const segment of asset.segments) {
-        if (segment.transcriptCorrectionPath?.trim()) {
-          try {
-            const correction = await readJson<RemixSegmentTranscriptCorrectionDocument>(
-              resolveProjectFile(projectDir, segment.transcriptCorrectionPath),
-            );
-            const effectiveText = normalizeTranscriptText(correction?.transcript.effectiveText);
-            const asrText = normalizeTranscriptText(correction?.transcript.asrText);
-            const correctionUpdatedAt = correction?.updatedAt?.trim() ?? '';
-            const correctionTime = correctionUpdatedAt ? new Date(correctionUpdatedAt).getTime() : NaN;
-            const hasMeaningfulTranscriptOverride =
-              Boolean(effectiveText) &&
-              effectiveText !== asrText &&
-              correction?.transcript.correctionStatus !== 'raw';
-
-            if (hasMeaningfulTranscriptOverride && !isNaN(correctionTime) && correctionTime > originalTime) {
-              isOverviewStale = true;
-              break;
-            }
-          } catch {
-            // 忽略
-          }
-        }
-      }
-    }
-  }
+  const isOverviewStale = hasAnySegmentStale;
 
   const suggestedTags = original?.remixStrategy?.suggestedTags || [];
   

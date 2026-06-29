@@ -1,6 +1,6 @@
 import fs from 'node:fs/promises';
 import path from 'node:path';
-import { getRemixSegmentTranscriptCorrectionJsonPath, getRemixSegmentTranscriptJsonPath, getRemixSegmentUnderstandingJsonPath } from './remix-artifact-paths';
+import { getRemixSegmentTranscriptCorrectionJsonPath, getRemixSegmentTranscriptJsonPath } from './remix-artifact-paths';
 import { resolveProjectFile } from './remix-validators';
 import { readStoredSourceAsset, writeStoredSourceAsset } from './remix-store';
 import { loadRemixUnderstandingWorkbench, type RemixUnderstandingWorkbenchSnapshot } from './remix-understanding-workbench';
@@ -124,9 +124,6 @@ export class RemixTranscriptCorrectionService {
     const current = await this.getSegmentTranscriptCorrection(projectDir, sourceAssetId, segmentId);
     const now = new Date().toISOString();
 
-    const previousEffectiveText = current.transcript.effectiveText;
-    const severity = evaluateTextChangeSeverity(previousEffectiveText, correctedText);
-
     // 更新字段
     current.updatedAt = now;
     current.transcript.correctedText = correctedText;
@@ -150,75 +147,7 @@ export class RemixTranscriptCorrectionService {
       await writeStoredSourceAsset(projectDir, doc);
     }
 
-    // 若判定为 major 剧烈修改，则进行物理清空
-    if (severity === 'major') {
-      const understandingRelPath = segment?.analysisJsonPath || getRemixSegmentUnderstandingJsonPath(sourceAssetId, segmentId);
-      const understandingAbsPath = resolveProjectFile(projectDir, understandingRelPath);
-      try {
-        const raw = await fs.readFile(understandingAbsPath, 'utf8');
-        const understandingDoc = JSON.parse(raw);
-        if (understandingDoc && understandingDoc.schema === 'sceneforge-remix-segment-understanding') {
-          // 清空大模型提取的生成字段
-          understandingDoc.visual = {
-            sceneSummary: '',
-            mainAction: '',
-            characters: [],
-            environmentDetails: '',
-            lighting: '',
-            colorTone: '',
-          };
-          understandingDoc.camera = {
-            shotSize: '',
-            angle: '',
-            movement: '',
-            composition: '',
-            focus: '',
-            editingRole: '',
-          };
-          understandingDoc.audio = {
-            speechSummary: '',
-            dialogue: [],
-            ambient: '',
-            music: '',
-            silenceOrPause: '',
-          };
-          understandingDoc.story = {
-            plotFunction: '',
-            emotion: '',
-            conflict: '',
-            beforeAfterRelation: '',
-          };
-          understandingDoc.videoPrompt = {
-            positivePrompt: '',
-            negativePrompt: '',
-            motionPrompt: '',
-            cameraPrompt: '',
-            dialoguePrompt: '',
-          };
-          understandingDoc.videoPromptText = '';
-          understandingDoc.remix = {
-            keepElements: [],
-            replaceableElements: [],
-            rewriteIdeas: [],
-            reuseScenarios: [],
-            riskNotes: [],
-          };
-          understandingDoc.quality = {
-            confidence: 0,
-            missingInputs: ['transcript_correction_changed'],
-            needsHumanReview: true,
-            warnings: ['台词发生剧烈修改，分析已重置失效。'],
-          };
-          understandingDoc.generatedAt = ''; // 置空生成时间，使其天然 stale
-
-          await fs.writeFile(understandingAbsPath, `${JSON.stringify(understandingDoc, null, 2)}\n`, 'utf8');
-        }
-      } catch {
-        // 若文件不存在或读取失败，则不作处理
-      }
-    }
-
-    // 重新生成快照并返回
+    // 台词纠偏不触发画面理解 / video prompt 失效或清空
     return loadRemixUnderstandingWorkbench(projectDir, doc.sourceAsset);
   }
 

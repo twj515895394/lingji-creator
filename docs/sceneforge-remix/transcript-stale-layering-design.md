@@ -1,5 +1,7 @@
 # 台词纠偏后 Segment Understanding 失效策略分层
 
+> **已废止**：产品决策改为台词与画面理解完全解耦，见 [transcript-understanding-decoupling.md](./transcript-understanding-decoupling.md)。
+
 > 状态：**待维护者确认**（确认后 Issue 09 可开工）  
 > 关联：Issue 08 / 09 · handoff 20260629-170233
 

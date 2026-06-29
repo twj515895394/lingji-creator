@@ -100,7 +100,7 @@ describe('RemixTranscriptCorrectionService - Stale physical reset', () => {
     expect(fs.writeFile).toHaveBeenCalledTimes(1); 
   });
 
-  it('resets analysis fields physically for major text change', async () => {
+  it('does not reset analysis for major text change (transcript independent from visual understanding)', async () => {
     // 模拟读取 correction.json (之前是 "ASR台词一号")
     const mockCorrectionDoc = {
       schema: 'sceneforge-remix-segment-transcript-correction',
@@ -124,39 +124,20 @@ describe('RemixTranscriptCorrectionService - Stale physical reset', () => {
     };
     vi.mocked(readStoredSourceAsset).mockResolvedValueOnce(mockDoc as any);
 
-    // 模拟读取 analysis.json
-    const mockAnalysisDoc = {
-      schema: 'sceneforge-remix-segment-understanding',
-      segmentId: 'seg-01',
-      visual: { mainAction: '动作丰富' },
-      camera: { shotSize: '远景' },
-      videoPrompt: { positivePrompt: '正向提示' },
-    };
-    vi.mocked(fs.readFile).mockResolvedValueOnce(JSON.stringify(mockAnalysisDoc)); // read analysis
+    const { loadRemixUnderstandingWorkbench } = await import(
+      '../electron/sceneforge/remix/remix-understanding-workbench'
+    );
+    vi.mocked(loadRemixUnderstandingWorkbench).mockResolvedValueOnce({} as any);
 
-    // 剧烈修改："ASR台词一号" -> "今天天气特别晴朗我们大家高高兴兴出去旅行"
     await service.updateSegmentTranscriptCorrection(
       '/project',
       'asset-01',
       'seg-01',
       '今天天气特别晴朗我们大家高高兴兴出去旅行',
-      false
+      false,
     );
 
-    // 验证：fs.writeFile 应该写了 correction.json 和被重置后的 analysis.json（2次）
-    expect(fs.writeFile).toHaveBeenCalledTimes(2);
-
-    // 获取写入 analysis.json 的数据并断言
-    const analysisWriteCall = vi.mocked(fs.writeFile).mock.calls.find(call => 
-      String(call[0]).includes('analysis.json')
-    );
-    expect(analysisWriteCall).toBeDefined();
-    const resetDoc = JSON.parse(analysisWriteCall![1] as string);
-    expect(resetDoc.visual.mainAction).toBe('');
-    expect(resetDoc.camera.shotSize).toBe('');
-    expect(resetDoc.videoPrompt.positivePrompt).toBe('');
-    expect(resetDoc.quality.needsHumanReview).toBe(true);
-    expect(resetDoc.quality.missingInputs).toContain('transcript_correction_changed');
-    expect(resetDoc.generatedAt).toBe('');
+    // 剧烈台词修改也不清空画面理解产物
+    expect(fs.writeFile).toHaveBeenCalledTimes(1);
   });
 });

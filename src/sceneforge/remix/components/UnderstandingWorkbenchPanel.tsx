@@ -407,9 +407,9 @@ export function UnderstandingWorkbenchPanel({
               {segment.isStale && (
                 <div
                   style={{
-                    color: (!segment.visual.mainAction && !segment.videoPrompt.fullChinesePrompt) ? '#ef4444' : '#fb923c',
+                    color: '#fb923c',
                     fontSize: '12px',
-                    background: (!segment.visual.mainAction && !segment.videoPrompt.fullChinesePrompt) ? 'rgba(239, 68, 68, 0.08)' : 'rgba(249, 115, 22, 0.08)',
+                    background: 'rgba(249, 115, 22, 0.08)',
                     padding: '8px 16px',
                     display: 'flex',
                     alignItems: 'center',
@@ -418,9 +418,11 @@ export function UnderstandingWorkbenchPanel({
                   }}
                 >
                   <span>
-                    {!segment.visual.mainAction && !segment.videoPrompt.fullChinesePrompt
-                      ? '⚠️ 台词发生剧烈修改，本段大模型分析已失效置空，请立即重跑理解。'
-                      : '⚠️ 台词已被修改，本段大模型分析已过期，建议重跑本段理解。'}
+                    {segment.staleReasons?.includes('frame_vision_changed')
+                      ? '⚠️ 画面视觉分析已更新，建议重跑本段理解以同步 video prompt。'
+                      : segment.staleReasons?.includes('keyframes_changed')
+                        ? '⚠️ 关键帧或片段时间范围已变更，建议重跑本段理解。'
+                        : '⚠️ 本段理解结果可能已过期，可按需重跑本段理解。'}
                   </span>
                 </div>
               )}

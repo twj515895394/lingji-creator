@@ -12,7 +12,10 @@ import {
   getRemixSegmentFrameVisionJsonPath,
   getRemixSegmentTranscriptCorrectionJsonPath,
 } from '../electron/sceneforge/remix/remix-artifact-paths';
-import { buildSegmentUnderstandingInputHash } from '../electron/sceneforge/remix/remix-segment-understanding-schema';
+import {
+  buildLegacySegmentUnderstandingInputHash,
+  buildSegmentUnderstandingInputHash,
+} from '../electron/sceneforge/remix/remix-segment-understanding-schema';
 import { RemixTranscriptCorrectionService } from '../electron/sceneforge/remix/remix-transcript-correction-service';
 
 let projectDir: string;
@@ -123,7 +126,6 @@ describe('RemixUnderstandingWorkbench V2 Aggregator', () => {
     // 6. 计算真实的 Hash 防止其过期
     const correctHash = buildSegmentUnderstandingInputHash({
       segment: sourceAsset.segments[0],
-      transcript: { plainText: '原始台词文字' } as any,
       keyframes: sourceAsset.segments[0].keyframes,
     });
 
@@ -242,7 +244,11 @@ describe('RemixUnderstandingWorkbench V2 Aggregator', () => {
     // Mock segment understanding (generated 10s ago)
     const segUnderstanding = {
       generatedAt: new Date(Date.now() - 10000).toISOString(),
-      inputHash: 'some-hash',
+      inputHash: buildLegacySegmentUnderstandingInputHash({
+        segment: sourceAsset.segments[0],
+        transcript: { plainText: '已修改台词' } as any,
+        keyframes: sourceAsset.segments[0].keyframes,
+      }),
       visual: { mainAction: '动作' },
       videoPrompt: { fullChinesePrompt: 'Prompt' },
     };
@@ -285,9 +291,9 @@ describe('RemixUnderstandingWorkbench V2 Aggregator', () => {
     await fs.utimes(corrPath, futureTime, futureTime);
 
     let snapshot = await loadRemixUnderstandingWorkbench(projectDir, sourceAsset);
-    expect(snapshot.isStale).toBe(true);
-    expect(snapshot.staleSegmentIds).toContain('seg-1');
-    expect(snapshot.staleReasons).toContain('transcript_correction_changed');
+    expect(snapshot.isStale).toBe(false);
+    expect(snapshot.segments[0]?.isStale).toBe(false);
+    expect(snapshot.staleReasons).not.toContain('transcript_correction_changed');
 
     // Case 2: frame_vision.json generatedAt is newer than understanding
     // 把 corrections 改为 raw (不触发 mtime 变更)

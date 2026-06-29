@@ -121,8 +121,55 @@ export function buildSegmentUnderstandingInputHash(input: {
       imagePath: frame.imagePath,
       timestampMs: frame.timestampMs,
     })),
+  });
+}
+
+/** 兼容旧版：inputHash 曾包含台词文本，仅用于判断存量理解是否仍有效 */
+export function buildLegacySegmentUnderstandingInputHash(input: {
+  segment: SourceSegment;
+  transcript?: RemixSegmentTranscriptDocument | null;
+  keyframes: SourceKeyframe[];
+}): string {
+  return hashPayload({
+    segmentId: input.segment.id,
+    timeRange: input.segment.timeRange,
+    keyframes: input.keyframes.map((frame) => ({
+      id: frame.id,
+      frameRole: frame.frameRole,
+      imagePath: frame.imagePath,
+      timestampMs: frame.timestampMs,
+    })),
     transcriptPlainText: input.transcript?.plainText ?? '',
   });
+}
+
+export function segmentUnderstandingInputHashMatchesStored(input: {
+  storedHash: string | null | undefined;
+  segment: SourceSegment;
+  keyframes: SourceKeyframe[];
+  transcriptPlainTextsToTry: string[];
+}): boolean {
+  if (!input.storedHash?.trim()) {
+    return false;
+  }
+  const visualHash = buildSegmentUnderstandingInputHash({
+    segment: input.segment,
+    keyframes: input.keyframes,
+  });
+  if (input.storedHash === visualHash) {
+    return true;
+  }
+  for (const plainText of input.transcriptPlainTextsToTry) {
+    const legacy = buildLegacySegmentUnderstandingInputHash({
+      segment: input.segment,
+      keyframes: input.keyframes,
+      transcript: { plainText } as RemixSegmentTranscriptDocument,
+    });
+    if (input.storedHash === legacy) {
+      return true;
+    }
+  }
+  return false;
 }
 
 function asString(value: unknown, fallback = ''): string {

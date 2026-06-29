@@ -127,7 +127,7 @@ describe('RemixUnderstandingService - Freshness Verification', () => {
     expect(report.staleReasons).toEqual([]);
   });
 
-  it('reports stale and transcript_correction_changed when input hash differs', async () => {
+  it('does not mark stale when only transcript text differs from stored legacy hash', async () => {
     const { readStoredSourceAsset } = await import('../electron/sceneforge/remix/remix-store');
     const mockDoc = {
       sourceAsset: {
@@ -172,10 +172,9 @@ describe('RemixUnderstandingService - Freshness Verification', () => {
 
     const report = await service.validateUnderstandingFreshness('/project', 'asset-01');
 
-    expect(report.isStale).toBe(true);
-    expect(report.staleSegmentIds).toContain('seg-01');
-    expect(report.staleReasons).toContain('transcript_correction_changed');
-    expect(report.segmentReports[0].staleReasons).toContain('transcript_correction_changed');
+    expect(report.isStale).toBe(false);
+    expect(report.staleSegmentIds).toEqual([]);
+    expect(report.staleReasons).not.toContain('transcript_correction_changed');
   });
 
   it('reports stale and frame_vision_changed when frame vision file generatedAt is newer than existing generatedAt', async () => {
