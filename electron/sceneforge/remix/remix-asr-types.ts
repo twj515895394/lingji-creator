@@ -38,3 +38,37 @@ export interface RemixAsrProviderCapabilities {
   supportsEmotion?: boolean;
   supportsEvent?: boolean;
 }
+
+export interface RemixSenseVoiceTags {
+  language?: string;
+  emotion?: string;
+  event?: string;
+  itn?: string;
+}
+
+export interface RemixSegmentAsrResult {
+  engine: RemixResolvedAsrEngine;
+  mode: 'segment_audio_asr';
+  timestampLevel: RemixAsrTimestampLevel;
+  text: string;
+  tags?: RemixSenseVoiceTags;
+  rawOutput?: string;
+  stderr?: string;
+  durationMs: number;
+  audioSha256?: string;
+  warnings: string[];
+}
+
+export interface RemixSegmentAsrProvider {
+  readonly capabilities: RemixAsrProviderCapabilities;
+
+  transcribeSegmentAudio(input: {
+    projectDir: string;
+    sourceAssetId: string;
+    segmentId: string;
+    audioPath: string;
+    sourceStartMs: number;
+    sourceEndMs: number;
+    outputDir: string;
+  }): Promise<RemixSegmentAsrResult>;
+}
