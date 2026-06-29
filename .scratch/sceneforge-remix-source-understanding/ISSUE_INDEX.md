@@ -20,6 +20,14 @@ Status: ready-for-agent
                      ├─ 05 rollup M3
                      ├─ 06 工作台 UI M4
                      └─ 07 一键编排（串联 A→B→05）
+
+SenseVoice 扩展分支
+  └─ 08-1 ASR 类型与 Provider 抽象
+      └─ 08-2 SenseVoice GGUF Provider
+          └─ 08-3 Segment Transcript Service
+              └─ 08-4 RemixTranscriptService 默认切换
+                  └─ 08-5 Workbench / Export / Correction 兼容
+                      └─ 08-6 测试与文档
 ```
 
 ★ 默认产品路径：**02 → 03c → 对齐 → 04 → 05**；用户通过 **07** 一次点击触发。
@@ -40,6 +48,12 @@ Status: ready-for-agent
 | **05** | [`issues/05-source-understanding-rollup-and-artifacts.md`](issues/05-source-understanding-rollup-and-artifacts.md) | 全片理解汇总与 Artifact 契约 | M3 | AFK | 04 | rollup, source_overview |
 | **06** | [`issues/06-understanding-workbench-and-annotation-prefill.md`](issues/06-understanding-workbench-and-annotation-prefill.md) | 理解工作台与标注预填 | M4 | AFK | 05 | UI, segment card, copy prompt |
 | **07** | [`issues/07-source-understanding-orchestrator.md`](issues/07-source-understanding-orchestrator.md) | 一键编排 Transcript→LLM→Rollup | 编排 | AFK | 01,02,03c,04,05 | orchestrator, job, progress, concurrency |
+| **08-1** | [`issues/08-1-asr-types-and-provider-resolver.md`](issues/08-1-asr-types-and-provider-resolver.md) | SenseVoice 接入：ASR 类型与 Provider Resolver | SenseVoice | AFK | 无 | resolver, engine, timestampLevel, fallback |
+| **08-2** | [`issues/08-2-sensevoice-gguf-provider.md`](issues/08-2-sensevoice-gguf-provider.md) | SenseVoiceSmall GGUF Provider | SenseVoice | AFK | 08-1 | provider, parser, tags, timeout |
+| **08-3** | [`issues/08-3-segment-transcript-service.md`](issues/08-3-segment-transcript-service.md) | SenseVoice Segment Transcript Service | SenseVoice | AFK | 08-1,08-2 | segment transcript, manifest, v2 |
+| **08-4** | [`issues/08-4-remix-transcript-service-default-switch.md`](issues/08-4-remix-transcript-service-default-switch.md) | RemixTranscriptService 默认切换到 SenseVoice 优先 | SenseVoice | AFK | 08-1,08-2,08-3 | auto, fallback, whisper, aggregate |
+| **08-5** | [`issues/08-5-workbench-export-correction-compat.md`](issues/08-5-workbench-export-correction-compat.md) | Workbench / Export / Correction 对 SenseVoice 兼容 | SenseVoice | AFK | 08-3,08-4 | workbench, export, correction, stale |
+| **08-6** | [`issues/08-6-tests-and-docs.md`](issues/08-6-tests-and-docs.md) | SenseVoice 测试与文档收口 | SenseVoice | AFK | 08-1,08-2,08-3,08-4,08-5 | tests, docs, fallback |
 
 ---
 
@@ -69,6 +83,7 @@ Status: ready-for-agent
 ## 5. 推荐执行顺序（简）
 
 `01` → `02` → `03c` → `04` → `05` → `06`；`07` 在 03c+04+05 能力就绪后接入按钮。  
+SenseVoice 第一阶段：`08-1` → `08-2` → `08-3` → `08-4` → `08-5` → `08-6`。  
 边缘：`03b`、`03` 非主线验收。
 
 完整表见 [`EXECUTION_ORDER.md`](EXECUTION_ORDER.md)。
@@ -83,3 +98,4 @@ Status: ready-for-agent
 - 进度条 / 卡片 / UI：`06`, `orchestration-and-ui`
 - 一键生成 / job：`07`, `orchestration`
 - 假完成 / stale：`01`
+- SenseVoice / provider / segment_range：`08-1` ~ `08-6`, `sensevoice-asr-integration`

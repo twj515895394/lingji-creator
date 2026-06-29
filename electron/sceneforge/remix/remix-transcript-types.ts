@@ -1,3 +1,9 @@
+import type {
+  RemixAsrTimestampLevel,
+  RemixResolvedAsrEngine,
+  RemixTranscriptMode,
+} from './remix-asr-types';
+
 export interface RemixTranscriptUtterance {
   id: string;
   text: string;
@@ -12,8 +18,9 @@ export interface RemixSourceTranscriptDocument {
   version: 1;
   sourceAssetId: string;
   language: string;
-  engine: 'local_whisper_cpp' | 'bcut' | 'imported_srt' | 'no_audio';
-  mode: 'full_source_asr' | 'imported_srt' | 'segment_asr_rerun' | 'no_audio';
+  engine: RemixResolvedAsrEngine;
+  mode: RemixTranscriptMode;
+  timestampLevel?: RemixAsrTimestampLevel;
   generatedAt: string;
   durationMs: number;
   inputRefs: {
@@ -48,6 +55,9 @@ export interface RemixSegmentTranscriptDocument {
     durationMs: number;
   };
   source: 'aligned_from_source_transcript';
+  engine?: RemixResolvedAsrEngine;
+  mode?: RemixTranscriptMode;
+  timestampLevel?: RemixAsrTimestampLevel;
   sourceTranscriptPath: string;
   utterances: Array<{
     sourceUtteranceId: string;
