@@ -401,6 +401,7 @@ export const remixMockApi: RemixIpcContract = {
         imagePath: f.imagePath,
         imageHash: 'mock-image-hash',
         caption: `（Mock 视觉分析）${f.frameRole}帧的主体动作。`,
+        onScreenSubtitles: [],
         visibleCharacters: ['主角'],
         visibleActions: ['移动', '抬头'],
         environment: 'Mock 场景空间',
@@ -411,6 +412,7 @@ export const remixMockApi: RemixIpcContract = {
         warnings: [],
       })),
       segmentVisualSummary: `【first帧】（Mock 视觉分析）首帧的主体动作；【middle帧】（Mock 视觉分析）中帧的主体动作`,
+      onScreenSubtitles: [],
       quality: {
         needsHumanReview: false,
         warnings: [],

@@ -24,10 +24,7 @@ import {
   type RemixSegmentUnderstandingDocument,
 } from './remix-segment-understanding-schema';
 import type { RemixUnderstandingFreshnessReport } from './remix-ipc-types';
-import {
-  mergeOnScreenSubtitlesFromFrameVision,
-  resolvePrimarySpokenTextForVideoPrompt,
-} from './remix-on-screen-subtitle';
+import { mergeOnScreenSubtitlesFromFrameVision } from './remix-on-screen-subtitle';
 import { RemixOriginalStoryRollupService } from './remix-original-story-rollup-service';
 
 export interface RemixUnderstandingServiceOptions {
