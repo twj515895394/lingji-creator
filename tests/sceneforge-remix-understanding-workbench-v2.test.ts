@@ -108,7 +108,15 @@ describe('RemixUnderstandingWorkbench V2 Aggregator', () => {
     await fs.mkdir(transDir, { recursive: true });
     await fs.writeFile(
       path.join(transDir, 'seg-1.json'),
-      JSON.stringify({ plainText: '原始台词文字' }),
+      JSON.stringify({
+        plainText: '原始台词文字',
+        source: 'segment_audio_sensevoice_gguf',
+        engine: 'funasr_sensevoice_gguf',
+        timestampLevel: 'segment_range',
+        quality: {
+          warnings: ['SenseVoice 当前为片段级时间范围，不提供精准 SRT 时间戳'],
+        },
+      }),
       'utf8',
     );
 
@@ -180,6 +188,10 @@ describe('RemixUnderstandingWorkbench V2 Aggregator', () => {
     const card = snapshot.segments[0];
     expect(card.segmentId).toBe('seg-1');
     expect(card.transcript.asrText).toBe('原始台词文字');
+    expect(card.transcript.source).toBe('segment_audio_sensevoice_gguf');
+    expect(card.transcript.engine).toBe('funasr_sensevoice_gguf');
+    expect(card.transcript.timestampLevel).toBe('segment_range');
+    expect(card.transcript.warnings[0]).toContain('不提供精准 SRT');
     expect(card.visual.mainAction).toBe('抬头');
     expect(card.camera.shotSize).toBe('特写');
     expect(card.videoPrompt.fullChinesePrompt).toBe('完整 Prompt');

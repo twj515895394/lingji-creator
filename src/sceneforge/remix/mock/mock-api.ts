@@ -135,6 +135,10 @@ function buildMockUnderstandingWorkbench(
       correctedText: '',
       effectiveText: 'Whisper 原始文本',
       correctionStatus: 'raw' as const,
+      source: 'aligned_from_source_transcript',
+      engine: 'local_whisper_cpp',
+      timestampLevel: 'sentence',
+      warnings: [],
     },
     visual: {
       sceneSummary: '微暗的室内环境，窗外隐约有光线射入',

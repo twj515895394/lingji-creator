@@ -46,7 +46,15 @@ describe('RemixUnderstandingReportExportService', () => {
     await fs.mkdir(path.join(projectDir, 'transcripts'), { recursive: true });
     await fs.writeFile(
       path.join(projectDir, 'transcripts/seg-01.json'),
-      JSON.stringify({ plainText: '原始自动识别台词' }),
+      JSON.stringify({
+        plainText: '原始自动识别台词',
+        source: 'segment_audio_sensevoice_gguf',
+        engine: 'funasr_sensevoice_gguf',
+        timestampLevel: 'segment_range',
+        quality: {
+          warnings: ['SenseVoice 当前为片段级时间范围，不提供精准 SRT 时间戳'],
+        },
+      }),
       'utf8',
     );
 
@@ -157,8 +165,12 @@ describe('RemixUnderstandingReportExportService', () => {
     expect(mdContent).toContain('## 片段明细');
     expect(mdContent).toContain('### 01 · 00:00 - 00:03');
     expect(mdContent).toContain('反派坐在椅上狂笑');
+    expect(mdContent).toContain('台词来源：segment_audio_sensevoice_gguf');
+    expect(mdContent).toContain('ASR 引擎：funasr_sensevoice_gguf');
+    expect(mdContent).toContain('时间粒度：segment_range（片段范围，不是精准字幕）');
     expect(mdContent).toContain('台词原文：原始自动识别台词');
     expect(mdContent).toContain('台词修正版：人工校对后的台词');
+    expect(mdContent).toContain('台词告警：SenseVoice 当前为片段级时间范围，不提供精准 SRT 时间戳');
     expect(mdContent).toContain('特写，逆光');
     expect(mdContent).toContain('昏暗地下室');
   });

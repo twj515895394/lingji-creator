@@ -70,6 +70,10 @@ export interface RemixUnderstandingWorkbenchSnapshot {
       correctedText: string;
       effectiveText: string;
       correctionStatus: 'raw' | 'edited' | 'confirmed';
+      source: string | null;
+      engine: string | null;
+      timestampLevel: string | null;
+      warnings: string[];
     };
 
     visual: {
@@ -234,11 +238,19 @@ export async function loadRemixUnderstandingWorkbench(
       resolveProjectFile(projectDir, relPath),
     );
     let transcriptSummary = '';
+    let transcriptSource: string | null = null;
+    let transcriptEngine: string | null = null;
+    let transcriptTimestampLevel: string | null = null;
+    let transcriptWarnings: string[] = [];
     if (segment.segmentTranscriptJsonPath?.trim()) {
       const transcript = await readJson<RemixSegmentTranscriptDocument>(
         resolveProjectFile(projectDir, segment.segmentTranscriptJsonPath),
       );
       transcriptSummary = transcript?.plainText?.trim() ?? '';
+      transcriptSource = transcript?.source ?? null;
+      transcriptEngine = transcript?.engine ?? null;
+      transcriptTimestampLevel = transcript?.timestampLevel ?? null;
+      transcriptWarnings = transcript?.quality?.warnings ?? [];
     }
 
     let transcriptCorrectionText = '';
@@ -325,6 +337,10 @@ export async function loadRemixUnderstandingWorkbench(
           correctedText: transcriptCorrectionText,
           effectiveText: effectiveTranscript,
           correctionStatus: transcriptCorrectionStatus,
+          source: transcriptSource,
+          engine: transcriptEngine,
+          timestampLevel: transcriptTimestampLevel,
+          warnings: transcriptWarnings,
         },
         visual: {
           sceneSummary: '待生成',
@@ -383,6 +399,10 @@ export async function loadRemixUnderstandingWorkbench(
         correctedText: transcriptCorrectionText,
         effectiveText: effectiveTranscript,
         correctionStatus: transcriptCorrectionStatus,
+        source: transcriptSource,
+        engine: transcriptEngine,
+        timestampLevel: transcriptTimestampLevel,
+        warnings: transcriptWarnings,
       },
       visual: {
         sceneSummary: understanding.visual?.sceneSummary || '',

@@ -44,6 +44,10 @@ export class RemixUnderstandingReportExportService {
 
       // 读取台词原文
       let plainText = '（无台词）';
+      let transcriptEngine = 'unknown';
+      let transcriptTimestampLevel = 'unknown';
+      let transcriptSource = 'unknown';
+      let transcriptWarnings: string[] = [];
       if (segment.segmentTranscriptJsonPath) {
         try {
           const transAbs = resolveProjectFile(projectDir, segment.segmentTranscriptJsonPath);
@@ -52,6 +56,10 @@ export class RemixUnderstandingReportExportService {
           if (transObj?.plainText) {
             plainText = transObj.plainText.trim();
           }
+          transcriptEngine = transObj?.engine || 'unknown';
+          transcriptTimestampLevel = transObj?.timestampLevel || 'unknown';
+          transcriptSource = transObj?.source || 'unknown';
+          transcriptWarnings = Array.isArray(transObj?.quality?.warnings) ? transObj.quality.warnings : [];
         } catch {}
       }
 
@@ -84,8 +92,12 @@ export class RemixUnderstandingReportExportService {
         `- 画面：${segDoc?.visual?.environmentDetails || '（未知环境）'}`,
         `- 动作：${segDoc?.visual?.mainAction || '（无动作）'}`,
         `- 镜头：${segDoc?.camera?.shotSize || '中景'} / ${segDoc?.camera?.movement || '固定'}`,
+        `- 台词来源：${transcriptSource}`,
+        `- ASR 引擎：${transcriptEngine}`,
+        `- 时间粒度：${transcriptTimestampLevel}${transcriptTimestampLevel === 'segment_range' ? '（片段范围，不是精准字幕）' : ''}`,
         `- 台词原文：${plainText}`,
         `- 台词修正版：${correctedText}`,
+        ...(transcriptWarnings.length > 0 ? [`- 台词告警：${transcriptWarnings.join('；')}`] : []),
         `- 剧情功能：${segDoc?.story?.plotFunction || '剧情过渡'}`,
         `- 保留点：${segDoc?.remix?.keepElements?.join('、') || '无'}`,
         `- 替换点：${segDoc?.remix?.replaceableElements?.join('、') || '无'}`,
