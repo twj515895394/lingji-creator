@@ -14,6 +14,7 @@ import {
 import type { RemixOriginalUnderstandingDocument } from './remix-source-understanding-rollup';
 import {
   buildSegmentUnderstandingInputHash,
+  buildVideoPromptDimensionsFromChinesePrompt,
   segmentUnderstandingInputHashMatchesStored,
   type RemixSegmentUnderstandingDocument,
 } from './remix-segment-understanding-schema';
@@ -442,7 +443,11 @@ export async function loadRemixUnderstandingWorkbench(
       videoPrompt: {
         version: 2,
         fullChinesePrompt: understanding.videoPrompt?.fullChinesePrompt || (understanding.videoPrompt as any)?.positivePrompt || '',
-        dimensions: (understanding.videoPrompt as any)?.dimensions || [],
+        dimensions:
+          Array.isArray((understanding.videoPrompt as any)?.dimensions) &&
+          (understanding.videoPrompt as any).dimensions.length > 0
+            ? (understanding.videoPrompt as any).dimensions
+            : buildVideoPromptDimensionsFromChinesePrompt(understanding.videoPrompt),
         negativePrompt: understanding.videoPrompt?.negativePrompt || '',
       },
       frameVision: {

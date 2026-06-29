@@ -108,7 +108,7 @@ export function buildSegmentUserPrompt(context: RemixSegmentGenerationContext): 
     '',
     visionPromptBlock,
     '',
-    '分段台词:',
+    '分段台词（有效文本，已含人工校对；生成 videoPrompt.dialoguePrompt / performancePrompt 时必须体现说话与口型）:',
     transcript?.plainText?.trim() || '（无台词）',
     '',
     '相邻片段摘要:',
@@ -287,13 +287,16 @@ export class RemixUnderstandingService {
         ? document.sourceAsset.segments[index + 1]
         : undefined;
     const transcript = await readSegmentTranscript(projectDir, segment);
+    const asrPlainText = transcript?.plainText?.trim() ?? '';
+    let effectiveTranscriptText = asrPlainText;
     if (transcript && segment.transcriptCorrectionPath?.trim()) {
       try {
         const correctionAbsPath = resolveProjectFile(projectDir, segment.transcriptCorrectionPath);
         const correctionRaw = await fs.readFile(correctionAbsPath, 'utf8');
         const correction = JSON.parse(correctionRaw);
         if (correction?.transcript?.effectiveText) {
-          transcript.plainText = correction.transcript.effectiveText;
+          effectiveTranscriptText = String(correction.transcript.effectiveText).trim();
+          transcript.plainText = effectiveTranscriptText;
         }
       } catch {
         // 读取失败则默默回退 ASR
@@ -335,6 +338,8 @@ export class RemixUnderstandingService {
       segment,
       sourceAssetId: document.sourceAsset.id,
       transcript,
+      effectiveTranscriptText,
+      asrTranscriptText: asrPlainText,
       keyframes: segment.keyframes,
       generatedAt,
     });
