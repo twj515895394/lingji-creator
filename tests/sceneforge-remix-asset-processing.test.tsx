@@ -639,6 +639,81 @@ describe('SceneForge Remix asset processing workspace', () => {
     expect(container.textContent).not.toContain('【AI 预填，请按真实观感修正】');
   });
 
+  it('保存入库页展示资产标记摘要与显式保存按钮', async () => {
+    const container = await renderProcessing(
+      <RemixAssetProcessing
+        projectDir="/tmp/remix-project"
+        apiClient={buildApiClient('success')}
+        sourceAssetId="source-library-001"
+        initialStepId="publish-source"
+      />,
+    );
+
+    expect(container.textContent).toContain('保存入库');
+    expect(container.textContent).toContain('资产标记摘要');
+    expect(container.textContent).not.toContain('当前播放片段');
+    expect(container.querySelector('[data-testid="remix-processing-publish"]')).not.toBeNull();
+    expect(container.querySelector('[data-testid="remix-publish-marking-summary"]')).not.toBeNull();
+  });
+
+  it('前置未满足时保存入库按钮禁用并显示阻塞提示', async () => {
+    const emptyTagsSnapshot = {
+      ...clone(MOCK_ASSET_PROCESSING_SNAPSHOTS['source-library-001']),
+      sourceAsset: {
+        ...clone(MOCK_ASSET_PROCESSING_SNAPSHOTS['source-library-001'].sourceAsset),
+        tags: [],
+        annotationNote: null,
+        lastAnnotatedAt: null,
+      },
+      variants: [],
+    };
+    const apiClient = {
+      ...buildApiClient('success'),
+      getSourceAsset: async () => emptyTagsSnapshot,
+      getSourceUnderstandingWorkbench: async () => ({
+        ready: true,
+        version: 2 as const,
+        isPlaceholder: false,
+        isStale: false,
+        staleSegmentIds: [],
+        staleReasons: [],
+        rollupFallbackUsed: false,
+        errors: [],
+        overview: {
+          logline: '天台心理战',
+          storySummaryShort: '天台博弈',
+          storyContent: '全片围绕对峙与情绪升温展开。',
+          eventChain: [],
+          characterMap: [],
+          mainConflict: '',
+          emotionCurve: '',
+          visualStyle: '',
+          dialogueStyle: '',
+          remixDirections: [],
+          warnings: [],
+        },
+        segments: [],
+        annotationPrefill: null,
+      }),
+    };
+
+    const container = await renderProcessing(
+      <RemixAssetProcessing
+        projectDir="/tmp/remix-project"
+        apiClient={apiClient}
+        sourceAssetId="source-library-001"
+        initialStepId="publish-source"
+        initialAnnotationNote=""
+      />,
+    );
+
+    const publishButton = container.querySelector('[data-testid="remix-processing-publish"]') as HTMLButtonElement;
+    expect(publishButton?.disabled).toBe(true);
+    expect(container.textContent).toContain('未满足');
+    expect(container.textContent).toContain('请先保存至少一个资产标签');
+    expect(container.querySelector('[data-testid="remix-publish-blocking-hint"]')).not.toBeNull();
+  });
+
   it('资产标记有未保存修改时，不把步骤显示成已完成', () => {
     const snapshot = MOCK_ASSET_PROCESSING_SNAPSHOTS['source-library-001'];
 

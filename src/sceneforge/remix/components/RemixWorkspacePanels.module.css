@@ -634,6 +634,25 @@
   gap: 8px;
 }
 
+.publishSection {
+  display: grid;
+  gap: 8px;
+}
+
+.publishSectionTitle {
+  margin: 0;
+  font-size: var(--font-size-footnote, 12px);
+  font-weight: var(--font-weight-semibold, 600);
+  color: rgba(255, 248, 235, 0.88);
+}
+
+.publishBlockingHint {
+  margin: 0;
+  font-size: var(--font-size-footnote, 12px);
+  line-height: 1.45;
+  color: rgba(255, 196, 120, 0.95);
+}
+
 .checkItem {
   display: grid;
   gap: 4px;

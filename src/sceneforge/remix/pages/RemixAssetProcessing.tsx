@@ -18,7 +18,10 @@ import { formatAssetLibraryDate, getLatestFailedJob, getProcessingStepLabel, get
 import { formatCompactPath } from '../lib/remix-display-text';
 import panelStyles from '../components/RemixWorkspacePanels.module.css';
 import {
+  buildAssetMarkingSummary,
   buildAssetProcessingWorkspaceState,
+  buildAssetPublishBlockingReason,
+  buildAssetPublishChecklist,
   buildSegmentationDiagnosticsSummary,
   formatSegmentConfidence,
   getAssetLibrarySectionForStatus,
@@ -58,15 +61,6 @@ function normalizeTags(tags: string[]): string[] {
   );
 }
 
-function buildAssetMarkingSummary(tags: string[], note: string) {
-  const trimmedNote = note.trim();
-  return {
-    tagCount: tags.length,
-    hasNote: trimmedNote.length > 0,
-    notePreview: trimmedNote.slice(0, 120),
-  };
-}
-
 function hasSavedAnnotation(asset: RemixAssetProcessingSnapshot['sourceAsset']): boolean {
   return (asset.tags?.length ?? 0) > 0;
 }
@@ -78,46 +72,6 @@ interface RemixAssetProcessingProps {
   onBackToLibrary?: (section?: RemixAssetLibrarySection) => void;
   initialStepId?: AssetProcessingStepId;
   initialAnnotationNote?: string;
-}
-
-function buildProcessingChecklist(
-  canPublish: boolean,
-  note: string,
-  tagCount: number,
-  statuses: ReturnType<typeof getAssetProcessingStepStatuses>,
-) {
-  return [
-    {
-      id: 'import',
-      label: '原片已登记',
-      passed: statuses['source-import'] === 'approved',
-      note: '视频主文件与基础元数据已经登记。',
-    },
-    {
-      id: 'segments',
-      label: '真实镜头切片已确认',
-      passed: statuses.segmentation === 'approved',
-      note: '镜头边界和长短镜头策略已经落定。',
-    },
-    {
-      id: 'keyframes',
-      label: '关键帧已抽取',
-      passed: statuses.keyframes === 'approved',
-      note: '至少形成 first / middle / last 的可引用快照。',
-    },
-    {
-      id: 'understanding',
-      label: '原片理解已整理',
-      passed: statuses.understanding === 'approved',
-      note: '素材摘要与分段分析已经整理成可扫读内容。',
-    },
-    {
-      id: 'annotate',
-      label: '资产标记已补齐',
-      passed: canPublish,
-      note: `当前 ${tagCount} 个标签，备注${note.trim() ? '已填写' : '未填写（建议补充）'}。`,
-    },
-  ];
 }
 
 function buildInspectorRows(
@@ -1076,12 +1030,9 @@ export function RemixAssetProcessing({
   }
 
   const canPublish = isAssetPublishReady(stepStatuses) && !hasUnsavedAnnotationChanges;
-  const publishChecklist = buildProcessingChecklist(
-    canPublish,
-    annotationNote,
-    tags.length,
-    stepStatuses,
-  );
+  const publishBlockingReason = buildAssetPublishBlockingReason(stepStatuses, hasUnsavedAnnotationChanges);
+  const publishChecklist = buildAssetPublishChecklist(stepStatuses, tags.length, annotationNote);
+  const publishMarkingSummary = buildAssetMarkingSummary(tags, annotationNote);
   const sourceFilename = getSourceAssetFilename(asset);
   const inspectorRows = buildInspectorRows(
     activeStepId,
@@ -1581,6 +1532,8 @@ export function RemixAssetProcessing({
 
         <PublishToLibraryButton
           items={publishChecklist}
+          summary={publishMarkingSummary}
+          blockingReason={publishBlockingReason}
           disabled={!canPublish || Boolean(pendingActionId)}
           onPublish={() => {
               void runAction(

@@ -51,6 +51,89 @@ export interface PublishChecklistItem {
   note: string;
 }
 
+export interface AssetMarkingSummary {
+  tagCount: number;
+  tags: string[];
+  hasNote: boolean;
+  notePreview: string | null;
+}
+
+export function buildAssetMarkingSummary(tags: string[], note: string): AssetMarkingSummary {
+  const normalized = tags.map((tag) => tag.trim()).filter(Boolean);
+  const trimmedNote = note.trim();
+  return {
+    tagCount: normalized.length,
+    tags: normalized,
+    hasNote: trimmedNote.length > 0,
+    notePreview: trimmedNote.length > 0 ? trimmedNote.slice(0, 200) : null,
+  };
+}
+
+export function buildAssetPublishChecklist(
+  statuses: Record<AssetProcessingStepId, RemixStageStatus>,
+  tagCount: number,
+  note: string,
+): PublishChecklistItem[] {
+  const noteLabel = note.trim() ? '已填写' : '未填写（建议补充）';
+  return [
+    {
+      id: 'import',
+      label: '原片已登记',
+      passed: statuses['source-import'] === 'approved',
+      note: '视频主文件与基础元数据已经登记。',
+    },
+    {
+      id: 'segments',
+      label: '真实镜头切片已确认',
+      passed: statuses.segmentation === 'approved',
+      note: '镜头边界和长短镜头策略已经落定。',
+    },
+    {
+      id: 'keyframes',
+      label: '关键帧已抽取',
+      passed: statuses.keyframes === 'approved',
+      note: '至少形成 first / middle / last 的可引用快照。',
+    },
+    {
+      id: 'understanding',
+      label: '原片理解已整理',
+      passed: statuses.understanding === 'approved',
+      note: '素材摘要与分段分析已经整理成可扫读内容。',
+    },
+    {
+      id: 'annotate',
+      label: '资产标记已补齐',
+      passed: statuses.annotate === 'approved',
+      note: `当前 ${tagCount} 个标签，资产备注${noteLabel}。`,
+    },
+  ];
+}
+
+export function buildAssetPublishBlockingReason(
+  statuses: Record<AssetProcessingStepId, RemixStageStatus>,
+  hasUnsavedAnnotationChanges: boolean,
+): string | null {
+  if (hasUnsavedAnnotationChanges) {
+    return '资产标记尚未保存，请先保存后再入库。';
+  }
+  if (statuses['source-import'] !== 'approved') {
+    return '请先完成「导入原片」。';
+  }
+  if (statuses.segmentation !== 'approved') {
+    return '请先完成「真实镜头切片」并确认结果。';
+  }
+  if (statuses.keyframes !== 'approved') {
+    return '请先完成「关键帧提取」。';
+  }
+  if (statuses.understanding !== 'approved') {
+    return '请先完成「原片理解」。';
+  }
+  if (statuses.annotate !== 'approved') {
+    return '请先保存至少一个资产标签。';
+  }
+  return null;
+}
+
 export interface RetentionMatrixDimension {
   key: keyof RetentionMatrix;
   label: string;
