@@ -718,6 +718,28 @@ export function RemixAssetProcessing({
     }
   }
 
+  async function handleUpdatePositiveVideoPrompt(
+    segmentId: string,
+    positiveText: string,
+    negativeText?: string | null,
+  ) {
+    if (!projectDir || !asset) {
+      return;
+    }
+    try {
+      const nextWorkbench = await resolveClient().updateSegmentPositiveVideoPrompt({
+        projectDir,
+        sourceAssetId: asset.id,
+        segmentId,
+        positiveText,
+        negativeText,
+      });
+      setUnderstandingWorkbench(nextWorkbench);
+    } catch (error) {
+      setErrorMessage(error instanceof Error ? error.message : '保存 Video Prompt 失败');
+    }
+  }
+
   async function handleConfirmAllTranscripts() {
     if (!projectDir || !asset) {
       return;
@@ -726,17 +748,12 @@ export function RemixAssetProcessing({
       'confirm-all-transcripts',
       null,
       async () => {
-        const nextWorkbench = await resolveClient().confirmAllSegmentTranscripts({
+        const nextSnapshot = await resolveClient().confirmAllSegmentTranscripts({
           projectDir,
           sourceAssetId: asset.id,
         });
-        setUnderstandingWorkbench(nextWorkbench);
-        
-        // 拉取最新物理状态的 snapshot，确保前端数据跟后端完全同步，消除状态延迟
-        const nextSnapshot = await resolveClient().getSourceAsset({
-          projectDir,
-          sourceAssetId: asset.id,
-        });
+        await refreshUnderstandingWorkbench(nextSnapshot.sourceAsset);
+        setActiveStepId('annotate');
         return nextSnapshot;
       },
       '正在确认所有片段台词',
@@ -1499,6 +1516,7 @@ export function RemixAssetProcessing({
           onRerunRollup={handleRerunOriginalStoryRollup}
           onRerunStaleSegments={handleRerunStaleSegmentUnderstandings}
           onUpdateTranscript={handleUpdateTranscriptCorrection}
+          onUpdatePositiveVideoPrompt={handleUpdatePositiveVideoPrompt}
         />
       </section>
     ),

@@ -11,7 +11,6 @@ interface SourceVideoPreviewProps {
   activeSegment: SourceSegment | null;
   currentTimeMs: number;
   seekToMs: number | null;
-  playRequestToken?: number;
   onTimeUpdate: (timeMs: number) => void;
   variant?: 'default' | 'compact';
 }
@@ -21,7 +20,6 @@ export function SourceVideoPreview({
   activeSegment,
   currentTimeMs,
   seekToMs,
-  playRequestToken = 0,
   onTimeUpdate,
   variant = 'default',
 }: SourceVideoPreviewProps) {
@@ -46,14 +44,6 @@ export function SourceVideoPreview({
       // 某些状态下浏览器会拒绝立即 seek；保持当前帧即可。
     }
   }, [seekToMs]);
-
-  useEffect(() => {
-    const video = videoRef.current;
-    if (!video || playRequestToken <= 0) {
-      return;
-    }
-    void video.play().catch(() => undefined);
-  }, [playRequestToken]);
 
   return (
     <article className={variant === 'compact' ? panelStyles.previewSurfaceCompact : panelStyles.previewSurface} data-testid="remix-source-video-preview">

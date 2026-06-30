@@ -59,6 +59,8 @@ import { assertPublishReady } from './remix-validators';
 import { loadRemixUnderstandingWorkbench } from './remix-understanding-workbench';
 import { RemixUnderstandingOrchestrator } from './remix-understanding-orchestrator';
 import { RemixTranscriptCorrectionService } from './remix-transcript-correction-service';
+import { RemixSegmentVideoPromptEditService } from './remix-segment-video-prompt-edit-service';
+import { evaluateRemixUnderstandingApproval } from './remix-understanding-approval';
 import { RemixFrameVisionService } from './remix-frame-vision-service';
 import { RemixUnderstandingReportExportService } from './remix-understanding-report-export-service';
 
@@ -99,6 +101,7 @@ export class RemixService {
 
   private readonly understandingOrchestrator: RemixUnderstandingOrchestrator;
   private readonly transcriptCorrectionService: RemixTranscriptCorrectionService;
+  private readonly segmentVideoPromptEditService: RemixSegmentVideoPromptEditService;
   private readonly frameVisionService: RemixFrameVisionService;
   private readonly reportExportService: RemixUnderstandingReportExportService;
 
@@ -123,6 +126,7 @@ export class RemixService {
       understandingConcurrency: options.understandingConcurrency ?? 2,
     });
     this.transcriptCorrectionService = new RemixTranscriptCorrectionService();
+    this.segmentVideoPromptEditService = new RemixSegmentVideoPromptEditService();
     this.frameVisionService = new RemixFrameVisionService();
     this.reportExportService = new RemixUnderstandingReportExportService();
   }
@@ -440,14 +444,49 @@ export class RemixService {
     );
   }
 
+  async updateSegmentPositiveVideoPrompt(input: {
+    projectDir: string;
+    sourceAssetId: string;
+    segmentId: string;
+    positiveText: string;
+    negativeText?: string | null;
+  }) {
+    return this.segmentVideoPromptEditService.updateSegmentPositiveVideoPrompt(
+      input.projectDir,
+      input.sourceAssetId,
+      input.segmentId,
+      input.positiveText,
+      input.negativeText,
+    );
+  }
+
   async confirmAllSegmentTranscripts(input: {
     projectDir: string;
     sourceAssetId: string;
   }) {
-    return this.transcriptCorrectionService.confirmAllSegmentTranscripts(
+    await this.transcriptCorrectionService.confirmAllSegmentTranscripts(
       input.projectDir,
       input.sourceAssetId,
     );
+    const evaluation = await evaluateRemixUnderstandingApproval(
+      input.projectDir,
+      input.sourceAssetId,
+      {
+        understandingService: this.understandingService,
+        transcriptCorrectionService: this.transcriptCorrectionService,
+      },
+    );
+    if (!evaluation.canApprove || !evaluation.nextStageStatus) {
+      throw new Error(
+        evaluation.blockers[0]?.message ?? '原片理解尚不能标记为完成，请先处理提示项。',
+      );
+    }
+    const document = await readStoredSourceAsset(input.projectDir, input.sourceAssetId);
+    document.processingStageStates.remix_understanding = evaluation.nextStageStatus;
+    document.sourceAsset.updatedAt = new Date().toISOString();
+    await writeStoredSourceAsset(input.projectDir, document);
+    const jobsDocument = await readStoredSourceAssetJobs(input.projectDir, input.sourceAssetId);
+    return buildSourceAssetSnapshot(document, jobsDocument.jobs);
   }
 
   private async patchUnderstandingJob(

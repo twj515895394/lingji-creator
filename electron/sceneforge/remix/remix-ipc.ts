@@ -207,6 +207,22 @@ export function registerSceneForgeRemixIpc(): void {
   );
 
   ipcMain.handle(
+    'sceneForgeRemix:updateSegmentPositiveVideoPrompt',
+    async (
+      _event,
+      input: {
+        projectDir: string;
+        sourceAssetId: string;
+        segmentId: string;
+        positiveText: string;
+        negativeText?: string | null;
+      },
+    ) => {
+      return service.updateSegmentPositiveVideoPrompt(input);
+    },
+  );
+
+  ipcMain.handle(
     'sceneForgeRemix:confirmAllSegmentTranscripts',
     async (
       _event,

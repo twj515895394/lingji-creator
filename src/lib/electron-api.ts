@@ -487,6 +487,9 @@ export interface ElectronAPI {
     runSourceKeyframes: (
       input: RunSourceAssetStageInput,
     ) => Promise<RemixAssetProcessingSnapshot>;
+    runSourceTranscript: (
+      input: RunSourceAssetStageInput,
+    ) => Promise<RemixAssetProcessingSnapshot>;
     addSegmentMiddleKeyframe: (
       input: SegmentKeyframeActionInput,
     ) => Promise<RemixAssetProcessingSnapshot>;
@@ -497,6 +500,9 @@ export interface ElectronAPI {
       input: RunSourceAssetStageInput,
     ) => Promise<RemixAssetProcessingSnapshot>;
     rerunSegmentUnderstanding: (
+      input: SegmentKeyframeActionInput,
+    ) => Promise<RemixAssetProcessingSnapshot>;
+    rerunSegmentTranscript: (
       input: SegmentKeyframeActionInput,
     ) => Promise<RemixAssetProcessingSnapshot>;
     rerunOriginalStoryRollup: (
@@ -526,6 +532,13 @@ export interface ElectronAPI {
       segmentId: string;
       correctedText: string;
       markConfirmed?: boolean;
+    }) => Promise<import('../../electron/sceneforge/remix/remix-understanding-workbench').RemixUnderstandingWorkbenchSnapshot>;
+    updateSegmentPositiveVideoPrompt: (input: {
+      projectDir: string;
+      sourceAssetId: string;
+      segmentId: string;
+      positiveText: string;
+      negativeText?: string | null;
     }) => Promise<import('../../electron/sceneforge/remix/remix-understanding-workbench').RemixUnderstandingWorkbenchSnapshot>;
     updateSourceSegments: (
       input: UpdateSourceSegmentsInput,

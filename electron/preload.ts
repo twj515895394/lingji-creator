@@ -225,6 +225,8 @@ contextBridge.exposeInMainWorld('electronAPI', {
       ipcRenderer.invoke('sceneForgeRemix:runSourceSegmentation', input),
     runSourceKeyframes: (input: RunSourceAssetStageInput) =>
       ipcRenderer.invoke('sceneForgeRemix:runSourceKeyframes', input),
+    runSourceTranscript: (input: RunSourceAssetStageInput) =>
+      ipcRenderer.invoke('sceneForgeRemix:runSourceTranscript', input),
     addSegmentMiddleKeyframe: (input: SegmentKeyframeActionInput) =>
       ipcRenderer.invoke('sceneForgeRemix:addSegmentMiddleKeyframe', input),
     deleteSegmentMiddleKeyframe: (input: SegmentKeyframeActionInput) =>
@@ -233,6 +235,8 @@ contextBridge.exposeInMainWorld('electronAPI', {
       ipcRenderer.invoke('sceneForgeRemix:runSourceUnderstanding', input),
     rerunSegmentUnderstanding: (input: SegmentKeyframeActionInput) =>
       ipcRenderer.invoke('sceneForgeRemix:rerunSegmentUnderstanding', input),
+    rerunSegmentTranscript: (input: SegmentKeyframeActionInput) =>
+      ipcRenderer.invoke('sceneForgeRemix:rerunSegmentTranscript', input),
     rerunOriginalStoryRollup: (input: RemixSourceAssetRefInput) =>
       ipcRenderer.invoke('sceneForgeRemix:rerunOriginalStoryRollup', input),
     getSourceUnderstandingWorkbench: (input: RemixSourceAssetRefInput) =>
@@ -261,6 +265,14 @@ contextBridge.exposeInMainWorld('electronAPI', {
       markConfirmed?: boolean;
     }) =>
       ipcRenderer.invoke('sceneForgeRemix:updateSegmentTranscriptCorrection', input),
+    updateSegmentPositiveVideoPrompt: (input: {
+      projectDir: string;
+      sourceAssetId: string;
+      segmentId: string;
+      positiveText: string;
+      negativeText?: string | null;
+    }) =>
+      ipcRenderer.invoke('sceneForgeRemix:updateSegmentPositiveVideoPrompt', input),
     confirmAllSegmentTranscripts: (input: {
       projectDir: string;
       sourceAssetId: string;
@@ -915,4 +927,3 @@ contextBridge.exposeInMainWorld('publishAPI', {
 });
 
 import './sceneforge/remix/segment-clips/segment-clip-preload';
-

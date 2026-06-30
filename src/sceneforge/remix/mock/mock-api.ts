@@ -511,6 +511,25 @@ export const remixMockApi: RemixIpcContract = {
     return workbench;
   },
 
+  async updateSegmentPositiveVideoPrompt(input: {
+    projectDir: string;
+    sourceAssetId: string;
+    segmentId: string;
+    positiveText: string;
+    negativeText?: string | null;
+  }) {
+    const snapshot = findProcessingSnapshot(input.sourceAssetId);
+    const workbench = buildMockUnderstandingWorkbench(snapshot.sourceAsset);
+    const segment = workbench.segments.find((s) => s.segmentId === input.segmentId);
+    if (segment) {
+      segment.videoPrompt.fullChinesePrompt = input.positiveText.trim();
+      if (input.negativeText != null) {
+        segment.videoPrompt.negativePrompt = input.negativeText.trim();
+      }
+    }
+    return workbench;
+  },
+
   async confirmAllSegmentTranscripts(input: {
     projectDir: string;
     sourceAssetId: string;
@@ -520,7 +539,8 @@ export const remixMockApi: RemixIpcContract = {
     for (const segment of workbench.segments) {
       segment.transcript.correctionStatus = 'confirmed';
     }
-    return workbench;
+    setProcessingStage(snapshot, 'remix_understanding', 'approved');
+    return snapshot;
   },
 
   async updateSourceSegments(input: UpdateSourceSegmentsInput) {

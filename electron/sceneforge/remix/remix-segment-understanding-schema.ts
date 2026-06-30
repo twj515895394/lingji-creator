@@ -29,6 +29,8 @@ export interface RemixChineseVideoPrompt {
   continuityPrompt: string;
   remixControlPrompt: string;
   negativePrompt: string;
+  /** 为 true 时展示/复制以 fullChinesePrompt 为准，不再用维度自动并集覆盖 */
+  manualPositivePromptOverride?: boolean;
   modelHints?: {
     seedance?: string;
     kling?: string;
@@ -212,6 +214,119 @@ export function buildVideoPromptDimensionsFromChinesePrompt(
   })).filter((item) => item.text.length > 0);
 }
 
+export interface RemixCameraStructForPrompt {
+  shotSize?: string;
+  movement?: string;
+  angle?: string;
+  composition?: string;
+  focus?: string;
+}
+
+/** 从结构化 camera + 可选 frame vision 构图，补全镜头语言（景别、运动、俯仰、构图、对焦）。 */
+export function buildRichCameraPromptText(
+  cameraPromptFromModel: string,
+  camera: RemixCameraStructForPrompt | null | undefined,
+  frameVisionComposition?: string | null,
+): string {
+  const base = asString(cameraPromptFromModel);
+  const shot = asString(camera?.shotSize);
+  const movement = asString(camera?.movement);
+  const angle = asString(camera?.angle, '平视');
+  const composition = asString(camera?.composition) || asString(frameVisionComposition);
+  const focus = asString(camera?.focus);
+
+  const segments: string[] = [];
+  if (base) {
+    segments.push(base);
+  }
+  const structured: string[] = [];
+  if (shot) {
+    structured.push(`景别：${shot}`);
+  }
+  if (movement) {
+    structured.push(`运镜：${movement}`);
+  }
+  if (angle) {
+    structured.push(`机位俯仰与视角：${angle}（含平视/仰视/俯视及人物是否正对镜头、侧对或背对镜头的描述）`);
+  }
+  if (composition) {
+    structured.push(`构图设计：${composition}`);
+  }
+  if (focus) {
+    structured.push(`画面焦点：${focus}`);
+  }
+  if (structured.length > 0) {
+    const block = structured.join('；');
+    if (!base || (!base.includes(shot) && shot) || (!base.includes('构图') && composition)) {
+      segments.push(block);
+    }
+  }
+  return segments.filter(Boolean).join('。').trim() || base || '中景，固定镜头，平视，主体居中构图';
+}
+
+function countFilledDimensionFields(videoPrompt: RemixChineseVideoPrompt): number {
+  return REMIX_VIDEO_PROMPT_DIMENSION_DEFS.filter((def) =>
+    asString(videoPrompt[def.field]).length > 0,
+  ).length;
+}
+
+/** 将各正向维度按影视标签拼接为可复制完整正向提示词（与维度区字段一致）。 */
+export function assembleFullChineseVideoPrompt(parts: RemixChineseVideoPrompt): string {
+  const lines: string[] = [];
+  for (const def of REMIX_VIDEO_PROMPT_DIMENSION_DEFS) {
+    const text = asString(parts[def.field]);
+    if (text) {
+      lines.push(`【${def.label}】${text}`);
+    }
+  }
+  return lines.join('\n');
+}
+
+/**
+ * 展示与复制用的正向 Video Prompt：优先用维度并集拼出的完整版；
+ * 若模型 full 更长且已包含主要维度关键词，则保留模型版与并集版中信息更全者。
+ */
+export function resolveExportablePositiveVideoPrompt(
+  videoPrompt: RemixChineseVideoPrompt,
+  options?: {
+    camera?: RemixCameraStructForPrompt | null;
+    frameVisionComposition?: string | null;
+  },
+): string {
+  const modelFull = asString(videoPrompt.fullChinesePrompt);
+  if (videoPrompt.manualPositivePromptOverride && modelFull) {
+    return modelFull;
+  }
+  const enriched: RemixChineseVideoPrompt = {
+    ...videoPrompt,
+    cameraPrompt: buildRichCameraPromptText(
+      videoPrompt.cameraPrompt,
+      options?.camera,
+      options?.frameVisionComposition,
+    ),
+  };
+  const assembled = assembleFullChineseVideoPrompt(enriched);
+  if (!assembled.trim()) {
+    return modelFull;
+  }
+  const filled = countFilledDimensionFields(enriched);
+  if (!modelFull) {
+    return assembled;
+  }
+  if (filled < 4) {
+    return modelFull;
+  }
+  if (filled >= 8 && modelFull.length < assembled.length * 0.65) {
+    return assembled;
+  }
+  if (modelFull.includes('【') && modelFull.length >= assembled.length * 0.9) {
+    return modelFull;
+  }
+  return assembled;
+}
+
+export { formatClipboardVideoPrompt } from '../../../src/sceneforge/remix/lib/remix-video-prompt-clipboard';
+
 function buildDialoguePerformanceVideoHints(input: {
   primarySpokenText: string;
   spokenSource: 'on_screen_subtitle' | 'transcript_effective' | 'transcript_asr' | 'none';
@@ -251,28 +366,6 @@ function buildDialoguePerformanceVideoHints(input: {
   }
 
   return { dialoguePrompt, performancePrompt };
-}
-
-function assembleFullChineseVideoPrompt(parts: RemixChineseVideoPrompt): string {
-  return [
-    parts.subjectPrompt,
-    parts.scenePrompt,
-    parts.actionPrompt,
-    parts.performancePrompt,
-    parts.cameraPrompt,
-    parts.lightingPrompt,
-    parts.colorPrompt,
-    parts.emotionPrompt,
-    parts.rhythmPrompt,
-    parts.dialoguePrompt,
-    parts.soundPrompt,
-    parts.stylePrompt,
-    parts.continuityPrompt,
-    parts.remixControlPrompt,
-  ]
-    .map((s) => s.trim())
-    .filter(Boolean)
-    .join('，');
 }
 
 function asStringArray(value: unknown): string[] {
@@ -370,14 +463,26 @@ export function normalizeSegmentUnderstandingPayload(
 
   // 兜底桥接值
   const visualAction = asString(visualRaw.mainAction, '人物完成一段可见动作。');
-  const cameraShot = asString(cameraRaw.shotSize, '中景') + '，' + asString(cameraRaw.movement, '固定镜头');
+  const cameraStruct: RemixCameraStructForPrompt = {
+    shotSize: asString(cameraRaw.shotSize, '中景'),
+    angle: asString(cameraRaw.angle, '平视'),
+    movement: asString(cameraRaw.movement, '固定镜头'),
+    composition: asString(cameraRaw.composition, '主体居中，背景可见。'),
+    focus: asString(cameraRaw.focus, '人物表情与动作'),
+  };
+  const frameVisionComposition =
+    context.frameVision?.frames?.find((f) => asString(f.composition).length > 0)?.composition ?? null;
   const transSummary = asString(audioRaw.speechSummary, transcriptFallback || '无明确台词');
 
   const finalSubjectPrompt = subjectPrompt || '人物主体';
   const finalScenePrompt = scenePrompt || asString(visualRaw.environmentDetails, '室内或日常场景');
   const finalActionPrompt = actionPrompt || visualAction;
   let finalPerformancePrompt = performancePrompt || '人物神态自然，眼神聚焦';
-  const finalCameraPrompt = cameraPrompt || cameraShot;
+  const finalCameraPrompt = buildRichCameraPromptText(
+    cameraPrompt || `${cameraStruct.shotSize}，${cameraStruct.movement}`,
+    cameraStruct,
+    frameVisionComposition,
+  );
   const finalLightingPrompt = lightingPrompt || asString(visualRaw.lighting, '自然光');
   const finalColorPrompt = colorPrompt || asString(visualRaw.colorTone, '写实中性色调');
   const finalEmotionPrompt = emotionPrompt || asString(storyRaw.emotion, '情绪平稳');
@@ -422,7 +527,10 @@ export function normalizeSegmentUnderstandingPayload(
     modelHints: (videoPromptRaw.modelHints as any) || {},
   };
 
-  const finalFullChinesePrompt = fullChinesePrompt.trim() || assembleFullChineseVideoPrompt(videoPromptParts);
+  const finalFullChinesePrompt = resolveExportablePositiveVideoPrompt(
+    { ...videoPromptParts, fullChinesePrompt },
+    { camera: cameraStruct, frameVisionComposition },
+  );
   videoPromptParts.fullChinesePrompt = finalFullChinesePrompt;
 
   const document: RemixSegmentUnderstandingDocument = {
@@ -448,11 +556,11 @@ export function normalizeSegmentUnderstandingPayload(
       colorTone: asString(visualRaw.colorTone, '写实中性色调。'),
     },
     camera: {
-      shotSize: asString(cameraRaw.shotSize, '中景'),
-      angle: asString(cameraRaw.angle, '平视'),
-      movement: asString(cameraRaw.movement, '固定镜头'),
-      composition: asString(cameraRaw.composition, '主体居中，背景可见。'),
-      focus: asString(cameraRaw.focus, '人物表情与动作'),
+      shotSize: cameraStruct.shotSize ?? '中景',
+      angle: cameraStruct.angle ?? '平视',
+      movement: cameraStruct.movement ?? '固定镜头',
+      composition: cameraStruct.composition ?? '主体居中，背景可见。',
+      focus: cameraStruct.focus ?? '人物表情与动作',
       editingRole: asString(cameraRaw.editingRole, '叙事推进'),
     },
     audio: {
@@ -565,10 +673,11 @@ export const REMIX_SEGMENT_UNDERSTANDING_SYSTEM_PROMPT = `你是专业影视分�
 2. 必须输出 visual、camera、audio、story、remix、videoPrompt、quality 全部字段；
 3. videoPrompt 必须是符合影视级多维度中文提示词的 RemixChineseVideoPrompt 结构：
    - 必须全部输出中文。
-   - 需拆解包含：人物主体(subjectPrompt)、空间场景(scenePrompt)、动作流程(actionPrompt)、表演状态(performancePrompt)、镜头语言(cameraPrompt)、光影明暗(lightingPrompt)、色调色彩(colorPrompt)、情绪氛围(emotionPrompt)、镜头节奏(rhythmPrompt)、台词语气(dialoguePrompt)、环境声音(soundPrompt)、风格质感(stylePrompt)、时序连续(continuityPrompt)、二创控制(remixControlPrompt)以及负向约束(negativePrompt)。
+   - 镜头语言(cameraPrompt)必须写明：景别、运镜方式、机位俯仰（平视/仰视/俯视）、人物与镜头朝向（正对/侧对/背对镜头）、构图设计（三分法/居中/留白等）；
    - 若上下文提供【画面烧录字幕】：对白与 videoPrompt.dialoguePrompt **必须以烧录字幕为准**，ASR/分段台词仅作参考，禁止改写字幕用词。
    - 若无烧录字幕且【分段台词】非空：dialoguePrompt 使用有效台词，并描述说话与口型。
    - 若画面有人物但无台词：dialoguePrompt 应说明无对白/闭口，勿编造台词。
-   - fullChinesePrompt 必须将上述全部正向维度（含台词、表演、情绪、节奏、声音）拼接为完整中文提示词，禁止只拼接前 8 项。
+   - 需拆解包含：人物主体(subjectPrompt)、空间场景(scenePrompt)、动作流程(actionPrompt)、表演状态(performancePrompt)、镜头语言(cameraPrompt)、光影明暗(lightingPrompt)、色调色彩(colorPrompt)、情绪氛围(emotionPrompt)、镜头节奏(rhythmPrompt)、台词语气(dialoguePrompt)、环境声音(soundPrompt)、风格质感(stylePrompt)、时序连续(continuityPrompt)、二创控制(remixControlPrompt)以及负向约束(negativePrompt)。
+   - fullChinesePrompt 必须将上述全部正向维度（含台词、表演、情绪、节奏、声音）按【维度名】分行拼接为完整中文提示词，禁止只写一两句概括或只拼接前 8 项。
 4. 只返回合法 JSON，不要附加任何 Markdown 格式、前言或后记；
 5. 时序画风连贯性约束：若上下文输入中提供了【上一段的视频提示词】，生成的 videoPrompt.continuityPrompt 必须详细规划前后连贯动作，且主体外貌服装、光影色彩风格必须与上一段保持完全连贯一致，防范生成闪跳漂移。`;

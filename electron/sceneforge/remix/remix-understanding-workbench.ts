@@ -13,8 +13,10 @@ import {
 } from './remix-understanding-gate';
 import type { RemixOriginalUnderstandingDocument } from './remix-source-understanding-rollup';
 import {
+  buildRichCameraPromptText,
   buildSegmentUnderstandingInputHash,
   buildVideoPromptDimensionsFromChinesePrompt,
+  resolveExportablePositiveVideoPrompt,
   segmentUnderstandingInputHashMatchesStored,
   type RemixSegmentUnderstandingDocument,
 } from './remix-segment-understanding-schema';
@@ -301,6 +303,7 @@ export async function loadRemixUnderstandingWorkbench(
     let frameVisionAvailable = false;
     let segmentVisualSummary: string | null = null;
     let frameVisionWarnings: string[] = [];
+    let frameVisionComposition: string | null = null;
 
     try {
       const fv = await readJson<any>(fvPath);
@@ -308,6 +311,14 @@ export async function loadRemixUnderstandingWorkbench(
         frameVisionAvailable = true;
         segmentVisualSummary = fv.segmentVisualSummary || null;
         frameVisionWarnings = fv.quality?.warnings || [];
+        const frames = Array.isArray(fv.frames) ? fv.frames : [];
+        for (const frame of frames) {
+          const comp = typeof frame?.composition === 'string' ? frame.composition.trim() : '';
+          if (comp) {
+            frameVisionComposition = comp;
+            break;
+          }
+        }
 
         if (understanding?.generatedAt && fv.generatedAt) {
           const fvTime = new Date(fv.generatedAt).getTime();
@@ -440,16 +451,33 @@ export async function loadRemixUnderstandingWorkbench(
         rewriteIdeas: understanding.remix?.rewriteIdeas || [],
         riskNotes: understanding.remix?.riskNotes || [],
       },
-      videoPrompt: {
-        version: 2,
-        fullChinesePrompt: understanding.videoPrompt?.fullChinesePrompt || (understanding.videoPrompt as any)?.positivePrompt || '',
-        dimensions:
-          Array.isArray((understanding.videoPrompt as any)?.dimensions) &&
-          (understanding.videoPrompt as any).dimensions.length > 0
-            ? (understanding.videoPrompt as any).dimensions
-            : buildVideoPromptDimensionsFromChinesePrompt(understanding.videoPrompt),
-        negativePrompt: understanding.videoPrompt?.negativePrompt || '',
-      },
+      videoPrompt: (() => {
+        const rawVp = understanding.videoPrompt ?? ({} as RemixSegmentUnderstandingDocument['videoPrompt']);
+        const manual = Boolean(rawVp.manualPositivePromptOverride);
+        const fullChinesePrompt = manual
+          ? (rawVp.fullChinesePrompt || '').trim()
+          : resolveExportablePositiveVideoPrompt(rawVp, {
+              camera: understanding.camera,
+              frameVisionComposition,
+            });
+        const dimsSource = {
+          ...rawVp,
+          cameraPrompt: buildRichCameraPromptText(
+            rawVp?.cameraPrompt ?? '',
+            understanding.camera,
+            frameVisionComposition,
+          ),
+        };
+        return {
+          version: 2 as const,
+          fullChinesePrompt,
+          dimensions:
+            Array.isArray((rawVp as any)?.dimensions) && (rawVp as any).dimensions.length > 0
+              ? (rawVp as any).dimensions
+              : buildVideoPromptDimensionsFromChinesePrompt(dimsSource),
+          negativePrompt: rawVp?.negativePrompt || '',
+        };
+      })(),
       frameVision: {
         available: frameVisionAvailable,
         segmentVisualSummary,

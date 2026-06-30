@@ -214,10 +214,17 @@ export interface RemixIpcContract {
     correctedText: string;
     markConfirmed?: boolean;
   }): Promise<RemixUnderstandingWorkbenchSnapshot>;
+  updateSegmentPositiveVideoPrompt(input: {
+    projectDir: string;
+    sourceAssetId: string;
+    segmentId: string;
+    positiveText: string;
+    negativeText?: string | null;
+  }): Promise<RemixUnderstandingWorkbenchSnapshot>;
   confirmAllSegmentTranscripts(input: {
     projectDir: string;
     sourceAssetId: string;
-  }): Promise<RemixUnderstandingWorkbenchSnapshot>;
+  }): Promise<RemixAssetProcessingSnapshot>;
   updateSourceSegments(input: UpdateSourceSegmentsInput): Promise<RemixAssetProcessingSnapshot>;
   getSegmentationDiagnostics(input: RemixSourceAssetRefInput): Promise<RemixSegmentationDiagnostics | null>;
   validateSourceAssetMedia(input: RemixSourceAssetRefInput): Promise<RemixSourceAssetMediaValidation>;

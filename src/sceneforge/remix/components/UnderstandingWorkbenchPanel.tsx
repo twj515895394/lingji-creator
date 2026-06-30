@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { Button } from '../../../ui';
 import type { RemixUnderstandingWorkbenchSnapshot } from '../../../../electron/sceneforge/remix/remix-understanding-workbench';
+import { formatClipboardVideoPrompt } from '../lib/remix-video-prompt-clipboard';
 import styles from './RemixWorkspacePanels.module.css';
 
 interface UnderstandingWorkbenchPanelProps {
@@ -22,6 +23,11 @@ interface UnderstandingWorkbenchPanelProps {
     correctedText: string,
     markConfirmed?: boolean,
   ) => Promise<void>;
+  onUpdatePositiveVideoPrompt?: (
+    segmentId: string,
+    positiveText: string,
+    negativeText?: string | null,
+  ) => Promise<void>;
 }
 
 export function UnderstandingWorkbenchPanel({
@@ -39,10 +45,14 @@ export function UnderstandingWorkbenchPanel({
   onRerunRollup,
   onRerunStaleSegments,
   onUpdateTranscript,
+  onUpdatePositiveVideoPrompt,
 }: UnderstandingWorkbenchPanelProps) {
   const [expandedCardIds, setExpandedCardIds] = useState<Record<string, boolean>>({});
-  const [editingSegmentId, setEditingSegmentId] = useState<string | null>(null);
-  const [editingText, setEditingText] = useState('');
+  const [editingTranscriptSegmentId, setEditingTranscriptSegmentId] = useState<string | null>(null);
+  const [editingTranscriptText, setEditingTranscriptText] = useState('');
+  const [editingPromptSegmentId, setEditingPromptSegmentId] = useState<string | null>(null);
+  const [editingPromptText, setEditingPromptText] = useState('');
+  const [savingPromptSegmentId, setSavingPromptSegmentId] = useState<string | null>(null);
   const [showDimensions, setShowDimensions] = useState<Record<string, boolean>>({});
   const [copiedDimension, setCopiedDimension] = useState<{ segmentId: string; dimName: string } | null>(null);
 
@@ -61,6 +71,12 @@ export function UnderstandingWorkbenchPanel({
     }, 1500);
   };
 
+  const clipboardPositive = (segment: RemixUnderstandingWorkbenchSnapshot['segments'][number]) =>
+    formatClipboardVideoPrompt(
+      segment.videoPrompt.fullChinesePrompt,
+      segment.videoPrompt.negativePrompt,
+    );
+
   const toggleExpand = (segmentId: string) => {
     setExpandedCardIds((prev) => ({
       ...prev,
@@ -68,20 +84,42 @@ export function UnderstandingWorkbenchPanel({
     }));
   };
 
-  const startEditing = (segmentId: string, currentText: string) => {
-    setEditingSegmentId(segmentId);
-    setEditingText(currentText);
+  const startEditingTranscript = (segmentId: string, currentText: string) => {
+    setEditingTranscriptSegmentId(segmentId);
+    setEditingTranscriptText(currentText);
     setExpandedCardIds((prev) => ({
       ...prev,
       [segmentId]: true,
     }));
   };
 
-  const handleSave = async (segmentId: string, markConfirmed = true) => {
+  const handleSaveTranscript = async (segmentId: string, markConfirmed = true) => {
     if (onUpdateTranscript) {
-      await onUpdateTranscript(segmentId, editingText, markConfirmed);
+      await onUpdateTranscript(segmentId, editingTranscriptText, markConfirmed);
     }
-    setEditingSegmentId(null);
+    setEditingTranscriptSegmentId(null);
+  };
+
+  const startEditingPositivePrompt = (segmentId: string, currentText: string) => {
+    setEditingPromptSegmentId(segmentId);
+    setEditingPromptText(currentText);
+    setExpandedCardIds((prev) => ({
+      ...prev,
+      [segmentId]: true,
+    }));
+  };
+
+  const handleSavePositivePrompt = async (segmentId: string, negativePrompt: string) => {
+    if (!onUpdatePositiveVideoPrompt) {
+      return;
+    }
+    setSavingPromptSegmentId(segmentId);
+    try {
+      await onUpdatePositiveVideoPrompt(segmentId, editingPromptText, negativePrompt || null);
+      setEditingPromptSegmentId(null);
+    } finally {
+      setSavingPromptSegmentId(null);
+    }
   };
 
   if (loading) {
@@ -162,7 +200,7 @@ export function UnderstandingWorkbenchPanel({
           }}
         >
           <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-            <span>⚠️ 局部台词校对或关键帧画面有更新，当前全片故事理解已过期，建议重跑以刷新。</span>
+            <span>⚠️ 关键帧或画面理解有更新，部分片段理解已过期，建议重跑以刷新全片故事。</span>
             {workbench.segments.some((s) => s.isStale) && (
               <span style={{ fontSize: '12px', opacity: 0.85 }}>检测到过期的局部理解段，您可以先一键重跑它们。</span>
             )}
@@ -296,7 +334,8 @@ export function UnderstandingWorkbenchPanel({
       <section className={styles.segmentAnalysisList}>
         {workbench.segments.map((segment) => {
           const isExpanded = expandedCardIds[segment.segmentId] ?? segment.isStale;
-          const isEditing = editingSegmentId === segment.segmentId;
+          const isEditingTranscript = editingTranscriptSegmentId === segment.segmentId;
+          const isEditingPrompt = editingPromptSegmentId === segment.segmentId;
           const cardStyle = segment.isStale
             ? (!segment.visual.mainAction && !segment.videoPrompt.fullChinesePrompt)
               ? {
@@ -441,11 +480,11 @@ export function UnderstandingWorkbenchPanel({
                 <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: '12px' }}>
                   <div style={{ display: 'flex', alignItems: 'flex-start', gap: '8px', flex: 1 }}>
                     <span style={{ fontSize: '13px', flexShrink: 0, marginTop: '2px', opacity: 0.8 }} title="台词">🗣️</span>
-                    {isEditing ? (
+                    {isEditingTranscript ? (
                       <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', width: '100%' }}>
                         <textarea
-                          value={editingText}
-                          onChange={(e) => setEditingText(e.target.value)}
+                          value={editingTranscriptText}
+                          onChange={(e) => setEditingTranscriptText(e.target.value)}
                           rows={2}
                           style={{
                             width: '100%',
@@ -461,13 +500,18 @@ export function UnderstandingWorkbenchPanel({
                           autoFocus
                         />
                         <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '6px' }}>
-                          <Button variant="ghost" size="xs" onClick={() => setEditingSegmentId(null)}>取消</Button>
-                          <Button variant="accent" size="xs" onClick={() => handleSave(segment.segmentId, true)}>保存</Button>
+                          <Button variant="ghost" size="xs" onClick={() => setEditingTranscriptSegmentId(null)}>取消</Button>
+                          <Button variant="accent" size="xs" onClick={() => void handleSaveTranscript(segment.segmentId, true)}>保存</Button>
                         </div>
                       </div>
                     ) : (
                       <span
-                        onDoubleClick={() => startEditing(segment.segmentId, segment.transcript.correctedText || segment.transcript.asrText)}
+                        onDoubleClick={() =>
+                          startEditingTranscript(
+                            segment.segmentId,
+                            segment.transcript.correctedText || segment.transcript.asrText,
+                          )
+                        }
                         style={{
                           fontSize: '13px',
                           color: 'rgba(255, 248, 235, 0.85)',
@@ -481,12 +525,17 @@ export function UnderstandingWorkbenchPanel({
                     )}
                   </div>
 
-                  {!isEditing && (
+                  {!isEditingTranscript && (
                     <div style={{ display: 'flex', gap: '4px', flexShrink: 0 }} onClick={(e) => e.stopPropagation()}>
                       <Button
                         variant="ghost"
                         size="xs"
-                        onClick={() => startEditing(segment.segmentId, segment.transcript.correctedText || segment.transcript.asrText)}
+                        onClick={() =>
+                          startEditingTranscript(
+                            segment.segmentId,
+                            segment.transcript.correctedText || segment.transcript.asrText,
+                          )
+                        }
                         style={{ padding: '2px 6px', height: '22px', fontSize: '11px', color: 'rgba(255, 255, 255, 0.45)' }}
                       >
                         ✏️ 编辑
@@ -571,22 +620,96 @@ export function UnderstandingWorkbenchPanel({
                         gap: '6px',
                       }}
                     >
-                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '6px' }}>
                         <span style={{ fontSize: '11px', color: '#60a5fa', fontWeight: 'bold', display: 'flex', alignItems: 'center', gap: '4px' }}>
                           ✍️ 正向 Video Prompt
                         </span>
-                        <Button
-                          variant="ghost"
-                          size="xs"
-                          onClick={() => onCopyPrompt(segment.segmentId, segment.videoPrompt.fullChinesePrompt)}
-                          style={{ fontSize: '10px', height: '18px', padding: '2px 6px', color: '#60a5fa' }}
+                        <div style={{ display: 'flex', gap: '4px' }} onClick={(e) => e.stopPropagation()}>
+                          {!isEditingPrompt && onUpdatePositiveVideoPrompt ? (
+                            <Button
+                              variant="ghost"
+                              size="xs"
+                              disabled={disabled || !segment.videoPrompt.fullChinesePrompt}
+                              onClick={() =>
+                                startEditingPositivePrompt(
+                                  segment.segmentId,
+                                  segment.videoPrompt.fullChinesePrompt || '',
+                                )
+                              }
+                              style={{ fontSize: '10px', height: '18px', padding: '2px 6px', color: 'rgba(255,255,255,0.5)' }}
+                            >
+                              ✏️ 编辑
+                            </Button>
+                          ) : null}
+                          <Button
+                            variant="ghost"
+                            size="xs"
+                            disabled={isEditingPrompt}
+                            onClick={() => onCopyPrompt(segment.segmentId, clipboardPositive(segment))}
+                            style={{ fontSize: '10px', height: '18px', padding: '2px 6px', color: '#60a5fa' }}
+                          >
+                            复制
+                          </Button>
+                        </div>
+                      </div>
+                      {isEditingPrompt ? (
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }} onClick={(e) => e.stopPropagation()}>
+                          <textarea
+                            value={editingPromptText}
+                            onChange={(e) => setEditingPromptText(e.target.value)}
+                            rows={10}
+                            style={{
+                              width: '100%',
+                              background: '#0a0d14',
+                              border: '1px solid rgba(96, 165, 250, 0.25)',
+                              borderRadius: '6px',
+                              padding: '8px 10px',
+                              color: 'rgba(255, 248, 235, 0.9)',
+                              fontSize: '12px',
+                              lineHeight: '1.5',
+                              outline: 'none',
+                              resize: 'vertical',
+                              fontFamily: 'inherit',
+                            }}
+                            autoFocus
+                          />
+                          <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '6px' }}>
+                            <Button
+                              variant="ghost"
+                              size="xs"
+                              disabled={savingPromptSegmentId === segment.segmentId}
+                              onClick={() => setEditingPromptSegmentId(null)}
+                            >
+                              取消
+                            </Button>
+                            <Button
+                              variant="accent"
+                              size="xs"
+                              disabled={disabled || savingPromptSegmentId === segment.segmentId || !editingPromptText.trim()}
+                              onClick={() =>
+                                void handleSavePositivePrompt(segment.segmentId, segment.videoPrompt.negativePrompt)
+                              }
+                            >
+                              {savingPromptSegmentId === segment.segmentId ? '保存中…' : '保存'}
+                            </Button>
+                          </div>
+                          <span style={{ fontSize: '11px', color: 'rgba(255,255,255,0.4)' }}>
+                            保存后写入本段理解产物；不会重跑 ASR 或大模型，也不会因改 prompt 使理解过期。
+                          </span>
+                        </div>
+                      ) : (
+                        <div
+                          style={{ fontSize: '12px', color: 'rgba(255, 248, 235, 0.85)', lineHeight: '1.5', whiteSpace: 'pre-wrap' }}
+                          onDoubleClick={() => {
+                            if (onUpdatePositiveVideoPrompt && segment.videoPrompt.fullChinesePrompt) {
+                              startEditingPositivePrompt(segment.segmentId, segment.videoPrompt.fullChinesePrompt);
+                            }
+                          }}
+                          title={onUpdatePositiveVideoPrompt ? '双击可编辑' : undefined}
                         >
-                          复制
-                        </Button>
-                      </div>
-                      <div style={{ fontSize: '12px', color: 'rgba(255, 248, 235, 0.85)', lineHeight: '1.4' }}>
-                        {segment.videoPrompt.fullChinesePrompt || '已失效，请重跑'}
-                      </div>
+                          {segment.videoPrompt.fullChinesePrompt || '已失效，请重跑'}
+                        </div>
+                      )}
                     </div>
 
                   {segment.videoPrompt.dimensions && segment.videoPrompt.dimensions.length > 0 && (
