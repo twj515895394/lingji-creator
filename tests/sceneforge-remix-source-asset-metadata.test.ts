@@ -33,7 +33,7 @@ describe('SceneForge Remix source asset metadata (#14)', () => {
     await service.runSourceUnderstanding({ projectDir, sourceAssetId });
 
     await expect(service.publishSourceAssetToLibrary({ projectDir, sourceAssetId })).rejects.toThrow(
-      '请先保存至少一个人工标签',
+      '请先保存至少一个资产标签',
     );
 
     const annotated = await service.updateSourceAssetMetadata({

@@ -379,7 +379,7 @@ describe('SceneForge Remix asset processing workspace', () => {
     expect(container.textContent).toContain('切片失败');
   });
 
-  it('保存人工标注后回显真实持久化状态', async () => {
+  it('保存资产标记后回显真实持久化状态', async () => {
     const container = await renderProcessing(
       <RemixAssetProcessing
         projectDir="/tmp/remix-project"
@@ -396,7 +396,7 @@ describe('SceneForge Remix asset processing workspace', () => {
       removeButton?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
     });
     const saveButton = Array.from(container.querySelectorAll('button')).find((element) =>
-      element.textContent?.includes('保存人工标注'),
+      element.textContent?.includes('保存资产标记'),
     );
     await act(async () => {
       saveButton?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
@@ -408,7 +408,7 @@ describe('SceneForge Remix asset processing workspace', () => {
     expect(container.textContent).toContain('最近保存：2026-06-23 12:00');
   });
 
-  it('未保存人工标注时返回会触发退出守卫', async () => {
+  it('未保存资产标记时返回会触发退出守卫', async () => {
     const container = await renderProcessing(
       <RemixAssetProcessing
         projectDir="/tmp/remix-project"
@@ -430,7 +430,7 @@ describe('SceneForge Remix asset processing workspace', () => {
       backButton?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
     });
 
-    expect(document.body.textContent).toContain('当前人工标注尚未保存');
+    expect(document.body.textContent).toContain('当前资产标记尚未保存');
     expect(document.body.textContent).toContain('保存并返回');
     expect(document.body.textContent).toContain('不保存返回');
   });
@@ -576,7 +576,7 @@ describe('SceneForge Remix asset processing workspace', () => {
     expect(record.transcriptSegmentId).toBe('segment-l-001');
   });
 
-  it('进入人工标注时会应用理解预填且不覆盖已保存标注', async () => {
+  it('进入资产标记时会应用理解预填且不覆盖已保存标注', async () => {
     const savedSnapshot = {
       ...clone(MOCK_ASSET_PROCESSING_SNAPSHOTS['source-library-001']),
       sourceAsset: {
@@ -605,7 +605,7 @@ describe('SceneForge Remix asset processing workspace', () => {
     expect(container.textContent).not.toContain('【AI 预填，请按真实观感修正】');
   });
 
-  it('人工标注有未保存修改时，不把步骤显示成已完成', () => {
+  it('资产标记有未保存修改时，不把步骤显示成已完成', () => {
     const snapshot = MOCK_ASSET_PROCESSING_SNAPSHOTS['source-library-001'];
 
     const statusesWithSavedMetadata = getAssetProcessingStepStatuses(

@@ -11,6 +11,7 @@ describe('RemixStageNav', () => {
     expect(html).toContain('导入原片');
     expect(html).toContain('真实镜头切片');
     expect(html).toContain('原片理解');
+    expect(html).toContain('资产标记');
     expect(html).toContain('保存入库');
     expect(html).not.toContain('创建二创版本');
     expect(html).not.toContain('Seedance 2.0 视频提示词');

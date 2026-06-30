@@ -189,10 +189,7 @@ function buildMockUnderstandingWorkbench(
     isPlaceholder: false,
   }));
 
-  const hasSavedAnnotation =
-    (asset.tags?.length ?? 0) > 0 ||
-    Boolean(asset.annotationNote?.trim()) ||
-    Boolean(asset.lastAnnotatedAt?.trim());
+  const hasSavedAnnotation = (asset.tags?.length ?? 0) > 0;
 
   return {
     ready: true,

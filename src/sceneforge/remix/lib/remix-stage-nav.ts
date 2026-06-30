@@ -12,8 +12,8 @@ export const REMIX_ASSET_PROCESSING_NAV_ITEMS: RemixStageNavItem[] = [
   { id: 'segmentation', index: 2, title: '真实镜头切片', caption: '保护镜头与表演完整性' },
   { id: 'keyframes', index: 3, title: '关键帧提取', caption: '首帧 / 尾帧 / 中间帧' },
   { id: 'understanding', index: 4, title: '原片理解', caption: '剧情、动作、镜头与梗点' },
-  { id: 'annotate', index: 5, title: '人工标注', caption: '保留点、替换点与备注' },
-  { id: 'publish-source', index: 6, title: '保存入库', caption: '让素材进入可复用资产库' },
+  { id: 'annotate', index: 5, title: '资产标记', caption: '标签、备注与入库补充信息' },
+  { id: 'publish-source', index: 6, title: '保存入库', caption: '确认前置门禁并写入资产库' },
 ] as const;
 
 export const REMIX_CREATION_NAV_ITEMS: RemixStageNavItem[] = [

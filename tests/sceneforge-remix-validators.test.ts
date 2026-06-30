@@ -75,6 +75,133 @@ describe('SceneForge Remix validators', () => {
       }),
     ).rejects.toThrow('Source Asset 阶段未完成');
   });
+
+  it('assertPublishReady 在缺少资产标签时阻止入库', async () => {
+    const overviewPath = 'sceneforge/remix/source-assets/source-001/analysis/source_overview.json';
+    const segmentPath = 'sceneforge/remix/source-assets/source-001/analysis/segment_analysis.json';
+    await fs.mkdir(path.join(projectDir, path.dirname(overviewPath)), { recursive: true });
+
+    const doc = {
+      ...baseDocument,
+      sourceAsset: {
+        ...baseDocument.sourceAsset,
+        tags: [],
+        sourceOverviewJsonPath: overviewPath,
+        segmentAnalysisJsonPath: segmentPath,
+        segments: [
+          {
+            id: 'segment-001',
+            sourceAssetId: 'source-001',
+            index: 1,
+            title: '片段 01',
+            boundaryType: 'source_shot' as const,
+            timeRange: { startMs: 0, endMs: 1000, durationMs: 1000 },
+            sourceClipPath: 'clip.mp4',
+            keyframes: [],
+          },
+        ],
+      },
+    };
+    const inputHash = buildRemixUnderstandingInputFingerprint(doc);
+
+    await fs.writeFile(
+      path.join(projectDir, overviewPath),
+      JSON.stringify(
+        {
+          artifactKind: REMIX_UNDERSTANDING_ROLLUP_KIND,
+          sourceAssetId: 'source-001',
+          segmentCount: 1,
+          understoodSegmentCount: 1,
+          failedSegmentCount: 0,
+          originalUnderstandingPath: 'analysis/original_understanding.json',
+          overall: { summary: '全片摘要', storyArc: '剧情线', highValueSegmentIds: ['segment-001'] },
+          quality: { segmentCount: 1, understoodSegmentCount: 1, failedSegmentCount: 0, needsHumanReview: true },
+          segmentRefs: [{ segmentId: 'segment-001', understandingPath: 'segments/segment-001/understanding.json' }],
+          inputHash,
+        },
+        null,
+        2,
+      ) + '\n',
+    );
+    await fs.writeFile(
+      path.join(projectDir, 'sceneforge/remix/source-assets/source-001/analysis/original_understanding.json'),
+      JSON.stringify({ schema: 'sceneforge-remix-original-understanding', quality: { understoodSegmentCount: 1 } }, null, 2) + '\n',
+    );
+    await fs.writeFile(
+      path.join(projectDir, segmentPath),
+      JSON.stringify(
+        [{ segmentId: 'segment-001', visual: { mainAction: '抬头' }, camera: { shotSize: '中近景' }, videoPrompt: '固定镜头。' }],
+        null,
+        2,
+      ) + '\n',
+    );
+
+    await expect(assertPublishReady(projectDir, doc)).rejects.toThrow('请先保存至少一个资产标签。');
+  });
+
+  it('assertPublishReady 不再强制要求人工备注', async () => {
+    const overviewPath = 'sceneforge/remix/source-assets/source-001/analysis/source_overview.json';
+    const segmentPath = 'sceneforge/remix/source-assets/source-001/analysis/segment_analysis.json';
+    await fs.mkdir(path.join(projectDir, path.dirname(overviewPath)), { recursive: true });
+
+    const doc = {
+      ...baseDocument,
+      sourceAsset: {
+        ...baseDocument.sourceAsset,
+        tags: ['night-market'],
+        annotationNote: null,
+        sourceOverviewJsonPath: overviewPath,
+        segmentAnalysisJsonPath: segmentPath,
+        segments: [
+          {
+            id: 'segment-001',
+            sourceAssetId: 'source-001',
+            index: 1,
+            title: '片段 01',
+            boundaryType: 'source_shot' as const,
+            timeRange: { startMs: 0, endMs: 1000, durationMs: 1000 },
+            sourceClipPath: 'clip.mp4',
+            keyframes: [],
+          },
+        ],
+      },
+    };
+    const inputHash = buildRemixUnderstandingInputFingerprint(doc);
+
+    await fs.writeFile(
+      path.join(projectDir, overviewPath),
+      JSON.stringify(
+        {
+          artifactKind: REMIX_UNDERSTANDING_ROLLUP_KIND,
+          sourceAssetId: 'source-001',
+          segmentCount: 1,
+          understoodSegmentCount: 1,
+          failedSegmentCount: 0,
+          originalUnderstandingPath: 'analysis/original_understanding.json',
+          overall: { summary: '全片摘要', storyArc: '剧情线', highValueSegmentIds: ['segment-001'] },
+          quality: { segmentCount: 1, understoodSegmentCount: 1, failedSegmentCount: 0, needsHumanReview: true },
+          segmentRefs: [{ segmentId: 'segment-001', understandingPath: 'segments/segment-001/understanding.json' }],
+          inputHash,
+        },
+        null,
+        2,
+      ) + '\n',
+    );
+    await fs.writeFile(
+      path.join(projectDir, 'sceneforge/remix/source-assets/source-001/analysis/original_understanding.json'),
+      JSON.stringify({ schema: 'sceneforge-remix-original-understanding', quality: { understoodSegmentCount: 1 } }, null, 2) + '\n',
+    );
+    await fs.writeFile(
+      path.join(projectDir, segmentPath),
+      JSON.stringify(
+        [{ segmentId: 'segment-001', visual: { mainAction: '抬头' }, camera: { shotSize: '中近景' }, videoPrompt: '固定镜头。' }],
+        null,
+        2,
+      ) + '\n',
+    );
+
+    await expect(assertPublishReady(projectDir, doc)).resolves.toBeUndefined();
+  });
 });
 
 describe('SceneForge Remix publish understanding gate', () => {

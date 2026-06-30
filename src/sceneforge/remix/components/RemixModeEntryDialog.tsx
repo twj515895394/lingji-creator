@@ -19,7 +19,7 @@ const OPTIONS: Array<{
   {
     value: 'asset-ingestion',
     title: '资产入库',
-    detail: '导入原片、切片、关键帧和人工标注，先把原片沉淀成稳定的源素材。',
+    detail: '导入原片、切片、关键帧与资产标记，先把原片沉淀成稳定的源素材。',
   },
   {
     value: 'creation',

@@ -24,10 +24,10 @@ export function AnnotationEditor({
 }: AnnotationEditorProps) {
   return (
     <div className={styles.stack} data-testid="remix-annotation-editor">
-      {prefillHint ? <p className={styles.copyFeedback}>{prefillHint}</p> : <p className={styles.copyFeedback}>建议先完成「原片理解」，再填写必须保留或替换的标注。</p>}
+      {prefillHint ? <p className={styles.copyFeedback}>{prefillHint}</p> : <p className={styles.copyFeedback}>为整条源素材添加至少一个标签；备注可选，建议补充检索与二创说明。</p>}
       <div className={styles.fieldStack}>
         <label className={styles.fieldLabel}>
-          <span className={styles.fieldName}>人工标签</span>
+          <span className={styles.fieldName}>资产标签</span>
           <div className={styles.tagEditor}>
             <Input
               value={draftTag}
@@ -58,7 +58,7 @@ export function AnnotationEditor({
         </div>
 
         <label className={styles.fieldLabel}>
-          <span className={styles.fieldName}>人工备注</span>
+          <span className={styles.fieldName}>资产备注（可选）</span>
           <Textarea
             value={note}
             onChange={(event) => onNoteChange(event.target.value)}

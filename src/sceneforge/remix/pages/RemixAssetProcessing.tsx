@@ -59,11 +59,7 @@ function normalizeTags(tags: string[]): string[] {
 }
 
 function hasSavedAnnotation(asset: RemixAssetProcessingSnapshot['sourceAsset']): boolean {
-  return (
-    (asset.tags?.length ?? 0) > 0 ||
-    Boolean(asset.annotationNote?.trim()) ||
-    Boolean(asset.lastAnnotatedAt?.trim())
-  );
+  return (asset.tags?.length ?? 0) > 0;
 }
 
 interface RemixAssetProcessingProps {
@@ -108,9 +104,9 @@ function buildProcessingChecklist(
     },
     {
       id: 'annotate',
-      label: '人工标注已补齐',
+      label: '资产标记已补齐',
       passed: canPublish,
-      note: `当前 ${tagCount} 个标签，备注${note.trim() ? '已填写' : '未填写'}。`,
+      note: `当前 ${tagCount} 个标签，备注${note.trim() ? '已填写' : '未填写（建议补充）'}。`,
     },
   ];
 }
@@ -145,14 +141,14 @@ function buildInspectorRows(
         { label: '当前步骤', value: '原片理解' },
         { label: '当前素材', value: assetTitle },
         { label: '理解状态', value: getStageStatusLabel(statuses.understanding) },
-        { label: '下一步', value: '补人工标注，明确保留点与替换点' },
+        { label: '下一步', value: '补资产标记（至少一个标签）' },
       ];
     case 'annotate':
       return [
-        { label: '当前步骤', value: '人工标注' },
-        { label: '人工标签', value: `${tagCount} 个` },
-        { label: '人工备注', value: note.trim() ? '已填写' : '待填写' },
-        { label: '下一步', value: canPublish ? '可以进入保存入库' : '先保存标注再进入入库筛选' },
+        { label: '当前步骤', value: '资产标记' },
+        { label: '资产标签', value: `${tagCount} 个` },
+        { label: '资产备注', value: note.trim() ? '已填写' : '待填写（可选）' },
+        { label: '下一步', value: canPublish ? '可以进入保存入库' : '先保存至少一个标签再进入入库确认' },
       ];
     case 'publish-source':
       return [
@@ -202,8 +198,8 @@ const STAGE_DESCRIPTIONS: Record<AssetProcessingStepId, string> = {
   segmentation: '先保护原始镜头边界和表演完整性，再决定哪里需要合并或拆分。',
   keyframes: '点击「提取关键帧」将自动为视频中的所有镜头段一键提取首帧、中帧与尾帧，无需逐个片段处理。',
   understanding: '把剧情、动作、镜头和梗点整理成可供二创复用的文本材料。',
-  annotate: '这里记录必须保留的动作、停顿和替换点，为后续二创创作打底。',
-  'publish-source': '只有前置步骤和人工标注都完成，这份素材才能进入资产库。',
+  annotate: '为整条源素材补充标签与备注，便于资产库检索与二创引用；不要求逐片段修订。',
+  'publish-source': '只有前置步骤与资产标记（至少一个已保存标签）都完成，这份素材才能进入资产库。',
 };
 
 const ASR_ENGINE_OPTIONS: Array<{ value: RemixAsrEngine; label: string }> = [
@@ -355,7 +351,7 @@ export function RemixAssetProcessing({
   }, [apiClient, projectDir, sourceAssetId, initialAnnotationNote]);
 
   const asset = snapshot?.sourceAsset ?? null;
-  const annotationReady = tags.length > 0 && annotationNote.trim().length > 0;
+  const annotationReady = tags.length > 0;
   const savedTags = normalizeTags(asset?.tags ?? []);
   const draftTags = normalizeTags(tags);
   const hasUnsavedAnnotationChanges =
@@ -1097,7 +1093,7 @@ export function RemixAssetProcessing({
     snapshot?.processingJobs?.find((job) => job.status === 'succeeded') ?? null;
   const exitGuardTitle =
     exitGuardMode === 'unsaved'
-      ? '当前人工标注尚未保存'
+      ? '当前资产标记尚未保存'
       : exitGuardMode === 'running'
         ? '当前任务仍在运行'
         : exitGuardMode === 'failed'
@@ -1105,7 +1101,7 @@ export function RemixAssetProcessing({
           : '这份素材还没有保存入库';
   const exitGuardDescription =
     exitGuardMode === 'unsaved'
-      ? '你可以先保存人工标注再返回，也可以放弃这次改动并回到处理中队列。'
+      ? '你可以先保存资产标记再返回，也可以放弃这次改动并回到处理中队列。'
       : exitGuardMode === 'running'
         ? `${workspaceState?.activeJob?.message ?? '系统正在执行当前步骤。'} 当前任务会继续在后台运行。`
         : exitGuardMode === 'failed'
@@ -1549,7 +1545,7 @@ export function RemixAssetProcessing({
               void saveAnnotationDraft();
             }}
           >
-            {pendingActionId === 'save-annotation' ? '保存中…' : '保存人工标注'}
+            {pendingActionId === 'save-annotation' ? '保存中…' : '保存资产标记'}
           </Button>
           <span className={panelStyles.copyFeedback}>
             {hasUnsavedAnnotationChanges

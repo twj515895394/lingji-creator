@@ -79,9 +79,9 @@ export function getSourceAssetNextStep(asset: SourceAsset): string {
     case 'draft':
       return '下一步：补齐切片、关键帧和原片理解。';
     case 'processing':
-      return '下一步：继续完成切片、关键帧和人工确认。';
+      return '下一步：继续完成切片、关键帧与资产标记。';
     case 'ready_for_review':
-      return '下一步：人工确认后再保存入库。';
+      return '下一步：完成资产标记后再保存入库。';
     case 'published_to_library':
       return '下一步：基于这份资产发起二创版本。';
     case 'failed':

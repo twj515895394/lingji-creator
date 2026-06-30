@@ -175,10 +175,7 @@ export function buildAnnotationPrefillFromUnderstanding(
   asset: SourceAsset,
   segments: RemixUnderstandingWorkbenchSnapshot['segments'],
 ): RemixUnderstandingAnnotationPrefill | null {
-  const hasSavedAnnotation =
-    (asset.tags?.length ?? 0) > 0 ||
-    Boolean(asset.annotationNote?.trim()) ||
-    Boolean(asset.lastAnnotatedAt?.trim());
+  const hasSavedAnnotation = (asset.tags?.length ?? 0) > 0;
   if (hasSavedAnnotation) {
     return null;
   }

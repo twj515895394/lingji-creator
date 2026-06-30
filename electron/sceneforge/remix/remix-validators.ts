@@ -39,10 +39,7 @@ export async function assertPublishReady(
   assertSourceAssetStageReady(document, 'remix_understanding');
   await assertRemixUnderstandingReady(projectDir, document);
   if ((document.sourceAsset.tags ?? []).length === 0) {
-    throw new Error('请先保存至少一个人工标签。');
-  }
-  if (!document.sourceAsset.annotationNote?.trim()) {
-    throw new Error('请先保存人工备注。');
+    throw new Error('请先保存至少一个资产标签。');
   }
 }
 

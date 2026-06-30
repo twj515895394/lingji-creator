@@ -489,10 +489,7 @@ export function getAssetProcessingStepStatuses(
 ): Record<AssetProcessingStepId, RemixStageStatus> {
   const understanding = snapshot.processingStageStates.remix_understanding ?? 'not_started';
   const hasSavedAnnotation =
-    Array.isArray(snapshot.sourceAsset.tags) &&
-    snapshot.sourceAsset.tags.length > 0 &&
-    typeof snapshot.sourceAsset.annotationNote === 'string' &&
-    snapshot.sourceAsset.annotationNote.trim().length > 0;
+    Array.isArray(snapshot.sourceAsset.tags) && snapshot.sourceAsset.tags.length > 0;
   const annotateStatus =
     understanding === 'approved'
       ? hasSavedAnnotation && !hasUnsavedAnnotationChanges
@@ -591,7 +588,7 @@ export function buildAssetProcessingWorkspaceState(
     taskSummary.activeJob?.status === 'running'
       ? taskSummary.activeJob.message ?? '系统正在执行当前步骤。'
       : options.activeStepId === 'annotate' && options.hasUnsavedAnnotationChanges
-        ? '人工标注尚未保存。'
+        ? '资产标记尚未保存。'
         : snapshot.sourceAsset.status === 'failed'
           ? taskSummary.latestFailedJob?.error ?? '当前素材存在失败步骤，请先恢复后再继续。'
           : null;
