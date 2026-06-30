@@ -105,7 +105,10 @@ export class RemixService {
   private readonly frameVisionService: RemixFrameVisionService;
   private readonly reportExportService: RemixUnderstandingReportExportService;
 
+  private readonly now: () => Date;
+
   constructor(options: RemixServiceOptions = {}) {
+    this.now = options.now ?? (() => new Date());
     this.sourceAssetService = new RemixSourceAssetService(options);
     this.segmentationService = new RemixSegmentationService();
     this.keyframeService = new RemixKeyframeService();
@@ -592,8 +595,9 @@ export class RemixService {
   ) {
     const document = await readStoredSourceAsset(input.projectDir, input.sourceAssetId);
     await assertPublishReady(input.projectDir, document);
+    const publishedAt = this.now().toISOString();
     document.sourceAsset.status = 'published_to_library';
-    document.sourceAsset.updatedAt = new Date().toISOString();
+    document.sourceAsset.updatedAt = publishedAt;
     await writeStoredSourceAsset(input.projectDir, document);
     const jobsDocument = await readStoredSourceAssetJobs(input.projectDir, input.sourceAssetId);
     return buildSourceAssetSnapshot(document, jobsDocument.jobs);

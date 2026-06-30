@@ -581,7 +581,11 @@ export const remixMockApi: RemixIpcContract = {
 
   async publishSourceAssetToLibrary(input: RemixSourceAssetRefInput) {
     const snapshot = findProcessingSnapshot(input.sourceAssetId);
+    if ((snapshot.sourceAsset.tags ?? []).length === 0) {
+      throw new Error('请先保存至少一个资产标签。');
+    }
     snapshot.sourceAsset.status = 'published_to_library';
+    snapshot.sourceAsset.updatedAt = NOW;
     return snapshot;
   },
 

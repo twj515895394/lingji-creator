@@ -8,6 +8,7 @@ import {
   getSourceAssetFilename,
   getSourceAssetKeyframeIssueCount,
   getSourceAssetKeyframeCount,
+  getSourceAssetMarkingSummaryLine,
   getSourceAssetNextStep,
   getVariantGateReason,
   getVariantStageLabel,
@@ -139,6 +140,7 @@ export function AssetDetailSidebar({
           </span>
         ))}
       </div>
+      <p className={styles.detailNote}>{getSourceAssetMarkingSummaryLine(asset)}</p>
 
       {asset.annotationNote ? (
         <div className={styles.detailHero}>

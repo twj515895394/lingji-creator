@@ -8,6 +8,7 @@ import { ProcessingAssetTaskCard } from '../src/sceneforge/remix/components/Proc
 import { SourceAssetThumbnail } from '../src/sceneforge/remix/components/SourceAssetThumbnail';
 import { SourceOverviewPanel } from '../src/sceneforge/remix/components/SourceOverviewPanel';
 import { filterAssetLibraryAssets, getAssetLibraryAvailableTags } from '../src/sceneforge/remix/lib/asset-library-state';
+import { getSourceAssetMarkingSummaryLine } from '../src/sceneforge/remix/lib/asset-library-view-model';
 import { MOCK_ASSET_PROCESSING_SNAPSHOTS, MOCK_SOURCE_ASSETS } from '../src/sceneforge/remix/mock/mock-data';
 import { RemixAssetLibrary } from '../src/sceneforge/remix/pages/RemixAssetLibrary';
 
@@ -262,6 +263,9 @@ describe('SceneForge Remix asset library', () => {
     expect(container.textContent).toContain('天台谈判名场面');
     expect(container.querySelector('[data-testid="remix-asset-library-inspector"]')).not.toBeNull();
     expect(container.textContent).toContain('狸猫黑帮版');
+    expect(container.textContent).toContain(
+      getSourceAssetMarkingSummaryLine(MOCK_SOURCE_ASSETS.find((a) => a.id === 'source-library-001')!),
+    );
   });
 
   it('在二创入口模式下优先展示已入库资产和二创动作', async () => {

@@ -74,6 +74,17 @@ export function getSourceAssetPrimaryAction(asset: SourceAsset): {
   return null;
 }
 
+export function getSourceAssetMarkingSummaryLine(asset: SourceAsset): string {
+  const tagCount = asset.tags?.length ?? 0;
+  if (tagCount === 0) {
+    return '尚未保存资产标签，需先完成资产标记。';
+  }
+  const notePart = asset.annotationNote?.trim()
+    ? '资产备注已填写'
+    : '资产备注未填写（可选）';
+  return `已保存 ${tagCount} 个资产标签 · ${notePart}`;
+}
+
 export function getSourceAssetNextStep(asset: SourceAsset): string {
   switch (asset.status) {
     case 'draft':
@@ -124,7 +135,7 @@ export function getVariantGateReason(asset: SourceAsset): string | null {
   if (asset.status === 'failed') {
     return '这份素材当前在异常队列，先恢复失败步骤后才能创建二创。';
   }
-  return '这份素材还没有保存入库，先完成处理并保存入库后才能创建二创。';
+  return '这份素材还没有保存入库，请先完成资产标记并保存入库后才能创建二创。';
 }
 
 export function getSourceAssetKeyframeCount(asset: SourceAsset): number {
