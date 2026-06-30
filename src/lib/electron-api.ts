@@ -73,6 +73,11 @@ import type {
   SegmentKeyframeActionInput,
 } from '../../electron/sceneforge/remix/remix-ipc-types';
 import type {
+  RebuildAssetLibraryResult,
+  SearchAssetLibraryInput,
+  SearchAssetLibraryResult,
+} from '../../electron/sceneforge/assets/asset-library-types';
+import type {
   RemixAssetLibrarySnapshot,
   RemixAssetProcessingSnapshot,
   RemixCreationWorkspaceSnapshot,
@@ -89,6 +94,9 @@ export type SceneStageRunProgressPayload = SceneStageRunProgressPayloadType;
 export type { SceneGetStageContextOptions, SceneStageRunnerResult };
 export type { PublishAccount, PublishPlatform };
 export type {
+  SearchAssetLibraryInput,
+  SearchAssetLibraryResult,
+  RebuildAssetLibraryResult,
   CreateSourceAssetFromImportInput,
   CreateVariantFromSourceAssetInput,
   ExportPromptBundleInput,

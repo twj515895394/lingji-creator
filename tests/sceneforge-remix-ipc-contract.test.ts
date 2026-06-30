@@ -27,6 +27,8 @@ describe('SceneForge Remix IPC contract', () => {
     expect(main).toContain('registerSceneForgeRemixIpc');
     expect(preload).toContain('sceneForgeRemix: {');
     expect(preload).toContain('sceneForgeRemix:listSourceAssets');
+    expect(preload).toContain('sceneForgeRemix:searchPublishedSourceAssets');
+    expect(preload).toContain('sceneForgeRemix:rebuildPublishedSourceAssetLibrary');
     expect(preload).toContain('sceneForgeRemix:deleteSourceAsset');
     expect(preload).toContain('sceneForgeRemix:updateSourceSegments');
     expect(preload).toContain('sceneForgeRemix:getSegmentationDiagnostics');
@@ -36,6 +38,7 @@ describe('SceneForge Remix IPC contract', () => {
     expect(preload).toContain('sceneForgeRemix:exportPromptBundle');
     expect(preload).toContain('sceneForgeRemix:rerunOriginalStoryRollup');
     expect(api).toContain('sceneForgeRemix: {');
+    expect(api).toContain('SearchAssetLibraryResult');
     expect(api).toContain('createVariantFromSourceAsset');
     expect(api).toContain('getSegmentationDiagnostics');
     expect(api).toContain('validateSourceAssetMedia');
@@ -43,6 +46,8 @@ describe('SceneForge Remix IPC contract', () => {
     expect(api).toContain('ExportPromptBundleResult');
     expect(api).toContain('rerunOriginalStoryRollup');
     expect(ipc).toContain('sceneForgeRemix:listSourceAssets');
+    expect(ipc).toContain('sceneForgeRemix:searchPublishedSourceAssets');
+    expect(ipc).toContain('sceneForgeRemix:rebuildPublishedSourceAssetLibrary');
     expect(ipc).toContain('sceneForgeRemix:deleteSourceAsset');
     expect(ipc).toContain('sceneForgeRemix:updateSourceSegments');
     expect(ipc).toContain('sceneForgeRemix:validateSourceAssetMedia');
@@ -128,6 +133,8 @@ describe('SceneForge Remix IPC contract', () => {
 
     const assetList = await service.listSourceAssets({ projectDir });
     expect(assetList.sourceAssets[0]?.title).toBe('买瓜原片');
+    const emptySearch = await service.searchPublishedSourceAssets({ projectDir, query: '买瓜' });
+    expect(emptySearch.sourceAssets).toEqual([]);
 
     const sourceAsset = await service.getSourceAsset({
       projectDir,
@@ -243,6 +250,10 @@ describe('SceneForge Remix IPC contract', () => {
       sourceAssetId: liveSourceAssetId,
     });
     expect(published.sourceAsset.status).toBe('published_to_library');
+    const publishedSearch = await service.searchPublishedSourceAssets({ projectDir, query: '买瓜' });
+    expect(publishedSearch.sourceAssets[0]?.id).toBe(liveSourceAssetId);
+    const rebuild = await service.rebuildPublishedSourceAssetLibrary({ projectDir });
+    expect(rebuild.rebuiltAssetIds).toContain(liveSourceAssetId);
 
     const createdVariant = await service.createVariantFromSourceAsset({
       projectDir,

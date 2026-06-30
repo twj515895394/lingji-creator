@@ -596,6 +596,45 @@ export const remixMockApi: RemixIpcContract = {
     });
   },
 
+  async searchPublishedSourceAssets(input: { projectDir: string; query?: string | null; limit?: number }) {
+    const query = input.query?.trim();
+    const assets = Array.from(processingSnapshotSession.values())
+      .map((snapshot: RemixAssetProcessingSnapshot) => snapshot.sourceAsset)
+      .filter((asset: SourceAsset) => asset.status === 'published_to_library')
+      .filter((asset: SourceAsset) => !query || asset.title.includes(query) || asset.tags.some((tag: string) => tag.includes(query)))
+      .slice(0, input.limit ?? 20)
+      .map((asset: SourceAsset) => ({
+        id: asset.id,
+        title: asset.title,
+        status: asset.status,
+        durationMs: asset.videoMetadata.durationMs,
+        segmentCount: asset.segments.length,
+        keyframeCount: asset.segments.reduce((sum: number, segment) => sum + segment.keyframes.length, 0),
+        variantCount: asset.variantCount,
+        updatedAt: asset.updatedAt,
+        tags: [...asset.tags],
+        annotationNote: asset.annotationNote ?? null,
+        publishedAt: asset.updatedAt,
+        thumbnailPath: asset.segments[0]?.keyframes[0]?.imagePath ?? null,
+        logline: 'Mock Logline',
+        storySummaryShort: 'Mock Summary',
+        mainConflict: 'Mock Conflict',
+        visualStyle: 'Mock Visual',
+        dialogueStyle: 'Mock Dialogue',
+      }));
+    return { sourceAssets: assets };
+  },
+
+  async rebuildPublishedSourceAssetLibrary(input: { projectDir: string; sourceAssetIds?: string[] | null }) {
+    const candidates = input.sourceAssetIds?.length
+      ? input.sourceAssetIds
+      : Array.from(processingSnapshotSession.values()).map((snapshot: RemixAssetProcessingSnapshot) => snapshot.sourceAsset.id);
+    return {
+      rebuiltAssetIds: candidates.filter((id: string) => getMutableProcessingSnapshot(id).sourceAsset.status === 'published_to_library'),
+      skippedAssetIds: candidates.filter((id: string) => getMutableProcessingSnapshot(id).sourceAsset.status !== 'published_to_library'),
+    };
+  },
+
   async publishSourceAssetToLibrary(input: RemixSourceAssetRefInput) {
     const snapshot = getMutableProcessingSnapshot(input.sourceAssetId);
     if ((snapshot.sourceAsset.tags ?? []).length === 0) {

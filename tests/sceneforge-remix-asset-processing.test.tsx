@@ -6,6 +6,7 @@ import type { RemixIpcContract } from '../electron/sceneforge/remix/remix-ipc-ty
 import { MOCK_ASSET_PROCESSING_SNAPSHOTS } from '../src/sceneforge/remix/mock/mock-data';
 import { RemixAssetProcessing } from '../src/sceneforge/remix/pages/RemixAssetProcessing';
 import { getAssetProcessingStepStatuses } from '../src/sceneforge/remix/lib/remix-workspace-view-model';
+import { ToastProvider } from '../src/ui';
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 (window as typeof window & { matchMedia?: (query: string) => MediaQueryList }).matchMedia =
@@ -328,7 +329,7 @@ async function renderProcessing(node: JSX.Element) {
   const root = createRoot(container);
   containerRecords.push({ container, root });
   await act(async () => {
-    root.render(node);
+    root.render(<ToastProvider>{node}</ToastProvider>);
   });
   await act(async () => {
     await Promise.resolve();
@@ -640,10 +641,26 @@ describe('SceneForge Remix asset processing workspace', () => {
   });
 
   it('保存入库页展示资产标记摘要与显式保存按钮', async () => {
+    const reviewSnapshot = {
+      ...clone(MOCK_ASSET_PROCESSING_SNAPSHOTS['source-library-001']),
+      sourceAsset: {
+        ...clone(MOCK_ASSET_PROCESSING_SNAPSHOTS['source-library-001'].sourceAsset),
+        status: 'ready_for_review' as const,
+      },
+      variants: [],
+    };
+    const apiClient = {
+      ...buildApiClient('success'),
+      getSourceAsset: async () => reviewSnapshot,
+      publishSourceAssetToLibrary: async () => ({
+        ...clone(MOCK_ASSET_PROCESSING_SNAPSHOTS['source-library-001']),
+        variants: [],
+      }),
+    };
     const container = await renderProcessing(
       <RemixAssetProcessing
         projectDir="/tmp/remix-project"
-        apiClient={buildApiClient('success')}
+        apiClient={apiClient}
         sourceAssetId="source-library-001"
         initialStepId="publish-source"
       />,
@@ -656,11 +673,28 @@ describe('SceneForge Remix asset processing workspace', () => {
     expect(container.querySelector('[data-testid="remix-publish-marking-summary"]')).not.toBeNull();
   });
 
+  it('已入库资产在保存入库页展示明确成功态', async () => {
+    const container = await renderProcessing(
+      <RemixAssetProcessing
+        projectDir="/tmp/remix-project"
+        apiClient={buildApiClient('success')}
+        sourceAssetId="source-library-001"
+        initialStepId="publish-source"
+      />,
+    );
+
+    expect(container.textContent).toContain('已入库');
+    expect(container.textContent).toContain('这份素材已进入可复用资产库');
+    expect(container.querySelector('[data-testid="remix-publish-success-state"]')).not.toBeNull();
+    expect(container.querySelector('[data-testid="remix-processing-publish"]')).toBeNull();
+  });
+
   it('前置未满足时保存入库按钮禁用并显示阻塞提示', async () => {
     const emptyTagsSnapshot = {
       ...clone(MOCK_ASSET_PROCESSING_SNAPSHOTS['source-library-001']),
       sourceAsset: {
         ...clone(MOCK_ASSET_PROCESSING_SNAPSHOTS['source-library-001'].sourceAsset),
+        status: 'ready_for_review' as const,
         tags: [],
         annotationNote: null,
         lastAnnotatedAt: null,

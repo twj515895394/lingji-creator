@@ -35,6 +35,7 @@ import type {
   UpdateVariantConfigInput,
   SegmentKeyframeActionInput,
 } from './sceneforge/remix/remix-ipc-types';
+import type { SearchAssetLibraryInput } from './sceneforge/assets/asset-library-types';
 
 type PipelineTaskUpdate = PipelineTask & { bridgeId: string };
 
@@ -213,6 +214,10 @@ contextBridge.exposeInMainWorld('electronAPI', {
   sceneForgeRemix: {
     listSourceAssets: (input: ListSourceAssetsInput) =>
       ipcRenderer.invoke('sceneForgeRemix:listSourceAssets', input),
+    searchPublishedSourceAssets: (input: SearchAssetLibraryInput) =>
+      ipcRenderer.invoke('sceneForgeRemix:searchPublishedSourceAssets', input),
+    rebuildPublishedSourceAssetLibrary: (input: { projectDir: string; sourceAssetIds?: string[] | null }) =>
+      ipcRenderer.invoke('sceneForgeRemix:rebuildPublishedSourceAssetLibrary', input),
     getSourceAsset: (input: RemixSourceAssetRefInput) =>
       ipcRenderer.invoke('sceneForgeRemix:getSourceAsset', input),
     deleteSourceAsset: (input: RemixSourceAssetRefInput) =>

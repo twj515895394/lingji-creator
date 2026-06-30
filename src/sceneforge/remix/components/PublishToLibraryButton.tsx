@@ -1,4 +1,4 @@
-import { Button } from '../../../ui';
+import { Badge, Button } from '../../../ui';
 import type { AssetMarkingSummary, PublishChecklistItem } from '../lib/remix-workspace-view-model';
 import styles from './RemixWorkspacePanels.module.css';
 
@@ -8,7 +8,9 @@ interface PublishToLibraryButtonProps {
   disabled: boolean;
   blockingReason?: string | null;
   isPublishing?: boolean;
+  isPublished?: boolean;
   onPublish?: () => void;
+  onBackToLibrary?: () => void;
 }
 
 export function PublishToLibraryButton({
@@ -17,7 +19,9 @@ export function PublishToLibraryButton({
   disabled,
   blockingReason = null,
   isPublishing = false,
+  isPublished = false,
   onPublish,
+  onBackToLibrary,
 }: PublishToLibraryButtonProps) {
   const failedItems = items.filter((item) => !item.passed);
 
@@ -56,20 +60,36 @@ export function PublishToLibraryButton({
         保存入库后，将更新 source manifest 与资产状态，供资产库与后续二创版本读取。
       </p>
 
-      {disabled && (blockingReason || failedItems.length > 0) ? (
+      {isPublished ? (
+        <div className={styles.publishSection} data-testid="remix-publish-success-state">
+          <div className={styles.copyRow}>
+            <Badge variant="success">已入库</Badge>
+            <span className={styles.copyFeedback}>这份素材已进入可复用资产库。</span>
+          </div>
+          <div className={styles.copyRow}>
+            <Button variant="accent" onClick={onBackToLibrary}>
+              返回资产库
+            </Button>
+          </div>
+        </div>
+      ) : null}
+
+      {!isPublished && disabled && (blockingReason || failedItems.length > 0) ? (
         <p className={styles.publishBlockingHint} data-testid="remix-publish-blocking-hint">
           {blockingReason ?? `仍有 ${failedItems.length} 项前置条件未满足，无法保存入库。`}
         </p>
       ) : null}
 
-      <Button
-        variant={disabled ? 'outline' : 'accent'}
-        disabled={disabled}
-        onClick={onPublish}
-        data-testid="remix-processing-publish"
-      >
-        {disabled ? '前置步骤未完成' : isPublishing ? '保存中…' : '保存入库'}
-      </Button>
+      {!isPublished ? (
+        <Button
+          variant={disabled ? 'outline' : 'accent'}
+          disabled={disabled}
+          onClick={onPublish}
+          data-testid="remix-processing-publish"
+        >
+          {disabled ? '前置步骤未完成' : isPublishing ? '保存中…' : '保存入库'}
+        </Button>
+      ) : null}
     </div>
   );
 }

@@ -19,6 +19,11 @@ import type {
 import type { RemixUnderstandingWorkbenchSnapshot } from './remix-understanding-workbench';
 import type { RemixSegmentTranscriptCorrectionDocument } from './remix-transcript-correction-service';
 import type { RemixAsrEngine } from './remix-asr-types';
+import type {
+  RebuildAssetLibraryResult,
+  SearchAssetLibraryInput,
+  SearchAssetLibraryResult,
+} from '../assets/asset-library-types';
 
 export interface RemixSourceAssetRefInput {
   projectDir: string;
@@ -26,6 +31,11 @@ export interface RemixSourceAssetRefInput {
 }
 
 export interface DeleteSourceAssetInput extends RemixSourceAssetRefInput {}
+
+export interface RebuildAssetLibraryInput {
+  projectDir: string;
+  sourceAssetIds?: string[] | null;
+}
 
 export interface ListSourceAssetsInput {
   projectDir: string;
@@ -153,6 +163,8 @@ export interface RemixUnderstandingFreshnessReport {
 
 export interface RemixIpcContract {
   listSourceAssets(input: ListSourceAssetsInput): Promise<RemixAssetLibrarySnapshot>;
+  searchPublishedSourceAssets(input: SearchAssetLibraryInput): Promise<SearchAssetLibraryResult>;
+  rebuildPublishedSourceAssetLibrary(input: RebuildAssetLibraryInput): Promise<RebuildAssetLibraryResult>;
   getSourceAsset(input: RemixSourceAssetRefInput): Promise<RemixAssetProcessingSnapshot>;
   deleteSourceAsset(input: DeleteSourceAssetInput): Promise<{ deletedSourceAssetId: string }>;
   updateSourceAssetMetadata(

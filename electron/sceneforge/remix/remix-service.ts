@@ -15,6 +15,7 @@ import type {
   ExportPromptBundleResult,
   ListVariantsForSourceAssetInput,
   ListSourceAssetsInput,
+  RebuildAssetLibraryInput,
   RegisterEditedKeyframeInput,
   RenameVariantInput,
   DeleteSourceAssetInput,
@@ -35,6 +36,7 @@ import {
   listStoredSourceAssetIds,
   readStoredSourceAsset,
   readStoredSourceAssetJobs,
+  readStoredVariant,
   writeStoredSourceAsset,
   writeStoredSourceAssetJobs,
 } from './remix-store';
@@ -63,12 +65,19 @@ import { RemixSegmentVideoPromptEditService } from './remix-segment-video-prompt
 import { evaluateRemixUnderstandingApproval } from './remix-understanding-approval';
 import { RemixFrameVisionService } from './remix-frame-vision-service';
 import { RemixUnderstandingReportExportService } from './remix-understanding-report-export-service';
+import { AssetLibraryIngestService } from '../assets/asset-library-ingest-service';
+import { AssetLibraryQueryService } from '../assets/asset-library-query-service';
+import { AssetLibraryRebuildService } from '../assets/asset-library-rebuild-service';
+import type { SearchAssetLibraryInput } from '../assets/asset-library-types';
 
 export interface RemixServiceOptions extends RemixSourceAssetServiceOptions {
   transcriptService?: RemixTranscriptService;
   understandingService?: RemixUnderstandingService;
   understandingServiceOptions?: RemixUnderstandingServiceOptions;
   understandingConcurrency?: number;
+  assetLibraryIngestService?: AssetLibraryIngestService;
+  assetLibraryQueryService?: AssetLibraryQueryService;
+  assetLibraryRebuildService?: AssetLibraryRebuildService;
 }
 
 export class RemixService {
@@ -104,6 +113,9 @@ export class RemixService {
   private readonly segmentVideoPromptEditService: RemixSegmentVideoPromptEditService;
   private readonly frameVisionService: RemixFrameVisionService;
   private readonly reportExportService: RemixUnderstandingReportExportService;
+  private readonly assetLibraryIngestService: AssetLibraryIngestService;
+  private readonly assetLibraryQueryService: AssetLibraryQueryService;
+  private readonly assetLibraryRebuildService: AssetLibraryRebuildService;
 
   private readonly now: () => Date;
 
@@ -132,6 +144,20 @@ export class RemixService {
     this.segmentVideoPromptEditService = new RemixSegmentVideoPromptEditService();
     this.frameVisionService = new RemixFrameVisionService();
     this.reportExportService = new RemixUnderstandingReportExportService();
+    this.assetLibraryIngestService = options.assetLibraryIngestService ?? new AssetLibraryIngestService();
+    this.assetLibraryQueryService = options.assetLibraryQueryService ?? new AssetLibraryQueryService();
+    this.assetLibraryRebuildService =
+      options.assetLibraryRebuildService ?? new AssetLibraryRebuildService(this.assetLibraryIngestService);
+  }
+
+  private async syncPublishedSourceAssetIfNeeded(projectDir: string, sourceAssetId: string) {
+    const document = await readStoredSourceAsset(projectDir, sourceAssetId);
+    if (document.sourceAsset.status !== 'published_to_library') {
+      return;
+    }
+    await this.assetLibraryIngestService.upsertSourceAsset(projectDir, document, {
+      status: document.sourceAsset.status,
+    });
   }
 
   private withCompleteSegmentBoundary(segment: SourceSegment): SourceSegment {
@@ -255,17 +281,36 @@ export class RemixService {
   async listSourceAssets(input: ListSourceAssetsInput): Promise<RemixAssetLibrarySnapshot> {
     const statusFilter = this.normalizeStatuses(input.statuses);
     const sourceAssetIds = await listStoredSourceAssetIds(input.projectDir);
+    const publishedSourceAssets =
+      !statusFilter || statusFilter.has('published_to_library')
+        ? await this.assetLibraryQueryService.listPublishedAssetSummaries(input.projectDir)
+        : [];
+    const publishedIds = new Set(publishedSourceAssets.map((asset) => asset.id));
     const sourceAssets = await Promise.all(
       sourceAssetIds.map(async (sourceAssetId) => {
         const document = await readStoredSourceAsset(input.projectDir, sourceAssetId);
+        if (
+          document.sourceAsset.status === 'published_to_library'
+          && publishedIds.has(document.sourceAsset.id)
+        ) {
+          return null;
+        }
         return buildSourceAssetSummary(document.sourceAsset);
       }),
     );
     return {
-      sourceAssets: sourceAssets
+      sourceAssets: [...publishedSourceAssets, ...sourceAssets.filter((asset) => asset !== null)]
         .filter((sourceAsset) => (statusFilter ? statusFilter.has(sourceAsset.status) : true))
         .sort((left, right) => right.updatedAt.localeCompare(left.updatedAt)),
     };
+  }
+
+  async searchPublishedSourceAssets(input: SearchAssetLibraryInput) {
+    return this.assetLibraryQueryService.searchPublishedAssets(input);
+  }
+
+  async rebuildPublishedSourceAssetLibrary(input: RebuildAssetLibraryInput) {
+    return this.assetLibraryRebuildService.rebuildPublishedAssets(input);
   }
 
   async getSourceAsset(input: RemixSourceAssetRefInput) {
@@ -275,12 +320,21 @@ export class RemixService {
   }
 
   async deleteSourceAsset(input: DeleteSourceAssetInput) {
+    const document = await readStoredSourceAsset(input.projectDir, input.sourceAssetId);
     await this.sourceAssetService.delete(input.projectDir, input.sourceAssetId);
+    if (document.sourceAsset.status === 'published_to_library') {
+      await this.assetLibraryIngestService.removeSourceAsset(input.projectDir, input.sourceAssetId);
+    }
     return { deletedSourceAssetId: input.sourceAssetId };
   }
 
   async updateSourceAssetMetadata(input: UpdateSourceAssetMetadataInput) {
     const document = await this.sourceAssetService.updateMetadata(input);
+    if (document.sourceAsset.status === 'published_to_library') {
+      await this.assetLibraryIngestService.upsertSourceAsset(input.projectDir, document, {
+        status: document.sourceAsset.status,
+      });
+    }
     const jobsDocument = await readStoredSourceAssetJobs(input.projectDir, input.sourceAssetId);
     const snapshot = buildSourceAssetSnapshot(document, jobsDocument.jobs);
     snapshot.variants = await this.variantService.listForSourceAsset(input.projectDir, input.sourceAssetId);
@@ -321,6 +375,7 @@ export class RemixService {
       input.sourceAssetId,
       input.segmentId,
     );
+    await this.syncPublishedSourceAssetIfNeeded(input.projectDir, input.sourceAssetId);
     await this.mediaValidationService.validate(input.projectDir, document);
     const jobsDocument = await readStoredSourceAssetJobs(input.projectDir, input.sourceAssetId);
     const snapshot = buildSourceAssetSnapshot(document, jobsDocument.jobs);
@@ -334,6 +389,7 @@ export class RemixService {
       input.sourceAssetId,
       input.segmentId,
     );
+    await this.syncPublishedSourceAssetIfNeeded(input.projectDir, input.sourceAssetId);
     await this.mediaValidationService.validate(input.projectDir, document);
     const jobsDocument = await readStoredSourceAssetJobs(input.projectDir, input.sourceAssetId);
     const snapshot = buildSourceAssetSnapshot(document, jobsDocument.jobs);
@@ -364,7 +420,7 @@ export class RemixService {
 
 
   async rerunSegmentUnderstanding(input: SegmentKeyframeActionInput) {
-    return this.runProcessingStage(
+    const snapshot = await this.runProcessingStage(
       input,
       'remix_understanding',
       () =>
@@ -374,6 +430,8 @@ export class RemixService {
         }),
       '单段原片理解任务',
     );
+    await this.syncPublishedSourceAssetIfNeeded(input.projectDir, input.sourceAssetId);
+    return snapshot;
   }
 
   async rerunSegmentTranscript(input: SegmentKeyframeActionInput) {
@@ -385,6 +443,7 @@ export class RemixService {
         preferredEngine: input.preferredAsrEngine ?? null,
       },
     );
+    await this.syncPublishedSourceAssetIfNeeded(input.projectDir, input.sourceAssetId);
     await this.mediaValidationService.validate(input.projectDir, document);
     const jobsDocument = await readStoredSourceAssetJobs(input.projectDir, input.sourceAssetId);
     const snapshot = buildSourceAssetSnapshot(document, jobsDocument.jobs);
@@ -393,12 +452,14 @@ export class RemixService {
   }
 
   async rerunOriginalStoryRollup(input: RemixSourceAssetRefInput) {
-    return this.runProcessingStage(
+    const snapshot = await this.runProcessingStage(
       input,
       'remix_understanding',
       () => this.understandingService.rerunRollupOnly(input.projectDir, input.sourceAssetId),
       '重跑全片故事串联任务',
     );
+    await this.syncPublishedSourceAssetIfNeeded(input.projectDir, input.sourceAssetId);
+    return snapshot;
   }
 
   async validateUnderstandingFreshness(input: RemixSourceAssetRefInput) {
@@ -406,12 +467,14 @@ export class RemixService {
   }
 
   async rerunStaleSegmentUnderstandings(input: RemixSourceAssetRefInput) {
-    return this.runProcessingStage(
+    const snapshot = await this.runProcessingStage(
       input,
       'remix_understanding',
       () => this.understandingService.rerunStaleSegmentUnderstandings(input.projectDir, input.sourceAssetId),
       '只重跑过期原片理解任务',
     );
+    await this.syncPublishedSourceAssetIfNeeded(input.projectDir, input.sourceAssetId);
+    return snapshot;
   }
 
   async getSourceUnderstandingWorkbench(input: RemixSourceAssetRefInput) {
@@ -438,13 +501,15 @@ export class RemixService {
     correctedText: string;
     markConfirmed?: boolean;
   }) {
-    return this.transcriptCorrectionService.updateSegmentTranscriptCorrection(
+    const snapshot = await this.transcriptCorrectionService.updateSegmentTranscriptCorrection(
       input.projectDir,
       input.sourceAssetId,
       input.segmentId,
       input.correctedText,
       input.markConfirmed,
     );
+    await this.syncPublishedSourceAssetIfNeeded(input.projectDir, input.sourceAssetId);
+    return snapshot;
   }
 
   async updateSegmentPositiveVideoPrompt(input: {
@@ -454,13 +519,15 @@ export class RemixService {
     positiveText: string;
     negativeText?: string | null;
   }) {
-    return this.segmentVideoPromptEditService.updateSegmentPositiveVideoPrompt(
+    const snapshot = await this.segmentVideoPromptEditService.updateSegmentPositiveVideoPrompt(
       input.projectDir,
       input.sourceAssetId,
       input.segmentId,
       input.positiveText,
       input.negativeText,
     );
+    await this.syncPublishedSourceAssetIfNeeded(input.projectDir, input.sourceAssetId);
+    return snapshot;
   }
 
   async confirmAllSegmentTranscripts(input: {
@@ -488,6 +555,7 @@ export class RemixService {
     document.processingStageStates.remix_understanding = evaluation.nextStageStatus;
     document.sourceAsset.updatedAt = new Date().toISOString();
     await writeStoredSourceAsset(input.projectDir, document);
+    await this.syncPublishedSourceAssetIfNeeded(input.projectDir, input.sourceAssetId);
     const jobsDocument = await readStoredSourceAssetJobs(input.projectDir, input.sourceAssetId);
     return buildSourceAssetSnapshot(document, jobsDocument.jobs);
   }
@@ -596,11 +664,26 @@ export class RemixService {
     const document = await readStoredSourceAsset(input.projectDir, input.sourceAssetId);
     await assertPublishReady(input.projectDir, document);
     const publishedAt = this.now().toISOString();
-    document.sourceAsset.status = 'published_to_library';
-    document.sourceAsset.updatedAt = publishedAt;
-    await writeStoredSourceAsset(input.projectDir, document);
+    const publishedDocument = {
+      ...document,
+      sourceAsset: {
+        ...document.sourceAsset,
+        status: 'published_to_library' as const,
+        updatedAt: publishedAt,
+      },
+    };
+    await this.assetLibraryIngestService.upsertSourceAsset(input.projectDir, publishedDocument, {
+      publishedAt,
+      status: 'published_to_library',
+    });
+    try {
+      await writeStoredSourceAsset(input.projectDir, publishedDocument);
+    } catch (error) {
+      await this.assetLibraryIngestService.removeSourceAsset(input.projectDir, input.sourceAssetId);
+      throw error;
+    }
     const jobsDocument = await readStoredSourceAssetJobs(input.projectDir, input.sourceAssetId);
-    return buildSourceAssetSnapshot(document, jobsDocument.jobs);
+    return buildSourceAssetSnapshot(publishedDocument, jobsDocument.jobs);
   }
 
   async updateSourceSegments(input: UpdateSourceSegmentsInput) {
@@ -659,6 +742,7 @@ export class RemixService {
       normalizedSegments,
     );
     await writeStoredSourceAsset(input.projectDir, document);
+    await this.syncPublishedSourceAssetIfNeeded(input.projectDir, input.sourceAssetId);
     await this.mediaValidationService.validate(input.projectDir, document);
     const jobsDocument = await readStoredSourceAssetJobs(input.projectDir, input.sourceAssetId);
     const snapshot = buildSourceAssetSnapshot(document, jobsDocument.jobs);
@@ -680,6 +764,7 @@ export class RemixService {
     input: CreateVariantFromSourceAssetInput,
   ): Promise<RemixCreationWorkspaceSnapshot> {
     const document = await this.variantService.create(input.projectDir, input);
+    await this.syncPublishedSourceAssetIfNeeded(input.projectDir, input.sourceAssetId);
     return this.variantService.getWorkspace(input.projectDir, document.variant.id);
   }
 
@@ -692,11 +777,17 @@ export class RemixService {
   }
 
   async duplicateVariant(input: DuplicateVariantInput) {
-    return this.variantService.duplicate(input.projectDir, input);
+    const variantDocument = await readStoredVariant(input.projectDir, input.variantId);
+    const variants = await this.variantService.duplicate(input.projectDir, input);
+    await this.syncPublishedSourceAssetIfNeeded(input.projectDir, variantDocument.variant.sourceAssetId);
+    return variants;
   }
 
   async deleteVariant(input: DeleteVariantInput) {
-    return this.variantService.delete(input.projectDir, input);
+    const variantDocument = await readStoredVariant(input.projectDir, input.variantId);
+    const variants = await this.variantService.delete(input.projectDir, input);
+    await this.syncPublishedSourceAssetIfNeeded(input.projectDir, variantDocument.variant.sourceAssetId);
+    return variants;
   }
 
   async getCreationWorkspace(

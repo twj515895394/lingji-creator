@@ -7,6 +7,7 @@ import type {
   DuplicateVariantInput,
   ListSourceAssetsInput,
   ListVariantsForSourceAssetInput,
+  RebuildAssetLibraryInput,
   RegisterEditedKeyframeInput,
   RenameVariantInput,
   RemixSourceAssetRefInput,
@@ -35,6 +36,20 @@ export function registerSceneForgeRemixIpc(): void {
   ipcMain.handle('sceneForgeRemix:listSourceAssets', async (_event, input: ListSourceAssetsInput) => {
     return service.listSourceAssets(input);
   });
+
+  ipcMain.handle(
+    'sceneForgeRemix:searchPublishedSourceAssets',
+    async (_event, input: { projectDir: string; query?: string | null; limit?: number }) => {
+      return service.searchPublishedSourceAssets(input);
+    },
+  );
+
+  ipcMain.handle(
+    'sceneForgeRemix:rebuildPublishedSourceAssetLibrary',
+    async (_event, input: RebuildAssetLibraryInput) => {
+      return service.rebuildPublishedSourceAssetLibrary(input);
+    },
+  );
 
   ipcMain.handle(
     'sceneForgeRemix:getSourceAsset',

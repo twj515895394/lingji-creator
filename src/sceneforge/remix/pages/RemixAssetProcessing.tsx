@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState, type ReactElement } from 'react';
-import { Badge, Button, Checkbox, Dialog, DialogBody, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, Select } from '../../../ui';
+import { Badge, Button, Checkbox, Dialog, DialogBody, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, Select, useToast } from '../../../ui';
 import { PanelHeader } from '../../../ui/patterns/PanelHeader';
 import type { RemixIpcContract } from '../../../../electron/sceneforge/remix/remix-ipc-types';
 import type { RemixAsrEngine } from '../../../../electron/sceneforge/remix/remix-asr-types';
@@ -180,6 +180,7 @@ export function RemixAssetProcessing({
   initialAnnotationNote = '保留人物逼近时的压迫节奏，不要在长停顿处提前切镜。',
 }: RemixAssetProcessingProps) {
   const resolveClient = () => apiClient ?? getRemixApiClient();
+  const { showToast } = useToast();
   const [snapshot, setSnapshot] = useState<RemixAssetProcessingSnapshot | null>(null);
   const [activeStepId, setActiveStepId] = useState<AssetProcessingStepId>(initialStepId);
   const [tags, setTags] = useState<string[]>(snapshot?.sourceAsset.tags ?? []);
@@ -417,6 +418,16 @@ export function RemixAssetProcessing({
       const nextSnapshot = await runner();
       if (nextSnapshot) {
         applySnapshot(nextSnapshot);
+        if (
+          actionId === 'publish-source' &&
+          nextSnapshot.sourceAsset.status === 'published_to_library'
+        ) {
+          showToast('这份素材已进入可复用资产库，可返回资产库继续查看或发起二创。', {
+            title: '保存入库成功',
+            type: 'success',
+            duration: 3200,
+          });
+        }
         if (actionId === 'understanding' || actionId.startsWith('retry-understanding')) {
           await refreshUnderstandingWorkbench(nextSnapshot.sourceAsset);
         }
@@ -1535,6 +1546,7 @@ export function RemixAssetProcessing({
           summary={publishMarkingSummary}
           blockingReason={publishBlockingReason}
           disabled={!canPublish || Boolean(pendingActionId)}
+          isPublished={asset.status === 'published_to_library'}
           onPublish={() => {
               void runAction(
                 'publish-source',
@@ -1546,6 +1558,7 @@ export function RemixAssetProcessing({
                 }),
               );
           }}
+          onBackToLibrary={() => onBackToLibrary?.('published')}
           isPublishing={pendingActionId === 'publish-source'}
         />
       </section>
