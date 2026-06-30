@@ -142,7 +142,7 @@ export function AssetDetailSidebar({
 
       {asset.annotationNote ? (
         <div className={styles.detailHero}>
-          <div className={styles.inspectorTitle}>人工备注</div>
+          <div className={styles.inspectorTitle}>资产备注</div>
           <div className={styles.detailNote}>{asset.annotationNote}</div>
         </div>
       ) : null}

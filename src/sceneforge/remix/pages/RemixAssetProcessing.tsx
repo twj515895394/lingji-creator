@@ -58,6 +58,15 @@ function normalizeTags(tags: string[]): string[] {
   );
 }
 
+function buildAssetMarkingSummary(tags: string[], note: string) {
+  const trimmedNote = note.trim();
+  return {
+    tagCount: tags.length,
+    hasNote: trimmedNote.length > 0,
+    notePreview: trimmedNote.slice(0, 120),
+  };
+}
+
 function hasSavedAnnotation(asset: RemixAssetProcessingSnapshot['sourceAsset']): boolean {
   return (asset.tags?.length ?? 0) > 0;
 }
@@ -1516,11 +1525,17 @@ export function RemixAssetProcessing({
         />
       </section>
     ),
-    annotate: (
+    annotate: (() => {
+      const markingSummary = buildAssetMarkingSummary(tags, annotationNote);
+      return (
       <section className={panelStyles.panelCard} data-testid="remix-processing-step-annotate">
 
         <AnnotationEditor
-          prefillHint={understandingWorkbench?.annotationPrefill ? "已根据片段理解预填保留/替换建议，保存前请按真实观感修正。" : null}
+          prefillHint={
+            understandingWorkbench?.annotationPrefill
+              ? '已根据原片理解生成资产级标签与备注建议，保存前请按整条素材的真实观感修正。'
+              : null
+          }
           tags={tags}
           draftTag={draftTag}
           note={annotationNote}
@@ -1529,6 +1544,11 @@ export function RemixAssetProcessing({
           onRemoveTag={removeTag}
           onNoteChange={setAnnotationNote}
         />
+        <p className={panelStyles.copyFeedback}>
+          {markingSummary.tagCount > 0
+            ? `当前 ${markingSummary.tagCount} 个资产标签${markingSummary.hasNote ? '，备注已填写' : '；备注未填（可选，建议补充）'}。`
+            : '请至少添加一个资产标签后再保存。'}
+        </p>
         {workspaceState?.activeJob?.understandingProgress ? (
           <p className={panelStyles.copyFeedback} data-testid="remix-understanding-job-progress">
             {workspaceState.activeJob.understandingProgress.message ?? '正在生成原片理解…'}
@@ -1549,12 +1569,13 @@ export function RemixAssetProcessing({
           </Button>
           <span className={panelStyles.copyFeedback}>
             {hasUnsavedAnnotationChanges
-              ? '当前标注有未保存改动，保存后才会进入真实入库筛选。'
-              : `最近保存：${asset.lastAnnotatedAt ? asset.lastAnnotatedAt.slice(0, 16).replace('T', ' ') : '尚未保存'}`}
+              ? '当前资产标记有未保存改动，保存后才会进入保存入库确认。'
+              : `最近保存资产标记：${asset.lastAnnotatedAt ? asset.lastAnnotatedAt.slice(0, 16).replace('T', ' ') : '尚未保存'}`}
           </span>
         </div>
       </section>
-    ),
+      );
+    })(),
     'publish-source': (
       <section className={panelStyles.panelCard} data-testid="remix-processing-step-publish-source">
 
@@ -1677,8 +1698,8 @@ export function RemixAssetProcessing({
                 <div className={panelStyles.stageTaskMessage}>{currentTaskMessage}</div>
               </div>
 
-              {/* 选中片段详情卡片 */}
-              {activePreviewSegment ? (
+              {/* 资产标记 / 保存入库阶段不展示片段级详情，仅保留整条素材元数据 */}
+              {activeStepId !== 'annotate' && activeStepId !== 'publish-source' && activePreviewSegment ? (
                 <div className={panelStyles.activeSegmentStickyCard}>
                   <div className={panelStyles.segmentLabel}>当前播放片段</div>
                   <div className={panelStyles.segmentTitle}>{activePreviewSegment.title}</div>

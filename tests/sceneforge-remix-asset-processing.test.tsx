@@ -405,7 +405,7 @@ describe('SceneForge Remix asset processing workspace', () => {
       await Promise.resolve();
     });
 
-    expect(container.textContent).toContain('最近保存：2026-06-23 12:00');
+    expect(container.textContent).toContain('最近保存资产标记：2026-06-23 12:00');
   });
 
   it('未保存资产标记时返回会触发退出守卫', async () => {
@@ -574,6 +574,40 @@ describe('SceneForge Remix asset processing workspace', () => {
 
     expect(record.transcriptPreferredAsrEngine).toBe('local_whisper_cpp');
     expect(record.transcriptSegmentId).toBe('segment-l-001');
+  });
+
+  it('资产标记页只展示资产级字段，不展示当前播放片段卡片', async () => {
+    const container = await renderProcessing(
+      <RemixAssetProcessing
+        projectDir="/tmp/remix-project"
+        apiClient={buildApiClient('success')}
+        sourceAssetId="source-library-001"
+        initialStepId="annotate"
+      />,
+    );
+
+    expect(container.textContent).toContain('资产标记');
+    expect(container.textContent).toContain('资产标签');
+    expect(container.textContent).not.toContain('当前播放片段');
+    expect(container.textContent).not.toMatch(/片段\s*01/);
+  });
+
+  it('资产标记页在仅有标签时也可视为满足入库前置标记条件', () => {
+    const snapshot = {
+      ...MOCK_ASSET_PROCESSING_SNAPSHOTS['source-library-001'],
+      sourceAsset: {
+        ...MOCK_ASSET_PROCESSING_SNAPSHOTS['source-library-001'].sourceAsset,
+        tags: ['hero-asset'],
+        annotationNote: null,
+      },
+      processingStageStates: {
+        ...MOCK_ASSET_PROCESSING_SNAPSHOTS['source-library-001'].processingStageStates,
+        remix_understanding: 'approved' as const,
+      },
+    };
+
+    const statuses = getAssetProcessingStepStatuses(snapshot, false);
+    expect(statuses.annotate).toBe('approved');
   });
 
   it('进入资产标记时会应用理解预填且不覆盖已保存标注', async () => {

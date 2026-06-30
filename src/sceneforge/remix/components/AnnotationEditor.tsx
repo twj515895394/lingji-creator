@@ -32,7 +32,7 @@ export function AnnotationEditor({
             <Input
               value={draftTag}
               onChange={(event) => onDraftTagChange(event.target.value)}
-              placeholder="例如：压迫感、角色反打"
+              placeholder="用于资产库筛选与二创引用，例如：夜市、慢节奏、压迫感"
               size="sm"
             />
             <Button variant="outline" size="sm" onClick={onAddTag}>
@@ -62,7 +62,7 @@ export function AnnotationEditor({
           <Textarea
             value={note}
             onChange={(event) => onNoteChange(event.target.value)}
-            placeholder="补充哪些情绪、停顿、动作和镜头关系必须被保留。"
+            placeholder="可选：补充整条素材的情绪、节奏或引用说明，便于后续二创检索。"
             size="sm"
             resize="vertical"
           />
