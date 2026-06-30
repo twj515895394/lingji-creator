@@ -45,6 +45,9 @@ import {
 
 const NOW = '2026-06-23T12:00:00.000Z';
 
+/** 可变会话快照：update / publish 等同一会话内读写一致（演示与测试用） */
+const processingSnapshotSession = new Map<string, RemixAssetProcessingSnapshot>();
+
 function clone<T>(value: T): T {
   return JSON.parse(JSON.stringify(value)) as T;
 }
@@ -55,10 +58,20 @@ function findSourceAsset(sourceAssetId: string): SourceAsset {
   );
 }
 
-function findProcessingSnapshot(sourceAssetId: string): RemixAssetProcessingSnapshot {
-  return clone(
+function getMutableProcessingSnapshot(sourceAssetId: string): RemixAssetProcessingSnapshot {
+  const cached = processingSnapshotSession.get(sourceAssetId);
+  if (cached) {
+    return cached;
+  }
+  const base = clone(
     MOCK_ASSET_PROCESSING_SNAPSHOTS[sourceAssetId] ?? MOCK_ASSET_PROCESSING_SNAPSHOTS['source-library-001'],
   );
+  processingSnapshotSession.set(sourceAssetId, base);
+  return base;
+}
+
+function findProcessingSnapshot(sourceAssetId: string): RemixAssetProcessingSnapshot {
+  return clone(getMutableProcessingSnapshot(sourceAssetId));
 }
 
 function buildVariantSummary(variantId: string, sourceAssetId: string, name: string): RemixVariantSummary {
@@ -254,13 +267,17 @@ export const remixMockApi: RemixIpcContract = {
   },
 
   async updateSourceAssetMetadata(input: UpdateSourceAssetMetadataInput) {
-    const snapshot = findProcessingSnapshot(input.sourceAssetId);
+    const snapshot = getMutableProcessingSnapshot(input.sourceAssetId);
     snapshot.sourceAsset.tags = clone(input.tags ?? snapshot.sourceAsset.tags);
-    snapshot.sourceAsset.annotationNote = input.annotationNote ?? snapshot.sourceAsset.annotationNote ?? null;
+    snapshot.sourceAsset.annotationNote =
+      input.annotationNote !== undefined
+        ? input.annotationNote?.trim() || null
+        : snapshot.sourceAsset.annotationNote ?? null;
     snapshot.sourceAsset.lastAnnotatedAt = NOW;
     snapshot.sourceAsset.annotatedBy = input.annotatedBy ?? 'Remix Editor';
     snapshot.sourceAsset.annotationSource = input.annotationSource ?? 'workspace_manual';
-    return snapshot;
+    snapshot.sourceAsset.updatedAt = NOW;
+    return clone(snapshot);
   },
 
   async createSourceAssetFromImport(input: CreateSourceAssetFromImportInput) {
@@ -580,13 +597,13 @@ export const remixMockApi: RemixIpcContract = {
   },
 
   async publishSourceAssetToLibrary(input: RemixSourceAssetRefInput) {
-    const snapshot = findProcessingSnapshot(input.sourceAssetId);
+    const snapshot = getMutableProcessingSnapshot(input.sourceAssetId);
     if ((snapshot.sourceAsset.tags ?? []).length === 0) {
       throw new Error('请先保存至少一个资产标签。');
     }
     snapshot.sourceAsset.status = 'published_to_library';
     snapshot.sourceAsset.updatedAt = NOW;
-    return snapshot;
+    return clone(snapshot);
   },
 
   async createVariantFromSourceAsset(input: CreateVariantFromSourceAssetInput) {

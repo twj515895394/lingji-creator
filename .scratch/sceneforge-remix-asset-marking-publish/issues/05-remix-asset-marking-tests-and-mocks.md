@@ -1,4 +1,4 @@
-Status: ready-for-agent
+Status: done
 
 # 测试、Mock 与文档收口
 
@@ -19,9 +19,13 @@ Type: AFK
 
 ## 验收标准
 
-- [ ] 自动测试覆盖第 05 / 06 步的关键资产级行为，尤其是门禁、保存、入库与状态回显
-- [ ] mock 数据与 mock API 不再输出片段级人工标注心智，能演示新的阶段形态
-- [ ] 文档、PRD 与 issue tracker 中的阶段命名和职责边界保持一致
+- [x] 自动测试覆盖第 05 / 06 步的关键资产级行为，尤其是门禁、保存、入库与状态回显
+- [x] mock 数据与 mock API 不再输出片段级人工标注心智，能演示新的阶段形态
+- [x] 文档、PRD 与 issue tracker 中的阶段命名和职责边界保持一致
+
+## 评论
+
+- 2026-06-30：核心回归 `npx vitest run tests/sceneforge-remix-validators.test.ts tests/sceneforge-remix-stage-nav.test.tsx tests/sceneforge-remix-asset-processing.test.tsx tests/sceneforge-remix-mock-data.test.ts tests/sceneforge-remix-publish-persistence.test.ts tests/sceneforge-remix-asset-library-view-model.test.ts tests/sceneforge-remix-ipc-contract.test.ts` — 通过（source-asset-metadata 集成测试仍依赖 LLM 环境，未纳入本轮门禁）。
 
 ## 被阻塞于
 

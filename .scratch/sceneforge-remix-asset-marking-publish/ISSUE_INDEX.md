@@ -1,4 +1,4 @@
-Status: ready-for-agent
+Status: done
 
 # SceneForge Remix 资产标记与保存入库 — Issue 总索引
 

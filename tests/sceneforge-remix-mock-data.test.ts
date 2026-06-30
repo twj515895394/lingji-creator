@@ -2,6 +2,10 @@ import { describe, expect, it, vi } from 'vitest';
 
 import { createMockRemixApi } from '../src/sceneforge/remix/mock/mock-api';
 import {
+  buildAssetMarkingSummary,
+  getAssetProcessingStepStatuses,
+} from '../src/sceneforge/remix/lib/remix-workspace-view-model';
+import {
   MOCK_ASSET_LIBRARY_SNAPSHOT,
   MOCK_ASSET_PROCESSING_SNAPSHOTS,
   MOCK_CREATION_WORKSPACE_SNAPSHOT,
@@ -26,6 +30,50 @@ describe('sceneforge remix mock data', () => {
     expect(MOCK_CREATION_WORKSPACE_SNAPSHOT.keyframeEditPrompts.length).toBeGreaterThan(0);
     expect(MOCK_CREATION_WORKSPACE_SNAPSHOT.editedKeyframes.length).toBeGreaterThan(0);
     expect(MOCK_CREATION_WORKSPACE_SNAPSHOT.seedancePrompts.length).toBeGreaterThan(0);
+  });
+
+  it('mock 资产标记支持仅标签满足完成态且备注可为空', async () => {
+    const api = createMockRemixApi();
+    const updated = await api.updateSourceAssetMetadata({
+      projectDir: '/mock/projects/sceneforge-remix',
+      sourceAssetId: 'source-library-001',
+      tags: ['demo-tag'],
+      annotationNote: null,
+    });
+    expect(updated.sourceAsset.tags).toEqual(['demo-tag']);
+    expect(updated.sourceAsset.annotationNote).toBeNull();
+    expect(updated.sourceAsset.lastAnnotatedAt).toBeTruthy();
+
+    const snapshot = {
+      ...MOCK_ASSET_PROCESSING_SNAPSHOTS['source-library-001'],
+      sourceAsset: updated.sourceAsset,
+      processingStageStates: {
+        ...MOCK_ASSET_PROCESSING_SNAPSHOTS['source-library-001'].processingStageStates,
+        remix_understanding: 'approved' as const,
+      },
+    };
+    const statuses = getAssetProcessingStepStatuses(snapshot, false);
+    expect(statuses.annotate).toBe('approved');
+
+    const summary = buildAssetMarkingSummary(['demo-tag'], '');
+    expect(summary.tagCount).toBe(1);
+    expect(summary.hasNote).toBe(false);
+  });
+
+  it('mock publish 在无标签时拒绝入库', async () => {
+    const api = createMockRemixApi();
+    await api.updateSourceAssetMetadata({
+      projectDir: '/mock/projects/sceneforge-remix',
+      sourceAssetId: 'source-processing-001',
+      tags: [],
+      annotationNote: null,
+    });
+    await expect(
+      api.publishSourceAssetToLibrary({
+        projectDir: '/mock/projects/sceneforge-remix',
+        sourceAssetId: 'source-processing-001',
+      }),
+    ).rejects.toThrow('请先保存至少一个资产标签');
   });
 
   it('mock API 签名与契约一致，并能返回预期快照', async () => {
