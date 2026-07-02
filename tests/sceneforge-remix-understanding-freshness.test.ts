@@ -8,6 +8,7 @@ vi.mock('node:fs/promises', () => {
       readFile: vi.fn(),
       writeFile: vi.fn(),
       mkdir: vi.fn(),
+      stat: vi.fn(),
     },
   };
 });
@@ -233,5 +234,64 @@ describe('RemixUnderstandingService - Freshness Verification', () => {
     expect(report.staleSegmentIds).toContain('seg-01');
     expect(report.staleReasons).toContain('frame_vision_changed');
     expect(report.segmentReports[0].staleReasons).toContain('frame_vision_changed');
+  });
+
+  it('reports transcript_changed when transcript is newer than understanding and old correction no longer matches ASR', async () => {
+    const { readStoredSourceAsset } = await import('../electron/sceneforge/remix/remix-store');
+    const { buildSegmentUnderstandingInputHash } = await import(
+      '../electron/sceneforge/remix/remix-segment-understanding-schema'
+    );
+    const mockDoc = {
+      sourceAsset: {
+        id: 'asset-01',
+        segments: [
+          {
+            id: 'seg-01',
+            sourceAssetId: 'asset-01',
+            timeRange: { startMs: 0, endMs: 5000 },
+            keyframes: [],
+            segmentTranscriptJsonPath: 'trans.json',
+            transcriptCorrectionPath: 'corr.json',
+            analysisJsonPath: 'analysis.json',
+          },
+        ],
+      },
+    };
+    vi.mocked(readStoredSourceAsset).mockResolvedValueOnce(mockDoc as any);
+    const expectedHash = buildSegmentUnderstandingInputHash({
+      segment: mockDoc.sourceAsset.segments[0] as any,
+      keyframes: [],
+    });
+    vi.mocked(fs.readFile)
+      .mockResolvedValueOnce(JSON.stringify({ plainText: '给我挑一个\n行' }))
+      .mockResolvedValueOnce(
+        JSON.stringify({
+          transcript: {
+            asrText: '<|nospeech|>',
+            correctedText: '<|nospeech|>',
+            effectiveText: '<|nospeech|>',
+            correctionStatus: 'confirmed',
+          },
+        }),
+      )
+      .mockResolvedValueOnce(
+        JSON.stringify({
+          schema: 'sceneforge-remix-segment-understanding',
+          segmentId: 'seg-01',
+          inputHash: expectedHash,
+          generatedAt: '2026-06-29T15:00:00.000Z',
+        }),
+      )
+      .mockRejectedValueOnce(new Error('ENOENT'));
+    vi.mocked(fs.stat)
+      .mockResolvedValueOnce({ mtimeMs: Date.parse('2026-06-29T16:39:50.000Z') } as any)
+      .mockResolvedValueOnce({ mtimeMs: Date.parse('2026-06-29T14:20:39.000Z') } as any);
+
+    const report = await service.validateUnderstandingFreshness('/project', 'asset-01');
+
+    expect(report.isStale).toBe(true);
+    expect(report.staleSegmentIds).toContain('seg-01');
+    expect(report.staleReasons).toContain('transcript_changed');
+    expect(report.segmentReports[0].staleReasons).toContain('transcript_changed');
   });
 });

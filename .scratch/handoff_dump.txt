@@ -1,0 +1,375 @@
+# SceneForge Remix 原片理解阶段 Handoff
+
+## 本次移交目的
+
+为下一位代理完整承接 `SceneForge Remix` 中“原片理解（understanding）阶段”的功能收口、交互修复与设计澄清工作。相比上一份 handoff，本文件重点补充：
+
+- 原片理解阶段的真实功能边界与数据流
+- 最近两轮已落地的修复
+- 用户最新提出的 3 个关键问题及现状分析
+- 下一轮更适合先做设计澄清、再落实现的改动建议
+
+## 相关产物索引
+
+- 上一份 handoff：[.handoff/handoff-20260629-161745.md](/Users/tangwujun/Documents/trae_projects/lingji-creator/.handoff/handoff-20260629-161745.md:1)
+- 设计文档：[docs/sceneforge-remix/sensevoice-asr-integration-design.md](/Users/tangwujun/Documents/trae_projects/lingji-creator/docs/sceneforge-remix/sensevoice-asr-integration-design.md:1)
+- 实施计划与 issue 索引：
+  - [.scratch/sceneforge-remix-post-segmentation-interaction/IMPLEMENTATION-PLAN.md](/Users/tangwujun/Documents/trae_projects/lingji-creator/.scratch/sceneforge-remix-post-segmentation-interaction/IMPLEMENTATION-PLAN.md:1)
+  - [.scratch/sceneforge-remix-post-segmentation-interaction/ISSUE_INDEX.md](/Users/tangwujun/Documents/trae_projects/lingji-creator/.scratch/sceneforge-remix-post-segmentation-interaction/ISSUE_INDEX.md:1)
+
+说明：
+
+- 本文件不重复复述上述文档里已详细记录的计划拆分和验收项，只补“当前会话新增认知、问题和决策建议”。
+
+## 原片理解阶段的功能模型
+
+### 1. 当前阶段实际由三条能力拼起来
+
+“原片理解”在现实现里不是单一能力，而是三层叠加：
+
+1. `ASR / transcript`
+   - 输入：源音频或切片音频
+   - 产出：segment transcript / source transcript
+   - 入口代码：
+     - [electron/sceneforge/remix/remix-transcript-service.ts](/Users/tangwujun/Documents/trae_projects/lingji-creator/electron/sceneforge/remix/remix-transcript-service.ts:1)
+     - [electron/sceneforge/remix/remix-segment-transcript-service.ts](/Users/tangwujun/Documents/trae_projects/lingji-creator/electron/sceneforge/remix/remix-segment-transcript-service.ts:1)
+
+2. `segment understanding`
+   - 输入：当前 segment 的 transcript、keyframes、frame vision、相邻片段摘要、上一段视频 prompt
+   - 产出：每段结构化理解 JSON + video prompt
+   - 入口代码：
+     - [electron/sceneforge/remix/remix-understanding-service.ts](/Users/tangwujun/Documents/trae_projects/lingji-creator/electron/sceneforge/remix/remix-understanding-service.ts:1)
+     - [electron/sceneforge/remix/remix-segment-understanding-schema.ts](/Users/tangwujun/Documents/trae_projects/lingji-creator/electron/sceneforge/remix/remix-segment-understanding-schema.ts:1)
+
+3. `original story rollup`
+   - 输入：所有片段理解结果
+   - 产出：全片故事串联 / 概览 / remix strategy
+   - 入口代码：
+     - [electron/sceneforge/remix/remix-original-story-rollup-service.ts](/Users/tangwujun/Documents/trae_projects/lingji-creator/electron/sceneforge/remix/remix-original-story-rollup-service.ts:1)
+
+### 2. 页面上的三个“重跑”动作语义并不一样
+
+- `重跑全部台词`
+  - 只走 transcript 链路，不应触发整份 LLM 理解
+- `重跑 ASR（单段）`
+  - 只重跑当前片段 transcript
+- `重跑本段`
+  - 当前走的是 `rerunSegmentUnderstanding`
+  - 本质上是重跑该段的多模态/结构化理解，不是重跑 ASR
+
+这里是当前用户认知最容易混淆的点，也是下一轮最应该先澄清命名和交互语义的地方。
+
+### 3. 当前 segment understanding 的提示词上下文
+
+现状并不是“只看当前段”：
+
+- 包含当前段 transcript
+- 包含当前段 keyframes
+- 包含 frame vision 结果（若有）
+- 包含相邻片段标题摘要（前一段 / 后一段）
+- 包含上一段已生成的视频提示词，作为连续性参考
+
+相关实现：
+
+- [electron/sceneforge/remix/remix-understanding-service.ts](/Users/tangwujun/Documents/trae_projects/lingji-creator/electron/sceneforge/remix/remix-understanding-service.ts:41)
+- [electron/sceneforge/remix/remix-understanding-service.ts](/Users/tangwujun/Documents/trae_projects/lingji-creator/electron/sceneforge/remix/remix-understanding-service.ts:298)
+
+但现状还**不包含用户手动补充建议**，这正是用户最新第 3 个需求要补的能力。
+
+## 本轮之前已完成内容
+
+详细记录见上一份 handoff，这里只列对当前会话判断最关键的结论：
+
+- 顶部 ASR 选择已经收口为单一状态源 `preferredAsrEngine`
+- 已补“重跑全部台词”与“单段重跑 ASR”能力
+- 点击片段已可联动顶部预览
+- “一键确认所有台词”后的 stale 判定已做过一次语义收口
+- SenseVoice 标签串泄漏已修过一轮
+
+参考：
+
+- [.handoff/handoff-20260629-161745.md](/Users/tangwujun/Documents/trae_projects/lingji-creator/.handoff/handoff-20260629-161745.md:1)
+
+## 当前会话新增修复
+
+### 1. Whisper 下 transcript 重跑报错修复
+
+用户反馈：
+
+- 选择 `Whisper` 后，点击“重跑全部台词”或单段“重跑 ASR”报错：
+  `resolveClient(...).runSourceTranscript is not a function`
+
+根因：
+
+- 渲染层已开始调用 `runSourceTranscript` / `rerunSegmentTranscript`
+- 但 preload 暴露层和前端类型声明未同步补齐
+
+已修：
+
+- [electron/preload.ts](/Users/tangwujun/Documents/trae_projects/lingji-creator/electron/preload.ts:228)
+- [src/lib/electron-api.ts](/Users/tangwujun/Documents/trae_projects/lingji-creator/src/lib/electron-api.ts:490)
+
+### 2. 片段点击自动播放改为只定位不自动播
+
+用户反馈：
+
+- 点击片段卡片只想定位预览，不想自动播放
+
+已修：
+
+- 去掉 `SourceVideoPreview` 中自动 `video.play()` 链路
+- 页面内所有片段点击入口改为只 seek，不传 autoplay
+
+关键入口：
+
+- [src/sceneforge/remix/components/SourceVideoPreview.tsx](/Users/tangwujun/Documents/trae_projects/lingji-creator/src/sceneforge/remix/components/SourceVideoPreview.tsx:9)
+- [src/sceneforge/remix/pages/RemixAssetProcessing.tsx](/Users/tangwujun/Documents/trae_projects/lingji-creator/src/sceneforge/remix/pages/RemixAssetProcessing.tsx:495)
+
+### 3. 单段重跑后页面滚动回顶修复
+
+用户反馈：
+
+- 在理解区中下部点击某一段“重跑 ASR”后，刷新完成会把下半部分工作区滚回顶部
+
+根因：
+
+- 下半部分是独立滚动容器 `.lowerScrollableSection`
+- 单段重跑后 `applySnapshot + refreshUnderstandingWorkbench` 触发局部区域重渲染，滚动锚点丢失
+
+已修：
+
+- 给下半部分滚动容器加 `ref`
+- 在单段 `rerunSegmentTranscript / rerunSegmentUnderstanding` 前保存 `scrollTop`
+- 刷新后恢复原位置
+
+关键入口：
+
+- [src/sceneforge/remix/pages/RemixAssetProcessing.tsx](/Users/tangwujun/Documents/trae_projects/lingji-creator/src/sceneforge/remix/pages/RemixAssetProcessing.tsx:261)
+
+## 用户新提出的 3 个问题与分析
+
+### 问题 1：为什么台词修正或重跑后，要把当前片段其他理解内容判失效？
+
+用户观点：
+
+- ASR 和画面理解是两个相对独立的能力
+- 画面理解可能是对的，台词只是有些错字需要纠偏
+- 因此“修台词 -> 整段理解失效”在体验上过重
+
+当前实现为何会这样：
+
+- `segment understanding` 的输入哈希目前把 `effectiveTranscript` 当作核心输入之一
+- 任何 transcript 纠偏只要导致 `effectiveTranscript` 变化，就会造成 `inputHash` 与存量 understanding 的 `storedHash` 不一致
+- 代码会直接判定 `transcript_correction_changed`
+
+关键实现：
+
+- [electron/sceneforge/remix/remix-understanding-workbench.ts](/Users/tangwujun/Documents/trae_projects/lingji-creator/electron/sceneforge/remix/remix-understanding-workbench.ts:277)
+- [electron/sceneforge/remix/remix-segment-understanding-schema.ts](/Users/tangwujun/Documents/trae_projects/lingji-creator/electron/sceneforge/remix/remix-segment-understanding-schema.ts:110)
+
+更具体地说：
+
+- 当前 hash 只看：
+  - segment 时间范围
+  - keyframes
+  - transcriptPlainText
+- 它没有“改动严重度分层”
+- 所以“错字修正”和“语义改写”都被同样视为理解输入变化
+
+这说明：
+
+- 当前实现是“技术上自洽，但产品语义过粗”
+- 它并不是 bug，而是 freshness 策略设计偏保守
+
+建议下一步设计方向：
+
+1. 把 transcript 变更拆成至少两档
+   - 轻微文本纠偏：默认不使 `visual / camera / frameVision` 失效
+   - 语义级改写：使 `audio / story / remix / videoPrompt` 失效
+2. 将“片段理解”内部再拆语义层
+   - `visual + camera + frameVision` 更偏视觉稳定层
+   - `audio + story + remix + videoPrompt` 更依赖 transcript
+3. 在 UI 文案上避免“整段全失效”的感知
+   - 可以提示“剧情/音频推断已过期”
+   - 但保留视觉理解为有效
+
+如果要落地，需要先补一个小设计说明，否则容易把现有 gate 改乱。
+
+### 问题 2：ASR 引擎下拉为什么有两个下拉标识，且大小不一致？
+
+结论：
+
+- 是样式叠加冲突，不是错觉
+
+根因：
+
+- 项目统一 `Select` 组件本身已经内置了 `ChevronDown`
+- 但页面又给 `controlClassName={panelStyles.customSelect}`
+- 而 `.customSelect` 额外加了一层 `background-image` 画箭头
+
+因此当前会同时出现：
+
+- 组件内部真实的 `ChevronDown`
+- CSS 背景图绘制出来的第二个箭头
+
+相关实现：
+
+- `Select` 内置箭头：
+  - [src/ui/components/select.tsx](/Users/tangwujun/Documents/trae_projects/lingji-creator/src/ui/components/select.tsx:514)
+- 外层又画了一次箭头：
+  - [src/sceneforge/remix/components/RemixWorkspacePanels.module.css](/Users/tangwujun/Documents/trae_projects/lingji-creator/src/sceneforge/remix/components/RemixWorkspacePanels.module.css:1016)
+
+为什么大小不一样：
+
+- `Select` 内置的是 `lucide-react` 的 `ChevronDown h-4 w-4`
+- `customSelect` 背景图 `background-size: 10px`
+- 两者尺寸、位置、抗锯齿方式都不同，所以视觉上更明显
+
+建议修法：
+
+- 删掉 `.customSelect` 里的 `background-image / background-position / background-size / appearance` 这套原生 select 兼容样式
+- 只保留颜色、边框、圆角、padding 等皮肤样式
+- 若右侧留白不够，再按组件实际结构微调 trigger 的 padding，而不是重复画箭头
+
+### 问题 3：每个片段的“重跑本段”建议先弹用户补充，再只重跑画面多模态理解
+
+用户诉求拆解后包含 3 个要求：
+
+1. 点击“重跑本段”前先弹一个补充输入
+2. 这里的“重跑本段”应只重跑多模态理解，不影响 ASR
+3. LLM 提示词应包含：
+   - 上一段内容
+   - 当前段内容
+   - 用户补充建议（可为空）
+
+现状分析：
+
+- 第 2 点基本已经接近现状
+  - `rerunSegmentUnderstanding` 与 `rerunSegmentTranscript` 已分开
+  - 语义上“重跑本段”当前就是理解链路，不是 ASR 链路
+- 但 UI 文案没有把这件事讲透，用户仍会把它理解为“大而泛的重跑”
+
+- 第 3 点部分已存在
+  - 已包含当前段 transcript
+  - 已包含相邻片段摘要
+  - 已包含上一段 `videoPrompt.fullChinesePrompt`
+  - 但没有“用户补充建议”
+
+当前提示词入口：
+
+- [electron/sceneforge/remix/remix-understanding-service.ts](/Users/tangwujun/Documents/trae_projects/lingji-creator/electron/sceneforge/remix/remix-understanding-service.ts:50)
+
+缺的能力：
+
+- 缺一个临时用户补充输入字段
+- 缺把该字段注入 `buildSegmentUserPrompt`
+- 缺决定该补充是“一次性 rerun hint”还是“持久化 segment-level note”
+
+建议设计方向：
+
+1. 将当前按钮改名为更明确的语义
+   - 例如 `重跑本段理解`
+2. 点击后弹轻量对话框
+   - 标题：`补充本段理解提示`
+   - 文本域：用户补充建议，可为空
+   - 辅助说明：`仅影响本次该段 LLM 理解重跑，不会重跑 ASR`
+3. 在 prompt 组装中新增块
+   - `【用户补充建议】...`
+4. 建议先做“一次性 hint，不持久化”
+   - 成本最小
+   - 若后续发现用户有复用需求，再升级为 segment annotation 字段
+
+另一个需要注意的点：
+
+- 现有 `previousSegmentPrompt` 是“上一段视频提示词”
+- 用户说的“上一段内容、当前段内容”更像希望传“上一段理解摘要 + 当前段 transcript/visual”
+- 所以下一轮最好明确：
+  - 究竟要传“上一段标题”
+  - 还是“上一段完整结构化理解摘要”
+  - 还是“上一段最终视频 prompt”
+
+## 当前设计上的关键矛盾
+
+### 1. 工程拆分已经做了，产品语义还没跟上
+
+代码层面目前已区分：
+
+- transcript rerun
+- segment understanding rerun
+- original rollup rerun
+
+但用户在界面上感知到的仍然是“这几个按钮都像在重跑原片理解”，说明命名、解释和层级还不够清楚。
+
+### 2. freshness 目前更偏安全保守，不偏用户体验
+
+现在的 stale 判定逻辑倾向于“宁可多失效，不可误复用”。这对早期稳定性有帮助，但在台词轻微纠偏场景里会显得太重。
+
+### 3. 原片理解页的 UI 已经开始混入策略层决策
+
+例如：
+
+- transcript correction
+- segment understanding rerun
+- stale segment rerun
+- rollup rerun
+
+这些动作都在一个区块里暴露，后续如果继续加“用户补充建议”“只重跑视觉层”“只重跑剧情层”，页面复杂度会很快失控。建议下一轮开始考虑把 transcript actions 与 understanding actions 做清晰分组。
+
+## 推荐的下一步
+
+### 必做
+
+1. 先补一份小设计说明
+   - 主题：`transcript 纠偏后 understanding 的失效策略分层`
+2. 修掉 ASR 引擎下拉双箭头样式冲突
+   - 这是明确 bug，低风险高收益
+3. 为“重跑本段”补一版交互方案
+   - 改名
+   - 弹补充输入
+   - 明确“不影响 ASR”
+
+### 次优先级
+
+1. 评估是否把 segment understanding 的 stale 粒度拆层
+2. 评估用户补充建议是否需要持久化
+3. 评估“上一段内容”应传哪一层抽象最合适
+
+## 已做验证
+
+本会话围绕上述修复已做的验证：
+
+- `npx tsc --noEmit`
+- `npx vitest run tests/sceneforge-remix-asset-processing.test.tsx --testTimeout=20000`
+
+结果：
+
+- 通过
+
+说明：
+
+- 本次没有新增专门覆盖“样式双箭头”和“stale 策略分层”的测试，因为这两点尚未实施，只完成了分析沉淀。
+
+## 未完成 / 待决定事项
+
+- transcript 轻微纠偏是否仍应触发整段 understanding stale
+- stale 是否要细分成视觉层 / 叙事层 / prompt 层
+- “重跑本段”按钮是否应更名为 `重跑本段理解`
+- 用户补充建议是否只作单次输入，还是需要持久化为 segment note
+- “上一段内容”在 prompt 中应该选用：
+  - 上一段标题
+  - 上一段结构化摘要
+  - 上一段视频 prompt
+  - 或三者组合
+
+## 建议技能
+
+- `document-helper`
+  - 先补“失效策略分层”和“重跑本段交互”两份短设计说明
+- `implement`
+  - 继续落地样式修复、按钮改名和补充输入弹窗
+- `review`
+  - 在改 freshness / gate 逻辑前做专项审查
+- `to-issues`
+  - 若要把问题拆给后续多个代理，先分成独立 issue
+- `handoff`
+  - 下一轮结束后继续压缩上下文，避免重复读长会话

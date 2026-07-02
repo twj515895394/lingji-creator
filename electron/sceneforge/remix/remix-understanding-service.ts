@@ -26,6 +26,10 @@ import {
 import type { RemixUnderstandingFreshnessReport } from './remix-ipc-types';
 import { mergeOnScreenSubtitlesFromFrameVision } from './remix-on-screen-subtitle';
 import { RemixOriginalStoryRollupService } from './remix-original-story-rollup-service';
+import {
+  normalizeTranscriptComparisonText,
+  resolveSegmentTranscriptState,
+} from './remix-transcript-correction-service';
 
 export interface RemixUnderstandingServiceOptions {
   loadAISettings?: () => Promise<AISettings | null>;
@@ -296,20 +300,18 @@ export class RemixUnderstandingService {
         ? document.sourceAsset.segments[index + 1]
         : undefined;
     const transcript = await readSegmentTranscript(projectDir, segment);
-    const asrPlainText = transcript?.plainText?.trim() ?? '';
-    let effectiveTranscriptText = asrPlainText;
-    if (transcript && segment.transcriptCorrectionPath?.trim()) {
-      try {
-        const correctionAbsPath = resolveProjectFile(projectDir, segment.transcriptCorrectionPath);
-        const correctionRaw = await fs.readFile(correctionAbsPath, 'utf8');
-        const correction = JSON.parse(correctionRaw);
-        if (correction?.transcript?.effectiveText) {
-          effectiveTranscriptText = String(correction.transcript.effectiveText).trim();
-          transcript.plainText = effectiveTranscriptText;
-        }
-      } catch {
-        // 读取失败则默默回退 ASR
-      }
+    const transcriptState = await resolveSegmentTranscriptState({
+      projectDir,
+      sourceAssetId: document.sourceAsset.id,
+      segmentId,
+      segmentTranscriptJsonPath: segment.segmentTranscriptJsonPath,
+      transcriptCorrectionPath: segment.transcriptCorrectionPath,
+      transcript,
+    });
+    const asrPlainText = transcriptState.asrText;
+    const effectiveTranscriptText = transcriptState.effectiveText;
+    if (transcript) {
+      transcript.plainText = effectiveTranscriptText;
     }
     const frameVisionPath = resolveProjectFile(
       projectDir,
@@ -559,25 +561,19 @@ export class RemixUnderstandingService {
     const segmentReports: RemixUnderstandingFreshnessReport['segmentReports'] = [];
 
     for (const segment of document.sourceAsset.segments) {
-      let effectiveTranscript = '';
-      let asrPlainText = '';
-      if (segment.segmentTranscriptJsonPath?.trim()) {
-        const transcriptDoc = await readSegmentTranscript(projectDir, segment);
-        asrPlainText = transcriptDoc?.plainText ?? '';
-        effectiveTranscript = asrPlainText;
-      }
-      if (segment.transcriptCorrectionPath?.trim()) {
-        try {
-          const correctionAbsPath = resolveProjectFile(projectDir, segment.transcriptCorrectionPath);
-          const correctionRaw = await fs.readFile(correctionAbsPath, 'utf8');
-          const correction = JSON.parse(correctionRaw);
-          if (correction?.transcript?.effectiveText) {
-            effectiveTranscript = correction.transcript.effectiveText;
-          }
-        } catch {
-          // 读取失败默默忽略
-        }
-      }
+      const transcriptDoc = segment.segmentTranscriptJsonPath?.trim()
+        ? await readSegmentTranscript(projectDir, segment)
+        : null;
+      const transcriptState = await resolveSegmentTranscriptState({
+        projectDir,
+        sourceAssetId,
+        segmentId: segment.id,
+        segmentTranscriptJsonPath: segment.segmentTranscriptJsonPath,
+        transcriptCorrectionPath: segment.transcriptCorrectionPath,
+        transcript: transcriptDoc,
+      });
+      const effectiveTranscript = transcriptState.effectiveText;
+      const asrPlainText = transcriptState.asrText;
 
       const transcriptPlainTextsToTry = [effectiveTranscript, asrPlainText].filter(
         (text, index, arr) => Boolean(text?.trim()) && arr.indexOf(text) === index,
@@ -627,6 +623,34 @@ export class RemixUnderstandingService {
           }
         } catch {
           // 忽略
+        }
+      }
+
+      if (existing?.generatedAt) {
+        const understandingTimeMs = new Date(existing.generatedAt).getTime();
+        if (!Number.isNaN(understandingTimeMs)) {
+          const transcriptChanged =
+            transcriptState.transcriptUpdatedAtMs !== null &&
+            transcriptState.transcriptUpdatedAtMs > understandingTimeMs &&
+            !transcriptState.usesCorrection &&
+            Boolean(normalizeTranscriptComparisonText(transcriptState.asrText));
+          const transcriptCorrectionChanged =
+            transcriptState.correctionUpdatedAtMs !== null &&
+            transcriptState.correctionUpdatedAtMs > understandingTimeMs &&
+            transcriptState.usesCorrection &&
+            normalizeTranscriptComparisonText(transcriptState.effectiveText) !==
+              normalizeTranscriptComparisonText(transcriptState.asrText);
+
+          if (transcriptChanged) {
+            isStale = true;
+            segStaleReasons.push('transcript_changed');
+            staleReasons.add('transcript_changed');
+          }
+          if (transcriptCorrectionChanged) {
+            isStale = true;
+            segStaleReasons.push('transcript_correction_changed');
+            staleReasons.add('transcript_correction_changed');
+          }
         }
       }
 

@@ -37,6 +37,20 @@ export interface RebuildAssetLibraryInput {
   sourceAssetIds?: string[] | null;
 }
 
+export interface RebuildSourceAssetVideoMetadataInput {
+  projectDir: string;
+  sourceAssetIds?: string[] | null;
+}
+
+export interface RebuildSourceAssetVideoMetadataResult {
+  rebuiltAssetIds: string[];
+  syncedPublishedAssetIds: string[];
+  failedAssets: Array<{
+    sourceAssetId: string;
+    error: string;
+  }>;
+}
+
 export interface ListSourceAssetsInput {
   projectDir: string;
   statuses?: RemixSourceAssetStatus | RemixSourceAssetStatus[];
@@ -165,6 +179,9 @@ export interface RemixIpcContract {
   listSourceAssets(input: ListSourceAssetsInput): Promise<RemixAssetLibrarySnapshot>;
   searchPublishedSourceAssets(input: SearchAssetLibraryInput): Promise<SearchAssetLibraryResult>;
   rebuildPublishedSourceAssetLibrary(input: RebuildAssetLibraryInput): Promise<RebuildAssetLibraryResult>;
+  rebuildSourceAssetVideoMetadata(
+    input: RebuildSourceAssetVideoMetadataInput,
+  ): Promise<RebuildSourceAssetVideoMetadataResult>;
   getSourceAsset(input: RemixSourceAssetRefInput): Promise<RemixAssetProcessingSnapshot>;
   deleteSourceAsset(input: DeleteSourceAssetInput): Promise<{ deletedSourceAssetId: string }>;
   updateSourceAssetMetadata(

@@ -42,10 +42,12 @@ afterEach(() => {
 
 interface TestRemixApiClient extends RemixIpcContract {
   getLastCreateVariantInput: () => { name: string; concept: string } | null;
+  getLastRebuildMetadataInput: () => { projectDir: string; sourceAssetIds?: string[] | null } | null;
 }
 
 function buildApiClient(): TestRemixApiClient {
   let lastCreateVariantInput: { name: string; concept: string } | null = null;
+  let lastRebuildMetadataInput: { projectDir: string; sourceAssetIds?: string[] | null } | null = null;
   let snapshots = {
     'source-processing-001': clone(MOCK_ASSET_PROCESSING_SNAPSHOTS['source-processing-001']),
     'source-library-001': clone(MOCK_ASSET_PROCESSING_SNAPSHOTS['source-library-001']),
@@ -92,6 +94,16 @@ function buildApiClient(): TestRemixApiClient {
         }));
       return { sourceAssets };
     },
+    searchPublishedSourceAssets: async () => ({ sourceAssets: [] }),
+    rebuildPublishedSourceAssetLibrary: async () => ({ rebuiltAssetIds: [], skippedAssetIds: [] }),
+    rebuildSourceAssetVideoMetadata: async (input) => {
+      lastRebuildMetadataInput = input;
+      return {
+        rebuiltAssetIds: Object.keys(snapshots),
+        syncedPublishedAssetIds: ['source-library-001'],
+        failedAssets: [],
+      };
+    },
     getSourceAsset: async (input) => clone(snapshots[input.sourceAssetId as keyof typeof snapshots]),
     deleteSourceAsset: async (input) => {
       delete snapshots[input.sourceAssetId as keyof typeof snapshots];
@@ -117,7 +129,24 @@ function buildApiClient(): TestRemixApiClient {
       return next;
     },
     runSourceKeyframes: async () => { throw new Error('not implemented'); },
+    runSourceTranscript: async () => { throw new Error('not implemented'); },
+    addSegmentMiddleKeyframe: async () => { throw new Error('not implemented'); },
+    deleteSegmentMiddleKeyframe: async () => { throw new Error('not implemented'); },
     runSourceUnderstanding: async () => { throw new Error('not implemented'); },
+    rerunSegmentUnderstanding: async () => { throw new Error('not implemented'); },
+    rerunSegmentTranscript: async () => { throw new Error('not implemented'); },
+    rerunOriginalStoryRollup: async () => { throw new Error('not implemented'); },
+    getSourceUnderstandingWorkbench: async () => { throw new Error('not implemented'); },
+    validateUnderstandingFreshness: async () => { throw new Error('not implemented'); },
+    exportUnderstandingReport: async () => ({ reportPath: '/tmp/mock-report.md' }),
+    runSegmentFrameVision: async () => { throw new Error('not implemented'); },
+    rerunStaleSegmentUnderstandings: async () => { throw new Error('not implemented'); },
+    getSegmentTranscriptCorrection: async () => null,
+    updateSegmentTranscriptCorrection: async () => { throw new Error('not implemented'); },
+    updateSegmentPositiveVideoPrompt: async () => { throw new Error('not implemented'); },
+    confirmAllSegmentTranscripts: async () => { throw new Error('not implemented'); },
+    updateSourceSegments: async () => { throw new Error('not implemented'); },
+    getSegmentationDiagnostics: async () => null,
     publishSourceAssetToLibrary: async () => { throw new Error('not implemented'); },
     createVariantFromSourceAsset: async (input) => {
       const sourceAsset = snapshots[input.sourceAssetId as keyof typeof snapshots]?.sourceAsset;
@@ -209,6 +238,7 @@ function buildApiClient(): TestRemixApiClient {
     runSeedancePrompts: async () => { throw new Error('not implemented'); },
     exportPromptBundle: async () => { throw new Error('not implemented'); },
     getLastCreateVariantInput: () => lastCreateVariantInput,
+    getLastRebuildMetadataInput: () => lastRebuildMetadataInput,
   };
 }
 
@@ -280,6 +310,33 @@ describe('SceneForge Remix asset library', () => {
     expect(container.textContent).toContain('先选已入库资产，再发起二创');
     expect(container.textContent).toContain('基于当前素材创建二创版本');
     expect(container.textContent).toContain('补充导入新原片');
+    expect(container.textContent).not.toContain('重建媒体规格');
+  });
+
+  it('支持在资产库页触发媒体规格重建', async () => {
+    const apiClient = buildApiClient();
+    const container = await renderLibrary(
+      <RemixAssetLibrary
+        projectDir="/tmp/remix-project"
+        apiClient={apiClient}
+        initialSection="published"
+      />,
+    );
+
+    const rebuildButton = container.querySelector('[data-testid="remix-rebuild-source-metadata-button"]');
+    await act(async () => {
+      rebuildButton?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    });
+    await act(async () => {
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    expect(apiClient.getLastRebuildMetadataInput()).toEqual({
+      projectDir: '/tmp/remix-project',
+    });
+    expect(container.textContent).toContain('已重建 3 份素材的媒体规格');
+    expect(container.textContent).toContain('并同步 1 份已入库资产到 SQLite');
   });
 
   it('创建二创时使用中文中性的默认名称与概念', async () => {

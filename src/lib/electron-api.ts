@@ -60,6 +60,8 @@ import type {
   ExportPromptBundleResult,
   ListSourceAssetsInput,
   ListVariantsForSourceAssetInput,
+  RebuildSourceAssetVideoMetadataInput,
+  RebuildSourceAssetVideoMetadataResult,
   RegisterEditedKeyframeInput,
   RenameVariantInput,
   RemixSourceAssetRefInput,
@@ -99,6 +101,8 @@ export type {
   RebuildAssetLibraryResult,
   CreateSourceAssetFromImportInput,
   CreateVariantFromSourceAssetInput,
+  RebuildSourceAssetVideoMetadataInput,
+  RebuildSourceAssetVideoMetadataResult,
   ExportPromptBundleInput,
   ExportPromptBundleResult,
   RegisterEditedKeyframeInput,
@@ -477,6 +481,9 @@ export interface ElectronAPI {
   ) => () => void;
   sceneForgeRemix: {
     listSourceAssets: (input: ListSourceAssetsInput) => Promise<RemixAssetLibrarySnapshot>;
+    rebuildSourceAssetVideoMetadata: (
+      input: RebuildSourceAssetVideoMetadataInput,
+    ) => Promise<RebuildSourceAssetVideoMetadataResult>;
     getSourceAsset: (
       input: RemixSourceAssetRefInput,
     ) => Promise<RemixAssetProcessingSnapshot>;

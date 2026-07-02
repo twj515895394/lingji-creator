@@ -2,7 +2,7 @@ import fs from 'node:fs/promises';
 import path from 'node:path';
 import type { VideoImportTaskSnapshot } from '../../video-import/types';
 import { getVideoImportService } from '../../video-import/import-service';
-import { readVideoDurationMs } from '../../media-duration';
+import { readVideoDurationMs, readVideoMetadata } from '../../media-duration';
 import type { CreateSourceAssetFromImportInput } from './remix-ipc-types';
 import {
   getRemixSegmentAnalysisJsonPath,
@@ -13,6 +13,8 @@ import {
 } from './remix-artifact-paths';
 import type { StoredSourceAssetDocument } from './remix-store';
 import { readStoredSourceAsset, slugifyRemixId, writeStoredSourceAsset } from './remix-store';
+import type { RemixVideoMetadata } from '../../../src/sceneforge/remix/types';
+import { resolveProjectFile } from './remix-validators';
 
 interface CreateSourceAssetResult {
   document: StoredSourceAssetDocument;
@@ -21,6 +23,7 @@ interface CreateSourceAssetResult {
 export interface RemixSourceAssetServiceOptions {
   now?: () => Date;
   readDurationMs?: (filePath: string) => Promise<number>;
+  readVideoMetadata?: (filePath: string) => Promise<RemixVideoMetadata>;
   getImportStatus?: (importId: string) => VideoImportTaskSnapshot | null;
 }
 
@@ -42,14 +45,25 @@ interface ResolvedImportSource {
 
 export class RemixSourceAssetService {
   private readonly now;
-
-  private readonly readDurationMs;
+  private readonly readSourceVideoMetadata;
 
   private readonly getImportStatus;
 
   constructor(options: RemixSourceAssetServiceOptions = {}) {
     this.now = options.now ?? (() => new Date());
-    this.readDurationMs = options.readDurationMs ?? ((filePath) => readVideoDurationMs(filePath));
+    const readDurationMs = options.readDurationMs ?? ((filePath: string) => readVideoDurationMs(filePath));
+    this.readSourceVideoMetadata =
+      options.readVideoMetadata ??
+      (options.readDurationMs
+        ? async (filePath: string): Promise<RemixVideoMetadata> => ({
+            durationMs: await readDurationMs(filePath),
+            width: 1920,
+            height: 1080,
+            fps: 25,
+            audioChannels: 2,
+            hasAudio: true,
+          })
+        : async (filePath: string) => readVideoMetadata(filePath));
     this.getImportStatus = options.getImportStatus ?? ((importId) => getVideoImportService().getImportStatus(importId));
   }
 
@@ -83,7 +97,7 @@ export class RemixSourceAssetService {
   async createFromImport(input: CreateSourceAssetFromImportInput): Promise<CreateSourceAssetResult> {
     const resolved = await this.resolveSource(input);
     const createdAt = this.now().toISOString();
-    const durationMs = await this.readDurationMs(resolved.sourceVideoPath);
+    const videoMetadata = await this.readSourceVideoMetadata(resolved.sourceVideoPath);
     const sourceAssetId = [
       'source',
       slugifyRemixId(input.importId?.trim() || resolved.title, 'asset'),
@@ -103,14 +117,7 @@ export class RemixSourceAssetService {
         sourceManifestPath: getRemixSourceManifestPath(sourceAssetId),
         transcriptPath: resolved.transcriptPath ?? null,
         srtPath: resolved.srtPath ?? null,
-        videoMetadata: {
-          durationMs,
-          width: 1920,
-          height: 1080,
-          fps: 25,
-          audioChannels: 2,
-          hasAudio: true,
-        },
+        videoMetadata,
         sourceOverviewMarkdownPath: getRemixSourceOverviewMarkdownPath(sourceAssetId),
         sourceOverviewJsonPath: getRemixSourceOverviewJsonPath(sourceAssetId),
         segmentAnalysisMarkdownPath: getRemixSegmentAnalysisMarkdownPath(sourceAssetId),
@@ -164,6 +171,24 @@ export class RemixSourceAssetService {
       updatedAt: nowIso,
     };
     await writeStoredSourceAsset(input.projectDir, document);
+    return document;
+  }
+
+  async rebuildVideoMetadata(
+    projectDir: string,
+    sourceAssetId: string,
+  ): Promise<StoredSourceAssetDocument> {
+    const document = await readStoredSourceAsset(projectDir, sourceAssetId);
+    const sourceVideoPath = resolveProjectFile(projectDir, document.sourceAsset.sourceVideoPath);
+    const nextMetadata = await this.readSourceVideoMetadata(sourceVideoPath);
+    const hasChanged =
+      JSON.stringify(document.sourceAsset.videoMetadata) !== JSON.stringify(nextMetadata);
+
+    document.sourceAsset.videoMetadata = nextMetadata;
+    if (hasChanged) {
+      document.sourceAsset.updatedAt = this.now().toISOString();
+    }
+    await writeStoredSourceAsset(projectDir, document);
     return document;
   }
 

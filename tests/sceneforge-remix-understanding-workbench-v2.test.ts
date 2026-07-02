@@ -112,6 +112,7 @@ describe('RemixUnderstandingWorkbench V2 Aggregator', () => {
     await fs.writeFile(
       path.join(transDir, 'seg-1.json'),
       JSON.stringify({
+        generatedAt: new Date(Date.now() - 30000).toISOString(),
         plainText: '原始台词文字',
         source: 'segment_audio_sensevoice_gguf',
         engine: 'funasr_sensevoice_gguf',
@@ -291,9 +292,9 @@ describe('RemixUnderstandingWorkbench V2 Aggregator', () => {
     await fs.utimes(corrPath, futureTime, futureTime);
 
     let snapshot = await loadRemixUnderstandingWorkbench(projectDir, sourceAsset);
-    expect(snapshot.isStale).toBe(false);
-    expect(snapshot.segments[0]?.isStale).toBe(false);
-    expect(snapshot.staleReasons).not.toContain('transcript_correction_changed');
+    expect(snapshot.isStale).toBe(true);
+    expect(snapshot.segments[0]?.isStale).toBe(true);
+    expect(snapshot.staleReasons).toContain('transcript_correction_changed');
 
     // Case 2: frame_vision.json generatedAt is newer than understanding
     // 把 corrections 改为 raw (不触发 mtime 变更)

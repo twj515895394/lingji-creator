@@ -193,4 +193,99 @@ describe('asset library query and rebuild', () => {
     expect(after.sourceAssets).toHaveLength(1);
     expect(after.sourceAssets[0].id).toBe(publishedId);
   });
+
+  it('rebuildSourceAssetVideoMetadata rewrites stored manifest metadata and syncs published sqlite rows', async () => {
+    let tick = 0;
+    const bootstrapService = new RemixService({
+      readDurationMs: async () => 9800,
+      now: () => new Date(`2026-06-30T11:00:0${tick++}.000Z`),
+    });
+
+    const publishedImported = await bootstrapService.createSourceAssetFromImport({
+      projectDir,
+      sourceVideoPath: path.join(projectDir, 'source.mp4'),
+      title: '待回填已发布素材',
+    });
+    const publishedId = publishedImported.sourceAsset.id;
+    await bootstrapService.runSourceSegmentation({ projectDir, sourceAssetId: publishedId });
+    await bootstrapService.runSourceKeyframes({ projectDir, sourceAssetId: publishedId });
+    await seedPublishReadyUnderstanding(bootstrapService, publishedId);
+    await bootstrapService.updateSourceAssetMetadata({
+      projectDir,
+      sourceAssetId: publishedId,
+      tags: ['回填测试'],
+      annotationNote: '旧资产规格需要修正',
+    });
+    await bootstrapService.publishSourceAssetToLibrary({ projectDir, sourceAssetId: publishedId });
+
+    const draftImported = await bootstrapService.createSourceAssetFromImport({
+      projectDir,
+      sourceVideoPath: path.join(projectDir, 'source.mp4'),
+      title: '待回填草稿素材',
+    });
+    const draftId = draftImported.sourceAsset.id;
+
+    const beforePublished = await readStoredSourceAsset(projectDir, publishedId);
+    expect(beforePublished.sourceAsset.videoMetadata.width).toBe(1920);
+    expect(beforePublished.sourceAsset.videoMetadata.height).toBe(1080);
+
+    const dbBefore = createAssetLibraryDb(projectDir);
+    const beforeRow = dbBefore
+      .prepare('SELECT width, height, fps FROM source_assets WHERE id = ?')
+      .get(publishedId) as { width: number; height: number; fps: number | null } | undefined;
+    dbBefore.close();
+    expect(beforeRow).toMatchObject({ width: 1920, height: 1080, fps: 25 });
+
+    const repairService = new RemixService({
+      readVideoMetadata: async (filePath) => {
+        const basename = path.basename(filePath);
+        if (basename === 'source.mp4') {
+          return {
+            durationMs: 8033,
+            width: 852,
+            height: 480,
+            fps: 29.97,
+            audioChannels: 1,
+            hasAudio: false,
+          };
+        }
+        throw new Error(`unexpected file: ${basename}`);
+      },
+      now: () => new Date('2026-06-30T11:10:00.000Z'),
+    });
+
+    const rebuilt = await repairService.rebuildSourceAssetVideoMetadata({
+      projectDir,
+      sourceAssetIds: [publishedId, draftId, 'missing-asset'],
+    });
+    expect(rebuilt.rebuiltAssetIds).toEqual([publishedId, draftId]);
+    expect(rebuilt.syncedPublishedAssetIds).toEqual([publishedId]);
+    expect(rebuilt.failedAssets).toHaveLength(1);
+    expect(rebuilt.failedAssets[0]?.sourceAssetId).toBe('missing-asset');
+
+    const publishedAfter = await readStoredSourceAsset(projectDir, publishedId);
+    const draftAfter = await readStoredSourceAsset(projectDir, draftId);
+    expect(publishedAfter.sourceAsset.videoMetadata).toEqual({
+      durationMs: 8033,
+      width: 852,
+      height: 480,
+      fps: 29.97,
+      audioChannels: 1,
+      hasAudio: false,
+    });
+    expect(draftAfter.sourceAsset.videoMetadata.width).toBe(852);
+    expect(draftAfter.sourceAsset.videoMetadata.height).toBe(480);
+
+    const dbAfter = createAssetLibraryDb(projectDir);
+    const publishedRow = dbAfter
+      .prepare('SELECT width, height, fps FROM source_assets WHERE id = ?')
+      .get(publishedId) as { width: number; height: number; fps: number | null } | undefined;
+    const draftRow = dbAfter
+      .prepare('SELECT width, height, fps FROM source_assets WHERE id = ?')
+      .get(draftId) as { width: number; height: number; fps: number | null } | undefined;
+    dbAfter.close();
+
+    expect(publishedRow).toMatchObject({ width: 852, height: 480, fps: 29.97 });
+    expect(draftRow).toBeUndefined();
+  });
 });

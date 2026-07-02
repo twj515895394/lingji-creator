@@ -21,7 +21,10 @@ import {
   type RemixSegmentUnderstandingDocument,
 } from './remix-segment-understanding-schema';
 import type { RemixSegmentTranscriptDocument } from './remix-transcript-types';
-import type { RemixSegmentTranscriptCorrectionDocument } from './remix-transcript-correction-service';
+import {
+  normalizeTranscriptComparisonText,
+  resolveSegmentTranscriptState,
+} from './remix-transcript-correction-service';
 import { resolveProjectFile } from './remix-validators';
 
 export interface RemixUnderstandingAnnotationPrefill {
@@ -247,34 +250,32 @@ export async function loadRemixUnderstandingWorkbench(
     let transcriptEngine: string | null = null;
     let transcriptTimestampLevel: string | null = null;
     let transcriptWarnings: string[] = [];
+    let transcriptDoc: RemixSegmentTranscriptDocument | null = null;
     if (segment.segmentTranscriptJsonPath?.trim()) {
-      const transcript = await readJson<RemixSegmentTranscriptDocument>(
+      transcriptDoc = await readJson<RemixSegmentTranscriptDocument>(
         resolveProjectFile(projectDir, segment.segmentTranscriptJsonPath),
       );
-      transcriptSummary = transcript?.plainText?.trim() ?? '';
-      transcriptSource = transcript?.source ?? null;
-      transcriptEngine = transcript?.engine ?? null;
-      transcriptTimestampLevel = transcript?.timestampLevel ?? null;
-      transcriptWarnings = transcript?.quality?.warnings ?? [];
+      transcriptSummary = transcriptDoc?.plainText?.trim() ?? '';
+      transcriptSource = transcriptDoc?.source ?? null;
+      transcriptEngine = transcriptDoc?.engine ?? null;
+      transcriptTimestampLevel = transcriptDoc?.timestampLevel ?? null;
+      transcriptWarnings = transcriptDoc?.quality?.warnings ?? [];
     }
 
-    let transcriptCorrectionText = '';
-    let transcriptCorrectionStatus: 'raw' | 'edited' | 'confirmed' = 'raw';
-    let effectiveTranscript = transcriptSummary;
+    const transcriptState = await resolveSegmentTranscriptState({
+      projectDir,
+      sourceAssetId: asset.id,
+      segmentId: segment.id,
+      segmentTranscriptJsonPath: segment.segmentTranscriptJsonPath,
+      transcriptCorrectionPath: segment.transcriptCorrectionPath,
+      transcript: transcriptDoc,
+    });
+    const transcriptCorrectionText = transcriptState.correctedText;
+    const transcriptCorrectionStatus = transcriptState.correctionStatus;
+    const effectiveTranscript = transcriptState.effectiveText || transcriptSummary;
     let isStale = false;
     const segStaleReasons: string[] = [];
-    if (segment.transcriptCorrectionPath?.trim()) {
-      const correction = await readJson<RemixSegmentTranscriptCorrectionDocument>(
-        resolveProjectFile(projectDir, segment.transcriptCorrectionPath),
-      );
-      if (correction) {
-        transcriptCorrectionText = correction.transcript.correctedText ?? '';
-        transcriptCorrectionStatus = correction.transcript.correctionStatus ?? 'raw';
-        effectiveTranscript = correction.transcript.effectiveText || transcriptSummary;
-      }
-    }
 
-    // 1. 仅关键帧 / 时间范围变更可令理解过期（台词纠偏或 ASR 变更不影响画面理解与 video prompt）
     const transcriptPlainTextsToTry = [
       effectiveTranscript,
       transcriptSummary,
@@ -329,6 +330,34 @@ export async function loadRemixUnderstandingWorkbench(
       }
     } catch {
       // 忽略
+    }
+
+    if (understanding?.generatedAt) {
+      const understandingTimeMs = new Date(understanding.generatedAt).getTime();
+      if (!Number.isNaN(understandingTimeMs)) {
+        const transcriptChanged =
+          transcriptState.transcriptUpdatedAtMs !== null &&
+          transcriptState.transcriptUpdatedAtMs > understandingTimeMs &&
+          !transcriptState.usesCorrection &&
+          Boolean(normalizeTranscriptComparisonText(transcriptSummary));
+        const transcriptCorrectionChanged =
+          transcriptState.correctionUpdatedAtMs !== null &&
+          transcriptState.correctionUpdatedAtMs > understandingTimeMs &&
+          transcriptState.usesCorrection &&
+          normalizeTranscriptComparisonText(effectiveTranscript) !==
+            normalizeTranscriptComparisonText(transcriptSummary);
+
+        if (transcriptChanged) {
+          isStale = true;
+          segStaleReasons.push('transcript_changed');
+          staleReasonsSet.add('transcript_changed');
+        }
+        if (transcriptCorrectionChanged) {
+          isStale = true;
+          segStaleReasons.push('transcript_correction_changed');
+          staleReasonsSet.add('transcript_correction_changed');
+        }
+      }
     }
 
     if (isStale) {
@@ -514,7 +543,7 @@ export async function loadRemixUnderstandingWorkbench(
     }
   }
 
-  // 3. 全片故事汇总过期：仅随片段理解过期联动（台词变更不触发）
+  // 3. 全片故事汇总过期：任一片段输入变更都应联动汇总重审
   const hasAnySegmentStale = cards.some((card) => card.isStale);
   const isOverviewStale = hasAnySegmentStale;
 

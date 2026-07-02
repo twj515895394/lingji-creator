@@ -8,6 +8,7 @@ import type {
   ListSourceAssetsInput,
   ListVariantsForSourceAssetInput,
   RebuildAssetLibraryInput,
+  RebuildSourceAssetVideoMetadataInput,
   RegisterEditedKeyframeInput,
   RenameVariantInput,
   RemixSourceAssetRefInput,
@@ -48,6 +49,13 @@ export function registerSceneForgeRemixIpc(): void {
     'sceneForgeRemix:rebuildPublishedSourceAssetLibrary',
     async (_event, input: RebuildAssetLibraryInput) => {
       return service.rebuildPublishedSourceAssetLibrary(input);
+    },
+  );
+
+  ipcMain.handle(
+    'sceneForgeRemix:rebuildSourceAssetVideoMetadata',
+    async (_event, input: RebuildSourceAssetVideoMetadataInput) => {
+      return service.rebuildSourceAssetVideoMetadata(input);
     },
   );
 

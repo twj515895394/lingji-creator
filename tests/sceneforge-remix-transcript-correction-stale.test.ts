@@ -12,6 +12,7 @@ vi.mock('node:fs/promises', () => {
       readFile: vi.fn(),
       writeFile: vi.fn(),
       mkdir: vi.fn(),
+      stat: vi.fn(),
     },
   };
 });
@@ -139,5 +140,42 @@ describe('RemixTranscriptCorrectionService - Stale physical reset', () => {
 
     // 剧烈台词修改也不清空画面理解产物
     expect(fs.writeFile).toHaveBeenCalledTimes(1);
+  });
+
+  it('falls back to latest transcript when correction is older and bound to stale ASR text', async () => {
+    vi.mocked(fs.readFile)
+      .mockResolvedValueOnce(
+        JSON.stringify({
+          schema: 'sceneforge-remix-segment-transcript',
+          plainText: '给我挑一个\n行',
+          sourceTranscriptPath: 'source-transcript.json',
+          utterances: [],
+          quality: { needsReview: false },
+        }),
+      )
+      .mockResolvedValueOnce(
+        JSON.stringify({
+          schema: 'sceneforge-remix-segment-transcript-correction',
+          generatedAt: '2026-06-29T14:20:39.000Z',
+          updatedAt: '2026-06-29T14:20:39.000Z',
+          transcript: {
+            asrText: '<|nospeech|>',
+            correctedText: '<|nospeech|>',
+            effectiveText: '<|nospeech|>',
+            correctionStatus: 'confirmed',
+          },
+          quality: { needsHumanReview: false, warnings: [] },
+        }),
+      );
+    vi.mocked(fs.stat)
+      .mockResolvedValueOnce({ mtimeMs: Date.parse('2026-06-29T16:39:50.000Z') } as any)
+      .mockResolvedValueOnce({ mtimeMs: Date.parse('2026-06-29T14:20:39.000Z') } as any);
+
+    const correction = await service.getSegmentTranscriptCorrection('/project', 'asset-01', 'seg-01');
+
+    expect(correction.transcript.asrText).toBe('给我挑一个\n行');
+    expect(correction.transcript.effectiveText).toBe('给我挑一个\n行');
+    expect(correction.transcript.correctionStatus).toBe('raw');
+    expect(correction.quality.warnings[0]).toContain('旧纠偏内容已回退为最新 ASR 文本');
   });
 });

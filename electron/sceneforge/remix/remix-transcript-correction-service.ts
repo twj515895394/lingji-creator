@@ -46,72 +46,236 @@ export interface RemixSegmentTranscriptCorrectionDocument {
   };
 }
 
+export interface RemixResolvedSegmentTranscriptState {
+  transcript: RemixSegmentTranscriptDocument | null;
+  correction: RemixSegmentTranscriptCorrectionDocument | null;
+  asrText: string;
+  correctedText: string;
+  effectiveText: string;
+  correctionStatus: 'raw' | 'edited' | 'confirmed';
+  usesCorrection: boolean;
+  correctionIsStale: boolean;
+  transcriptUpdatedAtMs: number | null;
+  correctionUpdatedAtMs: number | null;
+}
+
+export function normalizeTranscriptComparisonText(text: string | null | undefined): string {
+  return (text ?? '').replace(/\s+/g, ' ').trim();
+}
+
+function readTimestampMsFromDocument(
+  value: Record<string, unknown> | null | undefined,
+  ...keys: string[]
+): number | null {
+  if (!value) {
+    return null;
+  }
+  for (const key of keys) {
+    const raw = value[key];
+    if (typeof raw !== 'string' || !raw.trim()) {
+      continue;
+    }
+    const ms = new Date(raw).getTime();
+    if (!Number.isNaN(ms)) {
+      return ms;
+    }
+  }
+  return null;
+}
+
+async function resolveArtifactTimestampMs(
+  absPath: string,
+  document: Record<string, unknown> | null | undefined,
+  ...keys: string[]
+): Promise<number | null> {
+  const docTimestampMs = readTimestampMsFromDocument(document, ...keys);
+  if (docTimestampMs !== null) {
+    return docTimestampMs;
+  }
+  try {
+    const stat = await fs.stat(absPath);
+    return Number.isFinite(stat.mtimeMs) ? stat.mtimeMs : null;
+  } catch {
+    return null;
+  }
+}
+
+function buildDraftTranscriptCorrectionDocument(input: {
+  sourceAssetId: string;
+  segmentId: string;
+  transcriptRelPath: string;
+  transcript: RemixSegmentTranscriptDocument | null;
+  warning?: string | null;
+}): RemixSegmentTranscriptCorrectionDocument {
+  const now = new Date().toISOString();
+  const transcript = input.transcript;
+  const asrText = transcript?.plainText ?? '';
+  const warnings = input.warning?.trim() ? [input.warning.trim()] : [];
+  return {
+    schema: 'sceneforge-remix-segment-transcript-correction',
+    version: 1,
+    sourceAssetId: input.sourceAssetId,
+    segmentId: input.segmentId,
+    generatedAt: now,
+    updatedAt: '',
+    inputRefs: {
+      sourceTranscriptPath: transcript?.sourceTranscriptPath ?? null,
+      segmentTranscriptPath: input.transcriptRelPath,
+    },
+    transcript: {
+      asrText,
+      correctedText: '',
+      effectiveText: asrText,
+      correctionStatus: 'raw',
+      language: 'zh-CN',
+      notes: [],
+    },
+    dialogueLines: (transcript?.utterances ?? []).map((utterance) => ({
+      lineId: utterance.sourceUtteranceId,
+      startMs: utterance.relativeStartMs,
+      endMs: utterance.relativeEndMs,
+      asrText: utterance.text,
+      effectiveText: utterance.text,
+      confidence: utterance.confidence,
+    })),
+    quality: {
+      needsHumanReview: transcript?.quality?.needsReview ?? true,
+      warnings,
+    },
+  };
+}
+
+export async function resolveSegmentTranscriptState(input: {
+  projectDir: string;
+  sourceAssetId: string;
+  segmentId: string;
+  segmentTranscriptJsonPath?: string | null;
+  transcriptCorrectionPath?: string | null;
+  transcript?: RemixSegmentTranscriptDocument | null;
+  correction?: RemixSegmentTranscriptCorrectionDocument | null;
+}): Promise<RemixResolvedSegmentTranscriptState> {
+  const transcriptRelPath =
+    input.segmentTranscriptJsonPath?.trim() ||
+    getRemixSegmentTranscriptJsonPath(input.sourceAssetId, input.segmentId);
+  const transcriptAbsPath = resolveProjectFile(input.projectDir, transcriptRelPath);
+  let transcript = input.transcript ?? null;
+  if (!transcript && input.segmentTranscriptJsonPath?.trim()) {
+    try {
+      transcript = JSON.parse(await fs.readFile(transcriptAbsPath, 'utf8')) as RemixSegmentTranscriptDocument;
+    } catch {
+      transcript = null;
+    }
+  }
+
+  const correctionRelPath = input.transcriptCorrectionPath?.trim() || null;
+  const correctionAbsPath = correctionRelPath
+    ? resolveProjectFile(input.projectDir, correctionRelPath)
+    : null;
+  let correction = input.correction ?? null;
+  if (!correction && correctionAbsPath) {
+    try {
+      correction = JSON.parse(
+        await fs.readFile(correctionAbsPath, 'utf8'),
+      ) as RemixSegmentTranscriptCorrectionDocument;
+    } catch {
+      correction = null;
+    }
+  }
+
+  const transcriptUpdatedAtMs =
+    input.segmentTranscriptJsonPath?.trim() && transcript
+      ? await resolveArtifactTimestampMs(
+          transcriptAbsPath,
+          transcript as unknown as Record<string, unknown>,
+          'updatedAt',
+          'generatedAt',
+        )
+      : null;
+  const correctionUpdatedAtMs =
+    correctionAbsPath && correction
+      ? await resolveArtifactTimestampMs(
+          correctionAbsPath,
+          correction as unknown as Record<string, unknown>,
+          'updatedAt',
+          'generatedAt',
+        )
+      : null;
+
+  const asrText = transcript?.plainText?.trim() ?? '';
+  const correctedText = correction?.transcript?.correctedText?.trim() ?? '';
+  const correctionEffectiveText = correction?.transcript?.effectiveText?.trim() ?? '';
+  const correctionAsrText = correction?.transcript?.asrText?.trim() ?? '';
+  const correctionStatus = correction?.transcript?.correctionStatus ?? 'raw';
+
+  const transcriptMatchesCorrectionAsr =
+    !normalizeTranscriptComparisonText(correctionAsrText) ||
+    normalizeTranscriptComparisonText(correctionAsrText) === normalizeTranscriptComparisonText(asrText);
+  const transcriptNewerThanCorrection =
+    transcriptUpdatedAtMs !== null &&
+    correctionUpdatedAtMs !== null &&
+    transcriptUpdatedAtMs > correctionUpdatedAtMs;
+  const correctionIsStale =
+    Boolean(correction && correctionEffectiveText) &&
+    transcriptNewerThanCorrection &&
+    !transcriptMatchesCorrectionAsr;
+
+  const effectiveText =
+    correction && correctionEffectiveText && !correctionIsStale ? correctionEffectiveText : asrText;
+
+  const resolvedCorrection =
+    correctionIsStale && transcript
+      ? buildDraftTranscriptCorrectionDocument({
+          sourceAssetId: input.sourceAssetId,
+          segmentId: input.segmentId,
+          transcriptRelPath,
+          transcript,
+          warning: '检测到分段台词已更新，旧纠偏内容已回退为最新 ASR 文本，请重新确认。',
+        })
+      : correction;
+
+  return {
+    transcript,
+    correction: resolvedCorrection,
+    asrText,
+    correctedText: correctionIsStale ? '' : correctedText,
+    effectiveText,
+    correctionStatus: correctionIsStale ? 'raw' : correctionStatus,
+    usesCorrection: Boolean(correction && correctionEffectiveText && !correctionIsStale),
+    correctionIsStale,
+    transcriptUpdatedAtMs,
+    correctionUpdatedAtMs,
+  };
+}
+
 export class RemixTranscriptCorrectionService {
   async getSegmentTranscriptCorrection(
     projectDir: string,
     sourceAssetId: string,
     segmentId: string,
   ): Promise<RemixSegmentTranscriptCorrectionDocument> {
+    const transcriptRelPath = getRemixSegmentTranscriptJsonPath(sourceAssetId, segmentId);
     const correctionRelPath = getRemixSegmentTranscriptCorrectionJsonPath(sourceAssetId, segmentId);
-    const correctionAbsPath = resolveProjectFile(projectDir, correctionRelPath);
-
-    try {
-      const raw = await fs.readFile(correctionAbsPath, 'utf8');
-      return JSON.parse(raw) as RemixSegmentTranscriptCorrectionDocument;
-    } catch {
-      // 找不到已存文件，尝试读取原始转写进行封装
-      const transcriptRelPath = getRemixSegmentTranscriptJsonPath(sourceAssetId, segmentId);
-      const transcriptAbsPath = resolveProjectFile(projectDir, transcriptRelPath);
-      let asrText = '';
-      let dialogueLines: RemixSegmentTranscriptCorrectionDocument['dialogueLines'] = [];
-      let sourceTranscriptPath: string | null = null;
-      let needsReview = true;
-
-      try {
-        const rawAsr = await fs.readFile(transcriptAbsPath, 'utf8');
-        const asrDoc = JSON.parse(rawAsr) as RemixSegmentTranscriptDocument;
-        asrText = asrDoc.plainText ?? '';
-        sourceTranscriptPath = asrDoc.sourceTranscriptPath ?? null;
-        needsReview = asrDoc.quality?.needsReview ?? true;
-        dialogueLines = (asrDoc.utterances ?? []).map((utterance) => ({
-          lineId: utterance.sourceUtteranceId,
-          startMs: utterance.relativeStartMs,
-          endMs: utterance.relativeEndMs,
-          asrText: utterance.text,
-          effectiveText: utterance.text,
-          confidence: utterance.confidence,
-        }));
-      } catch {
-        // 片段转写不存在
-      }
-
-      const now = new Date().toISOString();
-      return {
-        schema: 'sceneforge-remix-segment-transcript-correction',
-        version: 1,
-        sourceAssetId,
-        segmentId,
-        generatedAt: now,
-        updatedAt: '', // 空字符串表示从未被实际人工编辑保存过
-        inputRefs: {
-          sourceTranscriptPath,
-          segmentTranscriptPath: transcriptRelPath,
-        },
-        transcript: {
-          asrText,
-          correctedText: '',
-          effectiveText: asrText,
-          correctionStatus: 'raw',
-          language: 'zh-CN',
-          notes: [],
-        },
-        dialogueLines,
-        quality: {
-          needsHumanReview: needsReview,
-          warnings: [],
-        },
-      };
+    const state = await resolveSegmentTranscriptState({
+      projectDir,
+      sourceAssetId,
+      segmentId,
+      segmentTranscriptJsonPath: transcriptRelPath,
+      transcriptCorrectionPath: correctionRelPath,
+    });
+    if (state.correctionIsStale && state.correction) {
+      const correctionAbsPath = resolveProjectFile(projectDir, correctionRelPath);
+      await fs.mkdir(path.dirname(correctionAbsPath), { recursive: true });
+      await fs.writeFile(correctionAbsPath, `${JSON.stringify(state.correction, null, 2)}\n`, 'utf8');
     }
+    if (state.correction) {
+      return state.correction;
+    }
+    return buildDraftTranscriptCorrectionDocument({
+      sourceAssetId,
+      segmentId,
+      transcriptRelPath,
+      transcript: state.transcript,
+    });
   }
 
   async updateSegmentTranscriptCorrection(

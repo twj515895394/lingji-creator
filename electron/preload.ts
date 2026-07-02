@@ -23,6 +23,7 @@ import type {
   DeleteVariantInput,
   DuplicateVariantInput,
   ListVariantsForSourceAssetInput,
+  RebuildSourceAssetVideoMetadataInput,
   RegisterEditedKeyframeInput,
   RenameVariantInput,
   RemixSourceAssetRefInput,
@@ -218,6 +219,8 @@ contextBridge.exposeInMainWorld('electronAPI', {
       ipcRenderer.invoke('sceneForgeRemix:searchPublishedSourceAssets', input),
     rebuildPublishedSourceAssetLibrary: (input: { projectDir: string; sourceAssetIds?: string[] | null }) =>
       ipcRenderer.invoke('sceneForgeRemix:rebuildPublishedSourceAssetLibrary', input),
+    rebuildSourceAssetVideoMetadata: (input: RebuildSourceAssetVideoMetadataInput) =>
+      ipcRenderer.invoke('sceneForgeRemix:rebuildSourceAssetVideoMetadata', input),
     getSourceAsset: (input: RemixSourceAssetRefInput) =>
       ipcRenderer.invoke('sceneForgeRemix:getSourceAsset', input),
     deleteSourceAsset: (input: RemixSourceAssetRefInput) =>

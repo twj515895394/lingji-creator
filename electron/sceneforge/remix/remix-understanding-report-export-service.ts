@@ -8,6 +8,8 @@ import {
 } from './remix-artifact-paths';
 import type { RemixOriginalUnderstandingDocument } from './remix-source-understanding-rollup';
 import type { RemixSegmentUnderstandingDocument } from './remix-segment-understanding-schema';
+import type { RemixSegmentTranscriptDocument } from './remix-transcript-types';
+import { resolveSegmentTranscriptState } from './remix-transcript-correction-service';
 
 export class RemixUnderstandingReportExportService {
   async exportReport(projectDir: string, sourceAssetId: string): Promise<{ reportPath: string }> {
@@ -48,34 +50,38 @@ export class RemixUnderstandingReportExportService {
       let transcriptTimestampLevel = 'unknown';
       let transcriptSource = 'unknown';
       let transcriptWarnings: string[] = [];
+      let transcriptDoc: RemixSegmentTranscriptDocument | null = null;
       if (segment.segmentTranscriptJsonPath) {
         try {
           const transAbs = resolveProjectFile(projectDir, segment.segmentTranscriptJsonPath);
           const transContent = await fs.readFile(transAbs, 'utf8');
-          const transObj = JSON.parse(transContent);
-          if (transObj?.plainText) {
-            plainText = transObj.plainText.trim();
+          transcriptDoc = JSON.parse(transContent);
+          if (transcriptDoc?.plainText) {
+            plainText = transcriptDoc.plainText.trim();
           }
-          transcriptEngine = transObj?.engine || 'unknown';
-          transcriptTimestampLevel = transObj?.timestampLevel || 'unknown';
-          transcriptSource = transObj?.source || 'unknown';
-          transcriptWarnings = Array.isArray(transObj?.quality?.warnings) ? transObj.quality.warnings : [];
+          transcriptEngine = transcriptDoc?.engine || 'unknown';
+          transcriptTimestampLevel = transcriptDoc?.timestampLevel || 'unknown';
+          transcriptSource = transcriptDoc?.source || 'unknown';
+          transcriptWarnings = Array.isArray(transcriptDoc?.quality?.warnings) ? transcriptDoc.quality.warnings : [];
         } catch {}
       }
 
       // 读取台词修正版
       let correctedText = '（与原文一致）';
-      if (segment.transcriptCorrectionPath) {
-        try {
-          const corrAbs = resolveProjectFile(projectDir, segment.transcriptCorrectionPath);
-          const corrContent = await fs.readFile(corrAbs, 'utf8');
-          const corrObj = JSON.parse(corrContent);
-          if (corrObj?.transcript?.effectiveText) {
-            correctedText = corrObj.transcript.effectiveText.trim();
-            hasCorrection = true;
-          }
-        } catch {}
-      }
+      try {
+        const transcriptState = await resolveSegmentTranscriptState({
+          projectDir,
+          sourceAssetId,
+          segmentId: segment.id,
+          segmentTranscriptJsonPath: segment.segmentTranscriptJsonPath,
+          transcriptCorrectionPath: segment.transcriptCorrectionPath,
+          transcript: transcriptDoc,
+        });
+        if (transcriptState.usesCorrection && transcriptState.effectiveText.trim()) {
+          correctedText = transcriptState.effectiveText.trim();
+          hasCorrection = true;
+        }
+      } catch {}
 
       // 格式化时间 ms 为 00:00
       const formatTime = (ms: number) => {

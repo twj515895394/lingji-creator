@@ -57,6 +57,7 @@ export function RemixAssetLibrary({
   const [creatingVariantFor, setCreatingVariantFor] = useState<string | null>(null);
   const [variantMap, setVariantMap] = useState<Record<string, RemixVariantSummary[]>>({});
   const [loadingVariantAssetId, setLoadingVariantAssetId] = useState<string | null>(null);
+  const [isRebuildingMetadata, setIsRebuildingMetadata] = useState(false);
 
   const availableTags = useMemo(
     () => getAssetLibraryAvailableTags(assets),
@@ -249,6 +250,28 @@ export function RemixAssetLibrary({
     return response;
   }
 
+  async function reloadCurrentSection() {
+    if (!projectDir) {
+      return;
+    }
+    const snapshot = await resolveClient().listSourceAssets({
+      projectDir,
+      statuses: getStatusesForAssetLibrarySection(activeStatus),
+    });
+    const details = await Promise.all(
+      snapshot.sourceAssets.map(async (sourceAsset) => {
+        return resolveClient().getSourceAsset({
+          projectDir,
+          sourceAssetId: sourceAsset.id,
+        });
+      }),
+    );
+    setAssetSnapshots(
+      Object.fromEntries(details.map((response) => [response.sourceAsset.id, response])),
+    );
+    setAssets(details.map((response) => response.sourceAsset));
+  }
+
   function resolveRetryRunner(snapshot: RemixAssetProcessingSnapshot) {
     const failedJob = getLatestFailedJob(snapshot.processingJobs);
     switch (failedJob?.stepId) {
@@ -303,6 +326,37 @@ export function RemixAssetLibrary({
       setActiveAssetId((current) => (current === sourceAssetId ? null : current));
     } catch (error) {
       setErrorMessage(error instanceof Error ? error.message : '删除草稿失败。');
+    }
+  }
+
+  async function handleRebuildSourceMetadata() {
+    if (!projectDir) {
+      setErrorMessage('请先打开项目后再重建媒体规格。');
+      return;
+    }
+    setIsRebuildingMetadata(true);
+    setErrorMessage(null);
+    try {
+      const result = await resolveClient().rebuildSourceAssetVideoMetadata({
+        projectDir,
+      });
+      await reloadCurrentSection();
+      const summary = [
+        `已重建 ${result.rebuiltAssetIds.length} 份素材的媒体规格`,
+        result.syncedPublishedAssetIds.length > 0
+          ? `并同步 ${result.syncedPublishedAssetIds.length} 份已入库资产到 SQLite`
+          : null,
+        result.failedAssets.length > 0
+          ? `失败 ${result.failedAssets.length} 份：${result.failedAssets.map((item) => item.sourceAssetId).join('、')}`
+          : null,
+      ]
+        .filter(Boolean)
+        .join('；');
+      setErrorMessage(summary);
+    } catch (error) {
+      setErrorMessage(error instanceof Error ? error.message : '重建媒体规格失败。');
+    } finally {
+      setIsRebuildingMetadata(false);
     }
   }
 
@@ -474,6 +528,7 @@ export function RemixAssetLibrary({
                 data-testid="remix-secondary-action-button"
                 disabled={
                   isImporting ||
+                  isRebuildingMetadata ||
                   creatingVariantFor !== null ||
                   !projectDir ||
                   (activeStatus === 'published' && !isCreationEntry && !preferredCreationAsset)
@@ -499,8 +554,21 @@ export function RemixAssetLibrary({
                     ? '基于已入库素材创建二创版本'
                     : '查看已入库资产'}
               </Button>
+              {!isCreationEntry ? (
+                <Button
+                  variant="ghost"
+                  data-testid="remix-rebuild-source-metadata-button"
+                  disabled={isImporting || isRebuildingMetadata || creatingVariantFor !== null || !projectDir}
+                  onClick={() => {
+                    void handleRebuildSourceMetadata();
+                  }}
+                >
+                  {isRebuildingMetadata ? '重建媒体规格中…' : '重建媒体规格'}
+                </Button>
+              ) : null}
               {isLoading ? <span className={styles.description}>正在同步资产库…</span> : null}
               {creatingVariantFor ? <span className={styles.description}>正在创建二创版本…</span> : null}
+              {isRebuildingMetadata ? <span className={styles.description}>正在重探源视频真实规格…</span> : null}
             </div>
           </div>
 

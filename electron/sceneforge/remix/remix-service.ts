@@ -15,6 +15,8 @@ import type {
   ExportPromptBundleResult,
   ListVariantsForSourceAssetInput,
   ListSourceAssetsInput,
+  RebuildSourceAssetVideoMetadataInput,
+  RebuildSourceAssetVideoMetadataResult,
   RebuildAssetLibraryInput,
   RegisterEditedKeyframeInput,
   RenameVariantInput,
@@ -311,6 +313,45 @@ export class RemixService {
 
   async rebuildPublishedSourceAssetLibrary(input: RebuildAssetLibraryInput) {
     return this.assetLibraryRebuildService.rebuildPublishedAssets(input);
+  }
+
+  async rebuildSourceAssetVideoMetadata(
+    input: RebuildSourceAssetVideoMetadataInput,
+  ): Promise<RebuildSourceAssetVideoMetadataResult> {
+    const candidateIds = input.sourceAssetIds?.length
+      ? input.sourceAssetIds
+      : await listStoredSourceAssetIds(input.projectDir);
+    const rebuiltAssetIds: string[] = [];
+    const syncedPublishedAssetIds: string[] = [];
+    const failedAssets: RebuildSourceAssetVideoMetadataResult['failedAssets'] = [];
+
+    for (const sourceAssetId of candidateIds) {
+      try {
+        const document = await this.sourceAssetService.rebuildVideoMetadata(
+          input.projectDir,
+          sourceAssetId,
+        );
+        await this.mediaValidationService.validate(input.projectDir, document);
+        if (document.sourceAsset.status === 'published_to_library') {
+          await this.assetLibraryIngestService.upsertSourceAsset(input.projectDir, document, {
+            status: document.sourceAsset.status,
+          });
+          syncedPublishedAssetIds.push(sourceAssetId);
+        }
+        rebuiltAssetIds.push(sourceAssetId);
+      } catch (error) {
+        failedAssets.push({
+          sourceAssetId,
+          error: error instanceof Error ? error.message : String(error),
+        });
+      }
+    }
+
+    return {
+      rebuiltAssetIds,
+      syncedPublishedAssetIds,
+      failedAssets,
+    };
   }
 
   async getSourceAsset(input: RemixSourceAssetRefInput) {

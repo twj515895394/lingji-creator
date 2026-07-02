@@ -6,6 +6,7 @@ import type {
   ExportPromptBundleInput,
   ExportPromptBundleResult,
   ListVariantsForSourceAssetInput,
+  RebuildSourceAssetVideoMetadataInput,
   RegisterEditedKeyframeInput,
   RemixIpcContract,
   RemixSourceAssetRefInput,
@@ -632,6 +633,20 @@ export const remixMockApi: RemixIpcContract = {
     return {
       rebuiltAssetIds: candidates.filter((id: string) => getMutableProcessingSnapshot(id).sourceAsset.status === 'published_to_library'),
       skippedAssetIds: candidates.filter((id: string) => getMutableProcessingSnapshot(id).sourceAsset.status !== 'published_to_library'),
+    };
+  },
+
+  async rebuildSourceAssetVideoMetadata(input: RebuildSourceAssetVideoMetadataInput) {
+    const candidates = input.sourceAssetIds?.length
+      ? input.sourceAssetIds
+      : Array.from(processingSnapshotSession.values()).map((snapshot: RemixAssetProcessingSnapshot) => snapshot.sourceAsset.id);
+    const publishedIds = candidates.filter(
+      (id: string) => getMutableProcessingSnapshot(id).sourceAsset.status === 'published_to_library',
+    );
+    return {
+      rebuiltAssetIds: [...candidates],
+      syncedPublishedAssetIds: publishedIds,
+      failedAssets: [],
     };
   },
 

@@ -29,6 +29,7 @@ describe('SceneForge Remix IPC contract', () => {
     expect(preload).toContain('sceneForgeRemix:listSourceAssets');
     expect(preload).toContain('sceneForgeRemix:searchPublishedSourceAssets');
     expect(preload).toContain('sceneForgeRemix:rebuildPublishedSourceAssetLibrary');
+    expect(preload).toContain('sceneForgeRemix:rebuildSourceAssetVideoMetadata');
     expect(preload).toContain('sceneForgeRemix:deleteSourceAsset');
     expect(preload).toContain('sceneForgeRemix:updateSourceSegments');
     expect(preload).toContain('sceneForgeRemix:getSegmentationDiagnostics');
@@ -40,6 +41,7 @@ describe('SceneForge Remix IPC contract', () => {
     expect(api).toContain('sceneForgeRemix: {');
     expect(api).toContain('SearchAssetLibraryResult');
     expect(api).toContain('createVariantFromSourceAsset');
+    expect(api).toContain('rebuildSourceAssetVideoMetadata');
     expect(api).toContain('getSegmentationDiagnostics');
     expect(api).toContain('validateSourceAssetMedia');
     expect(api).toContain('updateEditedKeyframeStatus');
@@ -48,6 +50,7 @@ describe('SceneForge Remix IPC contract', () => {
     expect(ipc).toContain('sceneForgeRemix:listSourceAssets');
     expect(ipc).toContain('sceneForgeRemix:searchPublishedSourceAssets');
     expect(ipc).toContain('sceneForgeRemix:rebuildPublishedSourceAssetLibrary');
+    expect(ipc).toContain('sceneForgeRemix:rebuildSourceAssetVideoMetadata');
     expect(ipc).toContain('sceneForgeRemix:deleteSourceAsset');
     expect(ipc).toContain('sceneForgeRemix:updateSourceSegments');
     expect(ipc).toContain('sceneForgeRemix:validateSourceAssetMedia');
@@ -254,6 +257,8 @@ describe('SceneForge Remix IPC contract', () => {
     expect(publishedSearch.sourceAssets[0]?.id).toBe(liveSourceAssetId);
     const rebuild = await service.rebuildPublishedSourceAssetLibrary({ projectDir });
     expect(rebuild.rebuiltAssetIds).toContain(liveSourceAssetId);
+    const rebuiltMetadata = await service.rebuildSourceAssetVideoMetadata({ projectDir });
+    expect(rebuiltMetadata.rebuiltAssetIds).toContain(liveSourceAssetId);
 
     const createdVariant = await service.createVariantFromSourceAsset({
       projectDir,
