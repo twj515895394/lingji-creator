@@ -1,6 +1,7 @@
 import { readSceneArtifact } from '../artifacts/scene-artifact-store';
 import type { SceneValidationError } from './scene-validator';
 import { validateScriptDraftSemantic } from './semantic-support-stages';
+import { hasChineseLedScriptBody } from './script-chinese-led';
 import {
   listMissingScriptDraftMarkdownSections,
   normalizeScriptDraftMarkdown,
@@ -16,6 +17,14 @@ export async function validateScriptStage(projectDir: string) {
 
   const { content } = await readSceneArtifact(projectDir, 'script.script_draft');
   const normalized = normalizeScriptDraftMarkdown(content);
+  if (!hasChineseLedScriptBody(normalized)) {
+    errors.push({
+      code: 'SCENE_SCRIPT_DRAFT_NOT_CHINESE_LED',
+      level: 'error',
+      message: 'Script 阶段剧本草案不是中文主导正文，当前英文占比过高或中文叙述过轻。',
+      suggestion: '请让中文承担 script_summary、story_beats、video_generation_unit_plan、script_body 与 handoff 正文；英文仅保留少量字段名、ID 或短标签。',
+    });
+  }
   const missingSections = listMissingScriptDraftMarkdownSections(normalized, SCRIPT_DRAFT_SECTIONS);
   if (missingSections.length > 0) {
     errors.push({

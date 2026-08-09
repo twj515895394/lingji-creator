@@ -46,10 +46,31 @@ export interface SceneTopicAnalysisState {
   styleCandidates: SceneGateStyleOption[];
 }
 
+export interface SceneTopicIntentCheckMissingDimension {
+  id: string;
+  label: string;
+  reason: string;
+}
+
+export interface SceneTopicIntentCheckSuggestion {
+  dimensionId: string;
+  tips: string[];
+}
+
+export interface SceneTopicIntentCheckState {
+  status: 'pass' | 'needs_more' | 'stale' | 'unknown';
+  summary: string | null;
+  intentHash: string | null;
+  missingDimensions: SceneTopicIntentCheckMissingDimension[];
+  suggestions: SceneTopicIntentCheckSuggestion[];
+}
+
 const ADAPTATION_HEADING = /^##\s*改编方向\s*$/im;
 const STYLE_HEADING = /^##\s*风格候选\s*$/im;
 const SCORE_HEADING = /^##\s*评分\s*$/im;
 const STYLE_CANDIDATE_HEADING = /^##\s*(?:导演\s*\/\s*画面风格候选|风格候选)\s*$/im;
+const INTENT_CHECK_MISSING_HEADING = /^##\s*缺失项\s*$/im;
+const INTENT_CHECK_SUGGESTIONS_HEADING = /^##\s*补充建议\s*$/im;
 
 function slugId(title: string, index: number): string {
   const base = title
@@ -232,6 +253,58 @@ function parseTopicAnalysisStyleCandidates(content: string): SceneGateStyleOptio
   return options;
 }
 
+function getMarkdownSection(content: string, heading: RegExp): string | null {
+  const match = content.match(heading);
+  if (!match || match.index === undefined) {
+    return null;
+  }
+  const after = content.slice(match.index + match[0].length);
+  const sectionEnd = after.search(/^##\s/m);
+  return (sectionEnd >= 0 ? after.slice(0, sectionEnd) : after).trim();
+}
+
+function parseTopicIntentCheckMissingDimensions(
+  content: string,
+): SceneTopicIntentCheckMissingDimension[] {
+  const section = getMarkdownSection(content, INTENT_CHECK_MISSING_HEADING);
+  if (!section) {
+    return [];
+  }
+  const items: SceneTopicIntentCheckMissingDimension[] = [];
+  for (const line of section.split('\n')) {
+    const trimmed = line.trim();
+    if (!trimmed.startsWith('-')) continue;
+    const body = trimmed.replace(/^-\s*/, '');
+    const id = (body.match(/id:\s*([^|]+)/i)?.[1] ?? '').trim();
+    const label = (body.match(/label:\s*([^|]+)/i)?.[1] ?? '').trim();
+    const reason = (body.match(/reason:\s*(.+)$/i)?.[1] ?? '').trim();
+    if (!id || !label || !reason) continue;
+    items.push({ id, label, reason });
+  }
+  return items;
+}
+
+function parseTopicIntentCheckSuggestions(content: string): SceneTopicIntentCheckSuggestion[] {
+  const section = getMarkdownSection(content, INTENT_CHECK_SUGGESTIONS_HEADING);
+  if (!section) {
+    return [];
+  }
+  const grouped = new Map<string, string[]>();
+  for (const line of section.split('\n')) {
+    const trimmed = line.trim();
+    if (!trimmed.startsWith('-')) continue;
+    const body = trimmed.replace(/^-\s*/, '');
+    const dimensionId = (body.match(/dimension_id:\s*([^|]+)/i)?.[1] ?? '').trim();
+    const tip = (body.match(/tip:\s*(.+)$/i)?.[1] ?? '').trim();
+    if (!dimensionId || !tip) continue;
+    grouped.set(dimensionId, [...(grouped.get(dimensionId) ?? []), tip]);
+  }
+  return Array.from(grouped.entries()).map(([dimensionId, tips]) => ({
+    dimensionId,
+    tips,
+  }));
+}
+
 export function parseTopicAnalysisFromMarkdown(content: string): SceneTopicAnalysisState {
   const summaryMatch = content.match(/(?:^|\n)summary:\s*(.+)$/im);
   const totalScoreMatch = content.match(/(?:^|\n)total_score:\s*(.+)$/im);
@@ -289,6 +362,55 @@ ${scoreLines}
 ## 导演 / 画面风格候选
 ${styleLines}
 `;
+}
+
+export function buildTopicIntentCheckMarkdown(input: {
+  status: 'pass' | 'needs_more' | 'stale';
+  summary: string;
+  intentHash: string;
+  missingDimensions: SceneTopicIntentCheckMissingDimension[];
+  suggestions: SceneTopicIntentCheckSuggestion[];
+}): string {
+  const missingLines =
+    input.missingDimensions.length > 0
+      ? input.missingDimensions
+          .map((item) => `- id: ${item.id} | label: ${item.label} | reason: ${item.reason}`)
+          .join('\n')
+      : '- 无';
+  const suggestionLines =
+    input.suggestions.length > 0
+      ? input.suggestions
+          .flatMap((item) => item.tips.map((tip) => `- dimension_id: ${item.dimensionId} | tip: ${tip}`))
+          .join('\n')
+      : '- 无';
+
+  return `# 创作意图检查
+
+status: ${input.status}
+intent_hash: ${input.intentHash}
+summary: ${input.summary.trim()}
+
+## 缺失项
+${missingLines}
+
+## 补充建议
+${suggestionLines}
+`;
+}
+
+export function parseTopicIntentCheckFromMarkdown(content: string): SceneTopicIntentCheckState {
+  const statusMatch = content.match(/(?:^|\n)status:\s*(pass|needs_more|stale)\b/i);
+  const summaryMatch = content.match(/(?:^|\n)summary:\s*(.+)$/im);
+  const intentHashMatch = content.match(/(?:^|\n)intent_hash:\s*(\S+)/i);
+
+  return {
+    status:
+      (statusMatch?.[1]?.toLowerCase() as SceneTopicIntentCheckState['status'] | undefined) ?? 'unknown',
+    summary: summaryMatch?.[1]?.trim() || null,
+    intentHash: intentHashMatch?.[1]?.trim() || null,
+    missingDimensions: parseTopicIntentCheckMissingDimensions(content),
+    suggestions: parseTopicIntentCheckSuggestions(content),
+  };
 }
 
 const DEFAULT_GATE_STYLES: SceneGateStyleOption[] = [

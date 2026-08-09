@@ -1021,6 +1021,61 @@ single portrait, cinematic portrait, hero poster.`,
     ]);
   });
 
+  it('accepts natural Chinese scene board prose without exact layout marker headings', async () => {
+    await writeDesignArtifact('design_prompts', validDesignOverviewBody);
+    await writeDesignArtifact(
+      'character_prompts',
+      `# 角色说明书
+
+## 多视角
+正面、3/4、侧面、背面。
+
+## 轮廓剪影
+轮廓稳定。
+
+## 表情系统
+惊讶、自信、紧张、喜悦、困惑、决心。
+
+## 微表情
+挑眉、抿嘴。
+
+## 动作姿态
+站立、转身、抬手、快步。
+
+## 关键道具交互
+与篮球和篮筐交互。
+
+## 细节区
+球衣纹理、护臂材质、鞋面反光。
+
+## 比例对照
+与球场、篮球和篮筐比例对照。
+
+## 边界约束
+中文主导，非海报。`,
+    );
+    await writeDesignArtifact(
+      'scene_prompts',
+      `# 全场景资产总参考图提示词
+
+## 夜晚篮球公园全场景资产总参考图
+主场景：封闭夜晚篮球场，矩形球场地面，中央三分线位置为对峙起点；篮筐位于画面右侧上方；四角灯光柱投射明亮锥形光影；背景观众席呈弧形排列。
+
+角色默认站位：进攻者持球位于中场偏左，防守者半蹲位于进攻者正前方约 3 米处；观众席角色分散坐立于背景。
+
+核心道具位置：篮球初始由进攻者双手持于腰前；状态矩阵：静止→运球→空中→入网。
+
+出入口与运动轴线：球场两侧有低矮围栏作为边界，运动轴线沿球场纵深从左至右推进，观众反应沿横向扩散。`,
+    );
+    await writeDesignArtifact('prop_prompts');
+    await writeDesignArtifact('master_reference_prompt');
+
+    const result = await validateSceneStage(tmpDir, 'design');
+
+    expect(result.status).toBe('passed');
+    expect(result.errors).toEqual([]);
+  });
+
   it('fails design when rhythm contract misses duration, density table and boundary rule', async () => {
     await writeDesignArtifact(
       'design_prompts',
@@ -1361,6 +1416,34 @@ beat_01
 轴线锁定
 #### Color Legend
 红=人物，蓝=镜头
+</copy-block>`;
+
+    await writeStoryboardArtifact('storyboard_prompt_pack', validStoryboardPackBody);
+    await writeStoryboardArtifact('control_board_prompts', controlBody);
+    await writeStoryboardArtifact('style_board_prompts', validStyleBoardPromptBody);
+    await writeStoryboardArtifact('master_board_prompt');
+
+    const result = await validateSceneStage(tmpDir, 'storyboard');
+    const arrowError = result.errors.find((e) => e.code === 'SCENE_STORYBOARD_CONTROL_PROMPT_MISSING_ARROW_RULES');
+    expect(arrowError).toBeUndefined();
+  });
+
+  it('accepts control board when red blue arrow cues are present in shot prose', async () => {
+    const controlBody = `<copy-block type="storyboard-pack" id="pack-01" label="控制板提示词 第01包">
+## Pack 1: 控制板提示词
+
+## Control-Oriented Storyboard Board
+
+### 画面区
+**Shot 01 (0s-1s)**：中景，正面机位，人物位于中轴偏右。红色人物运动箭头：右手下压运球短弧线；蓝色摄影机运动箭头：固定机位无运动。叙事目的：建立对峙。
+
+### 控制区
+**Panel Layout**：单包竖排。
+**Beat Line**：Shot 01 对应 beat_01。
+**Camera Path**：固定机位。
+**Action Path**：运球停顿后准备变向。
+**Continuity Rules**：人物和球都必须留在画面内。
+**Color Legend**：红色=人物运动箭头，蓝色=摄影机运动箭头。
 </copy-block>`;
 
     await writeStoryboardArtifact('storyboard_prompt_pack', validStoryboardPackBody);
@@ -1825,6 +1908,24 @@ English compiled prompt with Chinese notes.`,
     expect(result.errors).toEqual([]);
   });
 
+  it('fails video prompts when storyboard arrow jargon leaks into video-model prompt body', async () => {
+    await writeVideoArtifact(
+      'video_prompt_pack_cn',
+      validVideoPromptPackBody.replace(
+        'C02 [00:02-00:05] 景别切到中景并稳定逼近，机位锁定老奶奶左前主动位与对手右中受压位，构图保持前中后景明确，动作落在抬手示意与逼视对手，情绪持续施压，道具状态保持电子秤待机，声音承接延续前段张力，负向边界禁止角色换位。',
+        'C02 [00:02-00:05] 中景稳定逼近，老奶奶从左前主动位继续向前压近，对手保持右中受压位并短暂后撤；红色人物运动箭头表示老奶奶前压动作路径，蓝色摄影机运动箭头表示镜头轻微前移，电子秤继续待机，禁止角色换位。',
+      ),
+    );
+    await writeVideoReviewArtifact();
+    await writeVideoTraceArtifact();
+
+    const result = await validateSceneStage(tmpDir, 'video_prompts');
+    expect(result.status).toBe('failed');
+    expect(result.errors.map((error) => error.code)).toContain(
+      'SCENE_VIDEO_PROMPTS_STORYBOARD_ARROW_JARGON_DRIFT',
+    );
+  });
+
   it('fails when director long prompt is reduced to very short timecode bullets', async () => {
     await writeVideoArtifact(
       'video_prompt_pack_cn',
@@ -2260,6 +2361,76 @@ Segment 2 (10-20s): 小院
     expect(passed.errors).toEqual([]);
   });
 
+  it('rejects english-led script draft body', async () => {
+    await writeScriptArtifact(`## script_summary
+English-only summary for the whole piece.
+
+## segment_strategy
+segment_duration_seconds: 10
+segment_01_time_range: 0-10s
+segment_02_time_range: 10-20s
+
+## story_beats
+- beat_id: B01
+  title: Opening
+  beat_summary: English setup beat.
+- beat_id: B02
+  title: Pressure
+  beat_summary: English escalation beat.
+- beat_id: B03
+  title: Finish
+  beat_summary: English payoff beat.
+
+## beat_table
+- beat_id: B01
+  dramatic_role: setup
+  emotional_turn: calm -> tense
+  continuity_risk: the ball path may drift
+
+## video_generation_unit_plan
+- vgu_id: VGU-01
+  linked_beat_ids:
+    - B01
+  narrative_goal: establish the rivalry
+  pacing_profile: balanced
+  shot_density_hint: medium
+  target_duration_seconds: 10
+- vgu_id: VGU-02
+  linked_beat_ids:
+    - B02
+    - B03
+  narrative_goal: finish the move
+  pacing_profile: kinetic
+  shot_density_hint: high
+  target_duration_seconds: 10
+
+## script_body
+## Segment One
+VO: He looks up and pauses.
+Action: He steps forward and changes direction.
+
+## Segment Two
+Dialogue: Watch this.
+Action: He jumps and finishes the dunk.
+
+## performance_handoff
+- Keep the pause and eye-line.
+
+## storyboard_handoff
+- Keep the ball in frame and preserve continuity.
+- boundary_lock: shots_must_not_cross_segment_boundary
+
+## risk_notes
+- Too generic.
+
+## next_action
+- Move to storyboard.`);
+
+    const result = await validateSceneStage(tmpDir, 'script');
+    expect(result.status).toBe('failed');
+    expect(result.errors.map((error) => error.code)).toContain('SCENE_SCRIPT_DRAFT_NOT_CHINESE_LED');
+  });
+
   it('validates performance formal sheet structure', async () => {
     await writePerformanceArtifact('情绪：生气。动作：抬手。');
     const failed = await validateSceneStage(tmpDir, 'performance');
@@ -2334,6 +2505,45 @@ Segment 01 到 Segment 02 延续同一男孩非言语声线，不得突然变成
 进入 video_prompts 阶段。`;
 
     await writeAudioArtifact(noDialogueAudioBody);
+    const result = await validateSceneStage(tmpDir, 'audio');
+    expect(result.errors.map((e) => e.code)).not.toContain('SCENE_AUDIO_DESIGN_MISSING_DIALOGUE_PLAN');
+    expect(result.status).toBe('passed');
+  });
+
+  it('does not require dialogue_or_narration_plan when audio explicitly locks voice to empty', async () => {
+    const noVoiceAudioBody = `## voice_direction
+voice_identity_lock: 本段落无对话或旁白，所有人声元素锁定为空，避免任何语音生成。
+breath_pause_pattern: 无适用模式，保持无声人声段落。
+speaker_voice_notes: 无指定说话者，进攻者与防守者仅通过肢体动作传递情绪。
+segment_voice_continuity: 全10秒内维持无人声状态，确保各分镜视频生成时声音一致，无人声漂移。
+
+## music_design
+BGM: 采用高能量电子摇滚风格 BGM，从 0s 紧张低音鼓开始，逐步升级。
+
+## foley_design
+拟音/音效层: 篮球低运球弹跳声、脚步摩擦声、防守者倒地碰撞声、扣篮篮筐震动声。
+
+## ambience_design
+环境音: 夜晚篮球公园远处环境底噪与轻微风声，后半段观众延迟欢呼。
+
+## segment_audio_plan
+- 0s-1.5s: 运球弹跳声 + 轻微脚步滑步声，BGM 低沉启动。
+- 1.5s-3.5s: crossover 连续球声与身体晃动音效，BGM 节奏加速。
+- 3.5s-5s: 倒地碰撞声，BGM 短暂停顿强调张力。
+- 5s-7.5s: 助跑脚步、起跳风声、旋转扣篮篮筐音，BGM 高潮爆发。
+- 7.5s-10s: 篮球砸地反弹声与延迟观众欢呼，BGM 收尾。
+Silence: 在倒地后设计 0.2s 短暂停顿，突出失衡瞬间。
+
+## video_prompt_handoff
+下游 video_prompts 继承无人声锁定、BGM 能量曲线与关键 Foley timing，避免声音与画面脱节。
+
+## risk_notes
+观众欢呼需和扣篮落地形成延迟配合，所有拟音与动作链精确对应。
+
+## next_action
+进入 video_prompts 阶段。`;
+
+    await writeAudioArtifact(noVoiceAudioBody);
     const result = await validateSceneStage(tmpDir, 'audio');
     expect(result.errors.map((e) => e.code)).not.toContain('SCENE_AUDIO_DESIGN_MISSING_DIALOGUE_PLAN');
     expect(result.status).toBe('passed');

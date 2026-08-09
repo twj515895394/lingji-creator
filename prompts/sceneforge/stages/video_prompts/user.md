@@ -33,6 +33,7 @@ Inside `segment_sound_execution`, explicitly provide:
 - 若 storyboard 已规划多个 Pack，`video_prompt_pack_cn` 必须按相同顺序输出多个正式 Pack 块，不能把多个 storyboard packs 擅自压成一个总包。
 - `video_prompt_pack_cn` 中每个正式 Pack 都必须包在显式标签里：`<copy-block type="video-pack" id="pack-01" label="视频提示词 第01包">...</copy-block>`；`id` 必须使用 `pack-XX` 两位数格式，标签体正文必须是可直接投喂视频模型的完整单包内容。
 - 若 storyboard 已明确控制板 / 风格板 pack 参考关系，`故事板关键帧参考规则` 必须显式写出：将“控制故事板 Pack XX”作为动作与连续性主参考，将“风格故事板 Pack XX”作为渲染与氛围辅助参考。
+- 若 storyboard 控制板里写了“红色人物运动箭头”“蓝色摄影机运动箭头”“Color Legend”等图面标注，你必须把它们翻译成视频模型可执行的自然语言，例如“人物运动方向”“动作路径”“摄像机运动方向”“固定机位”“镜头轻微上仰跟随”；不要把“箭头”“图例”这类控制板术语原样写进 `video_prompt_pack_cn`。
 - 每个 segment 的导演长版提示词必须继承 storyboard shot order、VGU、continuity_in / continuity_out、角色数量、screen-side lock、道具状态连续性、next handoff，以及 audio 阶段确认的 BGM / Foley-SFX / Ambience / Silence；若 audio 已锁定 voice identity / pause rhythm / narration cadence，也必须一起继承，并在 `Voice` 小节落明。
 - 分包数、Segment 范围、VGU 引用和时间码流必须前后一致，不能和 storyboard 上游漂移。
 - 若某 optional 输入只有标题级摘要、单行标签或空泛提示，不要把它扩写成新规则；只能使用其中已明确写出的具体信息。

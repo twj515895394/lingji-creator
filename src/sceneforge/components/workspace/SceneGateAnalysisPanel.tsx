@@ -14,6 +14,8 @@ import styles from './SceneGateAnalysisPanel.module.css';
 export interface SceneGateAnalysisPanelProps {
   projectDir: string | null;
   topicBriefMarkdown: string;
+  intentCheckStatus?: 'pass' | 'needs_more' | 'unknown';
+  intentCheckStale?: boolean;
   initialAnalysisMarkdown?: string;
   busy?: boolean;
   onAnalyzed?: () => void;
@@ -30,6 +32,8 @@ function decisionLabel(value: SceneTopicAnalysisState['decisionSuggestion']): st
 export function SceneGateAnalysisPanel({
   projectDir,
   topicBriefMarkdown,
+  intentCheckStatus = 'unknown',
+  intentCheckStale = false,
   initialAnalysisMarkdown = '',
   busy = false,
   onAnalyzed,
@@ -58,6 +62,13 @@ export function SceneGateAnalysisPanel({
     analysis.scoreState.items.length > 0 ||
     analysis.styleCandidates.length > 0;
   const isRunning = busy || session?.status === 'running';
+  const analysisLockedReason = !topicBriefMarkdown.trim()
+    ? '请先确认并保存选题简报。'
+    : intentCheckStale
+      ? '你刚修改了选题描述，请先重新确认。'
+      : intentCheckStatus !== 'pass'
+        ? '请先确认选题描述，通过后再保存并分析。'
+        : null;
 
   const handleAnalyze = async () => {
     if (!projectDir || !window.electronAPI?.sceneAnalyzeTopicGate) {
@@ -108,7 +119,7 @@ export function SceneGateAnalysisPanel({
       {!hasAnalysis ? (
         <>
           <p className={styles.lead}>
-            先保存上方选题简报，再生成评分、决策建议和风格候选。
+            {analysisLockedReason ?? '确认选题描述通过后，再生成评分、决策建议和风格候选。'}
           </p>
           <div className={styles.actions}>
             <Button
@@ -116,12 +127,15 @@ export function SceneGateAnalysisPanel({
               variant="primary"
               size="sm"
               className={styles.primaryButton}
-              disabled={!projectDir || !topicBriefMarkdown.trim() || isRunning}
+              disabled={!projectDir || isRunning || analysisLockedReason !== null}
               onClick={() => void handleAnalyze()}
             >
               {isRunning ? '分析中…' : '分析选题'}
             </Button>
           </div>
+          {analysisLockedReason ? (
+            <p className={styles.hint}>{analysisLockedReason}</p>
+          ) : null}
           {isRunning ? (
             <div className={styles.inlineBusyCard} aria-live="polite">
               <span className={styles.inlineBusyDot} aria-hidden="true" />
@@ -144,12 +158,13 @@ export function SceneGateAnalysisPanel({
               variant="ghost"
               size="sm"
               className={styles.primaryButton}
-              disabled={!projectDir || isRunning}
+              disabled={!projectDir || isRunning || analysisLockedReason !== null}
               onClick={() => void handleAnalyze()}
             >
               {isRunning ? '分析中…' : '重新分析'}
             </Button>
           </div>
+          {analysisLockedReason ? <p className={styles.hint}>{analysisLockedReason}</p> : null}
 
           {analysis.summary ? <p className={styles.summary}>{analysis.summary}</p> : null}
 

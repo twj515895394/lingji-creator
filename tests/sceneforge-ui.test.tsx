@@ -34,6 +34,8 @@ describe('SceneForgeStudio', () => {
     expect(html).toContain('视频提示词');
     expect(html).toContain('data-testid="scene-pipeline-sidebar"');
     expect(html).not.toContain('data-testid="scene-style-selector"');
+    expect(html).toContain('确认选题描述');
+    expect(html).toContain('scene-topic-intent-check-panel');
     expect(html).toContain('分析选题');
     expect(html).toContain('scene-gate-analysis-panel');
     expect(html).toContain('确认风格并继续');

@@ -61,6 +61,25 @@
   outline-offset: 1px;
 }
 
+.textareaIntent {
+  width: 100%;
+  min-height: 88px;
+  padding: var(--space-3);
+  border: 1px solid var(--color-separator);
+  border-radius: var(--radius-md);
+  background: var(--color-panel-bg);
+  color: var(--color-text-primary);
+  font-size: var(--font-size-lg);
+  font-weight: 400;
+  line-height: var(--line-height-normal);
+  resize: vertical;
+}
+
+.textareaIntent:focus-visible {
+  outline: 2px solid color-mix(in srgb, var(--color-selection-blue) 45%, transparent);
+  outline-offset: 1px;
+}
+
 .textareaCompact {
   width: 100%;
   min-height: 120px;

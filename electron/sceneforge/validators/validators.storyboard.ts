@@ -113,28 +113,10 @@ function hasPackHeading(body: string): boolean {
 }
 
 function mentionsStoryboardArrowRule(content: string): boolean {
-  const hasRedArrow =
-    content.includes('红色人物运动箭头') ||
-    content.includes('红色箭头') ||
-    content.includes('红色道具运动箭头') ||
-    /红色.{0,12}箭头/u.test(content);
-  const hasBlueArrow =
-    content.includes('蓝色摄影机运动箭头') ||
-    content.includes('蓝色镜头运动箭头') ||
-    content.includes('蓝色摄影机运动') ||
-    (content.includes('蓝色') && content.includes('摄影机')) ||
-    /蓝色.{0,12}(摄影机|镜头).{0,12}箭头/u.test(content) ||
-    /画面内无摄影机运动/u.test(content);
-  const mentionsInsideFrame =
-    content.includes('画面区内部') ||
-    content.includes('画面内部') ||
-    content.includes('分镜画面区内部') ||
-    content.includes('画面区内') ||
-    content.includes('画面内控制标注') ||
-    /画面内/u.test(content) ||
-    /标在.{0,24}画面/u.test(content) ||
-    /画面.{0,16}标出/u.test(content);
-  return hasRedArrow && hasBlueArrow && mentionsInsideFrame;
+  const hasRed = content.includes('红');
+  const hasBlue = content.includes('蓝');
+  const hasArrow = content.includes('箭头');
+  return hasRed && hasBlue && hasArrow;
 }
 
 function hasBoardDescriptionDensity(content: string): boolean {

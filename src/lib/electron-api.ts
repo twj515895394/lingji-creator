@@ -34,6 +34,7 @@ import type {
 import type { SceneApprovalPolicy, SceneArtifactDisplayModel, SceneEntryPath, SceneProjectMeta, SceneStageId } from '../types/sceneforge';
 import type {
   SceneAnalyzeTopicGateIpcInput,
+  SceneCheckTopicIntentIpcInput,
   SceneGetStageContextOptions,
   SceneRunStageIpcInput,
   SceneStageRunProgressPayload as SceneStageRunProgressPayloadType,
@@ -90,6 +91,7 @@ import type {
 
 export type SceneRunStageInput = SceneRunStageIpcInput;
 export type SceneAnalyzeTopicGateInput = SceneAnalyzeTopicGateIpcInput;
+export type SceneCheckTopicIntentInput = SceneCheckTopicIntentIpcInput;
 export type SceneUpdateStyleSelectionInput = SceneUpdateStyleSelectionIpcInput;
 export type SceneStageRunProgressPayload = SceneStageRunProgressPayloadType;
 
@@ -450,6 +452,9 @@ export interface ElectronAPI {
   sceneSubmitStageDraft: (
     input: SceneSubmitStageDraftInput,
   ) => Promise<SubmitStageDraftResult>;
+  sceneCheckTopicIntent: (
+    input: SceneCheckTopicIntentInput,
+  ) => Promise<import('../../electron/sceneforge/topic-intent-check').SceneTopicIntentCheckResult>;
   sceneAnalyzeTopicGate: (
     input: SceneAnalyzeTopicGateInput,
   ) => Promise<import('../../electron/sceneforge/topic-gate-analysis').SceneTopicGateAnalysisResult>;

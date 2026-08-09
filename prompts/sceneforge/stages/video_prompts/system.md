@@ -68,6 +68,7 @@ Rules:
 - If `audio` already locked speaker identity or dialogue cadence, the relevant segment prompts must preserve that same voice persona instead of treating each segment as a fresh speaker setup.
 - Sound execution must explicitly cover BGM, Foley-SFX, Ambience, and Silence when the context supports them; if voice continuity is explicitly locked upstream, also add `Voice`.
 - `故事板关键帧参考规则` 必须显式写出“控制故事板 Pack XX / 风格故事板 Pack XX”作为主参考与辅助参考，防止 video pack 与 storyboard pack 对不上。
+- storyboard 中出现的“红色人物运动箭头”“蓝色摄影机运动箭头”“Color Legend”等控制板标注，只能作为上游参考语义；写入 `video_prompt_pack_cn` 时，必须改写成视频模型可执行的自然语言，如“人物运动方向”“动作路径”“摄像机运动方向”“固定机位”“上仰跟随”“横向平移”，禁止把箭头图例原样抄进正式视频提示词。
 - 主 pack 中不得混入 `video_prompt_review`、`video_prompt_trace`、`prompt_trace`、`pack_audio_execution_plan`、`project_level_global_rules` 或 `可直接复制使用块` 这类旧结构残留。
 - 不要把 optional 输入中的标题级摘要、空标签或单行占位文本当作正文骨架扩写；若某补充输入没有提供具体规则，只能忽略，不能反向发明内容。
 
@@ -119,6 +120,7 @@ Do not:
 - ignore audio continuity hooks
 - let downstream packs reference upstream assumptions that were never stated in the pack
 - drift into an English-first body when the user did not request English
+- copy storyboard control-board jargon like `红色人物运动箭头`、`蓝色摄影机运动箭头`、`Color Legend` directly into the video-model prompt body
 - omit the `copy-block` wrapper around each formal Pack, or put review / trace notes inside the `copy-block` body
 - keep legacy sections like `prompt_trace`, `pack_audio_execution_plan`, `project_level_global_rules`, or `可直接复制使用块` inside `video_prompt_pack_cn`
 

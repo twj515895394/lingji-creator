@@ -26,6 +26,11 @@ import {
   hasChineseLedStoryBody,
   STORY_CHINESE_RETRY_USER_APPENDIX,
 } from '../validators/story-chinese-led';
+import {
+  hasChineseLedScriptBody,
+  SCRIPT_CHINESE_MANDATE_SYSTEM_BLOCK,
+  SCRIPT_CHINESE_RETRY_USER_APPENDIX,
+} from '../validators/script-chinese-led';
 
 export type SceneDirectLlmGenerateText = (
   settings: AISettings,
@@ -353,6 +358,16 @@ function buildStoryHardRules(): string {
   ].join('\n');
 }
 
+function buildScriptHardRules(): string {
+  return [
+    '## Script Draft Hard Rules（与系统提示「硬性规则：中文为主」一致）',
+    '- `script_draft` 必须是**中文主导** Markdown：`script_summary`、`story_beats` 的 title / beat_summary、`beat_table` 说明、`video_generation_unit_plan` 的 `narrative_goal`、`script_body`、`performance_handoff`、`storyboard_handoff`、`risk_notes`、`next_action` 均用**简体中文**撰写。',
+    '- 允许保留 snake_case section 键名、`beat_id` / `vgu_id`、`narrative_goal` / `pacing_profile` / `shot_density_hint` / `boundary_lock` 这类字段名，以及括号内不超过 3 个词的短英文标签。',
+    '- **禁止**整篇英文剧本；**禁止**英文 `script_summary`；**禁止**英文 beat 标题；**禁止**英文 `narrative_goal` 段落；**禁止**英文 `script_body` 正文；**禁止**英文 handoff 正文。',
+    '- 违反语言规则时，本次调用结果无效，必须按用户提示中的强制纠正说明重写。',
+  ].join('\n');
+}
+
 function hasChineseLedContent(content: string, minChinese = 80): boolean {
   if (process.env.NODE_ENV === 'test') {
     return true;
@@ -373,6 +388,13 @@ function storyDirectionNeedsChineseRetry(
   return stage === 'story' && !hasChineseLedStoryBody(artifacts.story_direction ?? '');
 }
 
+function scriptDraftNeedsChineseRetry(
+  stage: SceneStageId,
+  artifacts: Record<string, string>,
+): boolean {
+  return stage === 'script' && !hasChineseLedScriptBody(artifacts.script_draft ?? '');
+}
+
 function buildVideoPromptsHardRules(): string {
   return [
     '## Video Prompts Hard Rules',
@@ -385,6 +407,7 @@ function buildVideoPromptsHardRules(): string {
     '- 必须按正式主 pack 结构输出：video_prompt_pack_plan -> global_execution_preamble -> 故事板关键帧参考规则 -> 项目级全局锁定规则 -> Segment -> Segment 技术控制说明 -> segment_sound_execution -> Segment 导演长版提示词。',
     '- 主 pack 中禁止保留旧残留结构：pack_audio_execution_plan、project_level_global_rules、prompt_trace、video_prompt_review、video_prompt_trace、可直接复制使用块。',
     '- `【故事板关键帧参考规则】` 必须明确“控制故事板 Pack XX”为动作与连续性主参考，“风格故事板 Pack XX”为渲染与氛围辅助参考。',
+    '- 若 storyboard 控制板出现“红色人物运动箭头”“蓝色摄影机运动箭头”“Color Legend”等图面标注，写入视频提示词时必须改写为“人物运动方向”“动作路径”“摄像机运动方向”“固定机位”“上仰跟随”等自然语言，禁止原样照抄箭头图例。',
     '- `【Segment X 技术控制说明】` 必须写成自然语言控制说明，不得写成 YAML、参数表或 key-value 清单。',
     '- `【项目级全局锁定规则】` 必须逐条写出主场景、角色锁定、不重复角色、画面可读性、风格锁定、灯光锁定、负向边界。',
     '- `【Segment X 技术控制说明】` 正文必须明确出现 VGU、continuity_in、continuity_out、blocking、prop state、next_handoff。',
@@ -850,6 +873,7 @@ export function createDirectLlmStageRunner(deps: SceneDirectLlmRunnerDeps): Scen
           : '';
 
       const storyHardRules = input.stage === 'story' ? buildStoryHardRules() : '';
+      const scriptHardRules = input.stage === 'script' ? buildScriptHardRules() : '';
 
       const artifacts = await invokeDirectLlmPhase(deps, {
         input,
@@ -861,6 +885,7 @@ export function createDirectLlmStageRunner(deps: SceneDirectLlmRunnerDeps): Scen
         additionalUserSections: [
           ...(performanceLocked ? [performanceLocked] : []),
           ...(storyHardRules ? [storyHardRules] : []),
+          ...(scriptHardRules ? [scriptHardRules, SCRIPT_CHINESE_MANDATE_SYSTEM_BLOCK] : []),
         ].filter(Boolean),
       });
 
@@ -881,6 +906,33 @@ export function createDirectLlmStageRunner(deps: SceneDirectLlmRunnerDeps): Scen
           throw new SceneDirectLlmRunnerError(
             'SCENE_DIRECT_LLM_INVOKE_FAILED',
             'Story 阶段连续两次生成仍未满足“中文主导”硬性规则。请更换模型或收紧上游参考后重试。',
+          );
+        }
+        return {
+          runnerType: 'direct_llm',
+          stage: input.stage,
+          artifacts: retriedArtifacts,
+          requiredArtifacts: [...pack.outputContract.requiredArtifacts],
+        };
+      }
+
+      if (scriptDraftNeedsChineseRetry(input.stage, artifacts)) {
+        const retriedArtifacts = await invokeDirectLlmPhase(deps, {
+          input,
+          settings,
+          systemPrompt,
+          userPrompt,
+          requiredArtifacts: pack.outputContract.requiredArtifacts,
+          phaseLabel: 'single-phase-script-chinese-retry',
+          additionalUserSections: [
+            ...(scriptHardRules ? [scriptHardRules, SCRIPT_CHINESE_MANDATE_SYSTEM_BLOCK] : []),
+            SCRIPT_CHINESE_RETRY_USER_APPENDIX,
+          ],
+        });
+        if (scriptDraftNeedsChineseRetry(input.stage, retriedArtifacts)) {
+          throw new SceneDirectLlmRunnerError(
+            'SCENE_DIRECT_LLM_INVOKE_FAILED',
+            'Script 阶段连续两次生成仍未满足“中文主导”硬性规则。请更换模型或收紧上游参考后重试。',
           );
         }
         return {

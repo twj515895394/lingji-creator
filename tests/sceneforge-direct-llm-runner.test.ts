@@ -133,6 +133,73 @@ rationale: 四个 beat 足够完成建立、升级、高潮与收束。
 进入 assets 阶段，把人物、场景与关键道具拆成可执行资产需求。`,
     };
   }
+  if (stage === 'script') {
+    return {
+      script_draft: `## script_summary
+10 秒街球对决短片，按对峙、升级、收束三拍推进。
+
+## segment_strategy
+segment_duration_seconds: 10
+segment_01_time_range: 0-10s
+segment_02_time_range: 10-20s
+
+## story_beats
+- beat_id: beat_01
+  title: 对峙启动
+  beat_summary: 进攻者持球与防守者正面僵持，先建立压迫感。
+- beat_id: beat_02
+  title: 变向升级
+  beat_summary: 连续 crossover 让防守者逐步失衡。
+- beat_id: beat_03
+  title: 高光收束
+  beat_summary: 进攻者完成突破与扣篮，观众反应同步爆发。
+
+## beat_table
+- beat_id: beat_01
+  dramatic_role: setup
+  emotional_turn: 平静 -> 紧张
+  continuity_risk: 球和人物站位不能漂移
+
+## video_generation_unit_plan
+- vgu_id: VGU-01
+  linked_beat_ids:
+    - beat_01
+    - beat_02
+  narrative_goal: 建立对峙并推进变向压迫
+  pacing_profile: balanced
+  shot_density_hint: 中密度
+  target_duration_seconds: 10
+- vgu_id: VGU-02
+  linked_beat_ids:
+    - beat_03
+  narrative_goal: 完成扣篮高潮与情绪释放
+  pacing_profile: kinetic
+  shot_density_hint: 高密度
+  target_duration_seconds: 10
+
+## script_body
+## 第1段
+旁白：夜场灯光压下来，球声先响起。
+动作：进攻者先停顿，再抬眼，随后连续变向。
+
+## 第2段
+对白：看好了。
+动作：防守者失衡后退，进攻者起跳完成扣篮。
+
+## performance_handoff
+- 保留停顿、抬眼、变向节奏和起跳前蓄力。
+
+## storyboard_handoff
+- 保持球、站位与扣篮动作连续性。
+- boundary_lock: shots_must_not_cross_segment_boundary
+
+## risk_notes
+- 注意动作连续性不要断。
+
+## next_action
+- 进入 storyboard 阶段。`,
+    };
+  }
   return Object.fromEntries(
     REQUIRED_ARTIFACTS[stage].map((key) => [key, `# ${key}`]),
   );
@@ -294,6 +361,9 @@ describe('SceneForge direct_llm runner', () => {
     expect(generateText.mock.calls[0]?.[2]).toContain('标题级摘要');
     expect(generateText.mock.calls[0]?.[2]).toContain('video_prompt_trace');
     expect(generateText.mock.calls[0]?.[2]).toContain('主 pack 中禁止保留旧残留结构');
+    expect(generateText.mock.calls[0]?.[2]).toContain('红色人物运动箭头');
+    expect(generateText.mock.calls[0]?.[2]).toContain('人物运动方向');
+    expect(generateText.mock.calls[0]?.[2]).toContain('摄像机运动方向');
   });
 
   it('retries story generation with a chinese-forcing appendix when the first draft is english-led', async () => {
@@ -428,6 +498,143 @@ rationale: 四个 beat 足够完成建立、升级、高潮与收束。
     expect(generateText).toHaveBeenCalledTimes(2);
     expect(generateText.mock.calls[1]?.[2]).toContain('## 【强制纠正】上次输出语言违规');
     expect(generateText.mock.calls[1]?.[2]).toContain('请完全用简体中文重写 story_direction');
+  });
+
+  it('retries script generation with a chinese-forcing appendix when the first draft is english-led', async () => {
+    const firstDraft = {
+      script_draft: `## script_summary
+English-only summary.
+
+## segment_strategy
+segment_duration_seconds: 10
+segment_01_time_range: 0-10s
+segment_02_time_range: 10-20s
+
+## story_beats
+- beat_id: beat_01
+  title: Opening Clash
+  beat_summary: English beat.
+- beat_id: beat_02
+  title: Pressure Rise
+  beat_summary: English beat.
+- beat_id: beat_03
+  title: Final Push
+  beat_summary: English beat.
+
+## beat_table
+- beat_01: dramatic role = setup
+
+## video_generation_unit_plan
+- vgu_id: VGU-01
+  narrative_goal: Establish the conflict
+  pacing_profile: balanced
+  shot_density_hint: medium
+  target_duration_seconds: 10
+- vgu_id: VGU-02
+  narrative_goal: Finish the payoff
+  pacing_profile: kinetic
+  shot_density_hint: high
+  target_duration_seconds: 10
+
+## script_body
+## Segment One
+VO: English opening line.
+Action: He pauses and looks up.
+
+## Segment Two
+Dialogue: Let's go.
+Action: He steps forward and finishes the move.
+
+## performance_handoff
+- Keep the pause and eye-line.
+
+## storyboard_handoff
+- Keep the ball in frame.
+- boundary_lock: shots_must_not_cross_segment_boundary
+
+## risk_notes
+- Too generic.
+
+## next_action
+- Move to storyboard.`,
+    };
+    const secondDraft = {
+      script_draft: `## script_summary
+10 秒街球对决短片，聚焦对峙、变向升级与扣篮收束。
+
+## segment_strategy
+segment_duration_seconds: 10
+segment_01_time_range: 0-10s
+segment_02_time_range: 10-20s
+
+## story_beats
+- beat_id: beat_01
+  title: 对峙启动
+  beat_summary: 进攻者持球面对防守者，先建立压迫感。
+- beat_id: beat_02
+  title: 变向升级
+  beat_summary: crossover 连击让防守者逐步失衡。
+- beat_id: beat_03
+  title: 扣篮收束
+  beat_summary: 进攻者完成扣篮，观众反应立刻接上。
+
+## beat_table
+- beat_01: dramatic role = 建立；情绪转折 = 平静到紧张。
+
+## video_generation_unit_plan
+- vgu_id: VGU-01
+  narrative_goal: 建立对峙并推进变向压迫
+  pacing_profile: balanced
+  shot_density_hint: 中密度
+  target_duration_seconds: 10
+- vgu_id: VGU-02
+  narrative_goal: 完成扣篮高潮与情绪释放
+  pacing_profile: kinetic
+  shot_density_hint: 高密度
+  target_duration_seconds: 10
+
+## script_body
+## 第1段
+旁白：夜场灯光压下来，球声先响起。
+动作：进攻者先停顿，再抬眼，随后连续变向。
+
+## 第2段
+对白：看好了。
+动作：防守者失衡后退，进攻者起跳完成扣篮。
+
+## performance_handoff
+- 保留停顿、抬眼、变向节奏和起跳前蓄力。
+
+## storyboard_handoff
+- 保持球、站位与扣篮动作连续性。
+- boundary_lock: shots_must_not_cross_segment_boundary
+
+## risk_notes
+- 注意动作连续性不要断。
+
+## next_action
+- 进入 storyboard 阶段。`,
+    };
+    const generateText = vi
+      .fn()
+      .mockResolvedValueOnce(JSON.stringify(firstDraft))
+      .mockResolvedValueOnce(JSON.stringify(secondDraft));
+    const runner = createDirectLlmStageRunner({
+      loadSettings: async () => MOCK_LLM_SETTINGS_REF,
+      generateText,
+    });
+
+    const result = await runner.run({
+      ...baseInput,
+      stage: 'script',
+      stageContext: makeContext('script'),
+    });
+
+    expect(result.artifacts).toEqual(secondDraft);
+    expect(generateText).toHaveBeenCalledTimes(2);
+    expect(generateText.mock.calls[0]?.[2]).toContain('Script Draft Hard Rules');
+    expect(generateText.mock.calls[1]?.[2]).toContain('## 【强制纠正】上次输出语言违规');
+    expect(generateText.mock.calls[1]?.[2]).toContain('把 script_summary、beat 标题与 beat_summary');
   });
 
   it('fails story generation when the chinese retry still returns an english-led draft', async () => {

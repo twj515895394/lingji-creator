@@ -14,6 +14,7 @@ import { SceneAdaptationDirectionPanel } from '../components/workspace/SceneAdap
 import { SceneGateConfirmPanel } from '../components/workspace/SceneGateConfirmPanel';
 import { SceneGateAnalysisPanel } from '../components/workspace/SceneGateAnalysisPanel';
 import { SceneSupportPlaceholderWorkspace } from '../components/workspace/SceneSupportPlaceholderWorkspace';
+import { SceneTopicIntentCheckPanel } from '../components/workspace/SceneTopicIntentCheckPanel';
 import {
   ScenePrepSupportWorkspace,
   isPrepSupportSubmitStage,
@@ -24,9 +25,16 @@ import { SceneGateBriefForm } from '../components/workspace/SceneGateBriefForm';
 import { buildScenePipelineGroups, getSceneStageDefinitionLite } from '../lib/scene-pipeline-ui';
 import { getRecommendedResumeStage, stagesCompletedForNav } from '../lib/scene-entry-path';
 import {
+  buildTopicBriefMarkdown,
+  createTopicBriefHash,
+  parseTopicBriefForm,
+  type TopicBriefFormValues,
+} from '../lib/topic-gate-form';
+import {
   parseAdaptationDirectionsFromMarkdown,
   parseAdaptationSelectionFromArtifact,
   parseGateHITLFromArtifacts,
+  parseTopicIntentCheckFromMarkdown,
   parseTopicAnalysisFromMarkdown,
 } from '../lib/scene-hitl-markdown';
 import {
@@ -130,15 +138,25 @@ export function SceneForgeStudio({ projectDir = null }: SceneForgeStudioProps) {
   const [flowBusy, setFlowBusy] = useState<'validate' | 'continue' | null>(null);
   const [sourceMaterialMarkdown, setSourceMaterialMarkdown] = useState('');
   const [topicBriefMarkdown, setTopicBriefMarkdown] = useState('');
+  const [topicIntentCheckMarkdown, setTopicIntentCheckMarkdown] = useState('');
+  const [topicIntentCheckLiveMarkdown, setTopicIntentCheckLiveMarkdown] = useState('');
   const [topicAnalysisMarkdown, setTopicAnalysisMarkdown] = useState('');
   const [gateConfirmationsMarkdown, setGateConfirmationsMarkdown] = useState('');
   const [adaptationSelectionMarkdown, setAdaptationSelectionMarkdown] = useState('');
   const [prepSupportMarkdown, setPrepSupportMarkdown] = useState('');
+  const [topicBriefLoaded, setTopicBriefLoaded] = useState(false);
   const [pendingStageRunResult, setPendingStageRunResult] = useState<SceneStageRunnerResult | null>(
     null,
   );
   const [stageContext, setStageContext] = useState<SceneStageContext | null>(null);
   const [autoAdvanceMessage, setAutoAdvanceMessage] = useState<string | null>(null);
+  const [topicIntentDirty, setTopicIntentDirty] = useState(false);
+  const [topicIntentCheckBusy, setTopicIntentCheckBusy] = useState(false);
+  const [topicBriefDraft, setTopicBriefDraft] = useState<TopicBriefFormValues>({
+    intent: '',
+    totalDurationSec: 60,
+    segmentDurationSec: 8,
+  });
   const autoAdvanceTimerRef = useRef<number | null>(null);
 
   const selectedStageMeta = useMemo(() => {
@@ -167,6 +185,7 @@ export function SceneForgeStudio({ projectDir = null }: SceneForgeStudioProps) {
 
   useEffect(() => {
     entryStageSynced.current = false;
+    setTopicIntentCheckLiveMarkdown('');
   }, [projectDir]);
 
   useEffect(() => {
@@ -247,10 +266,12 @@ export function SceneForgeStudio({ projectDir = null }: SceneForgeStudioProps) {
     if (!projectDir || !projectState?.artifacts.length) {
       setSourceMaterialMarkdown('');
       setTopicBriefMarkdown('');
+      setTopicIntentCheckMarkdown('');
       setTopicAnalysisMarkdown('');
       setGateConfirmationsMarkdown('');
       setAdaptationSelectionMarkdown('');
       setPrepSupportMarkdown('');
+      setTopicBriefLoaded(false);
       return;
     }
     const load = async (id: string, setter: (v: string) => void) => {
@@ -265,12 +286,32 @@ export function SceneForgeStudio({ projectDir = null }: SceneForgeStudioProps) {
         setter('');
       }
     };
+    setTopicBriefLoaded(false);
     void load('source_intake.source_material', setSourceMaterialMarkdown);
-    void load('topic_gate.topic_brief', setTopicBriefMarkdown);
+    void (async () => {
+      if (!projectState.artifacts.some((a) => a.id === 'topic_gate.topic_brief')) {
+        setTopicBriefMarkdown('');
+        setTopicBriefLoaded(true);
+        return;
+      }
+      try {
+        const { content } = await window.electronAPI.sceneReadArtifact(projectDir, 'topic_gate.topic_brief');
+        setTopicBriefMarkdown(content);
+      } catch {
+        setTopicBriefMarkdown('');
+      } finally {
+        setTopicBriefLoaded(true);
+      }
+    })();
+    void load('topic_gate.intent_check', setTopicIntentCheckMarkdown);
     void load('topic_gate.topic_analysis', setTopicAnalysisMarkdown);
     void load('topic_gate.gate_confirmations', setGateConfirmationsMarkdown);
     void load('source_intake.adaptation_selection', setAdaptationSelectionMarkdown);
   }, [projectDir, projectState?.artifacts]);
+
+  useEffect(() => {
+    setTopicBriefDraft(parseTopicBriefForm(topicBriefMarkdown));
+  }, [topicBriefMarkdown]);
 
   useEffect(() => {
     if (!projectDir || !isPrepSupportSubmitStage(selectedStage)) {
@@ -348,6 +389,30 @@ export function SceneForgeStudio({ projectDir = null }: SceneForgeStudioProps) {
     () => parseTopicAnalysisFromMarkdown(topicAnalysisMarkdown),
     [topicAnalysisMarkdown],
   );
+  const hasLoadedTopicBriefContent = topicBriefLoaded && Boolean(topicBriefMarkdown.trim());
+  const visibleTopicIntentCheckMarkdown = useMemo(() => {
+    if (topicIntentCheckLiveMarkdown.trim()) {
+      return topicIntentCheckLiveMarkdown;
+    }
+    return hasLoadedTopicBriefContent ? topicIntentCheckMarkdown : '';
+  }, [hasLoadedTopicBriefContent, topicIntentCheckLiveMarkdown, topicIntentCheckMarkdown]);
+  const topicIntentCheck = useMemo(
+    () => parseTopicIntentCheckFromMarkdown(visibleTopicIntentCheckMarkdown),
+    [visibleTopicIntentCheckMarkdown],
+  );
+  const hasTopicIntentCheckResult =
+    topicIntentCheck.status !== 'unknown' || Boolean(topicIntentCheck.summary);
+  const currentTopicBriefMarkdown = useMemo(() => buildTopicBriefMarkdown(topicBriefDraft), [topicBriefDraft]);
+  const currentIntentHash = useMemo(() => createTopicBriefHash(topicBriefDraft), [topicBriefDraft]);
+  const topicIntentCheckStale =
+    hasLoadedTopicBriefContent &&
+    hasTopicIntentCheckResult &&
+    (topicIntentCheck.intentHash !== null &&
+      currentIntentHash.length > 0 &&
+      topicIntentCheck.intentHash !== currentIntentHash);
+  const topicIntentNeedsSave = topicIntentDirty;
+  const topicIntentCheckPassed = topicIntentCheck.status === 'pass' && !topicIntentCheckStale;
+  const topicIntentSaveEnabled = topicIntentCheckPassed;
   const gateState = useMemo(() => {
     if (gateHitl.styleConfirmed) {
       return gateHitl;
@@ -913,7 +978,41 @@ export function SceneForgeStudio({ projectDir = null }: SceneForgeStudioProps) {
                   <SceneGateBriefForm
                     projectDir={projectDir}
                     initialMarkdown={topicBriefMarkdown}
+                    canSave={topicIntentSaveEnabled}
+                    confirmBusy={topicIntentCheckBusy}
+                    confirmPassed={topicIntentCheckPassed}
+                    onDraftChange={({ form }) => {
+                      setTopicBriefDraft(form);
+                    }}
+                    onConfirmDraft={({ markdown }) => {
+                      if (!projectDir || !window.electronAPI?.sceneCheckTopicIntent) {
+                        setErrorMessage('请先打开 SceneForge 项目目录。');
+                        return;
+                      }
+                      setTopicIntentCheckBusy(true);
+                      setErrorMessage(null);
+                      void window.electronAPI
+                        .sceneCheckTopicIntent({ projectDir, topicBriefMarkdown: markdown })
+                        .then((result) => {
+                          setTopicIntentCheckLiveMarkdown(result.content);
+                          return refreshProjectState();
+                        })
+                        .catch((error) =>
+                          setErrorMessage(error instanceof Error ? error.message : '确认选题描述失败。'),
+                        )
+                        .finally(() => setTopicIntentCheckBusy(false));
+                    }}
+                    onIntentDirtyChange={setTopicIntentDirty}
                     onSubmitted={(result) => void handleSupportStageSubmitted('topic_gate', result)}
+                    onError={(message) => setErrorMessage(message)}
+                  />
+                  <SceneTopicIntentCheckPanel
+                    projectDir={projectDir}
+                    topicBriefMarkdown={currentTopicBriefMarkdown}
+                    initialCheckMarkdown={visibleTopicIntentCheckMarkdown}
+                    stale={topicIntentCheckStale}
+                    busy={topicIntentCheckBusy}
+                    showAction={false}
                     onError={(message) => setErrorMessage(message)}
                   />
                 </InspectorSection>
@@ -921,6 +1020,14 @@ export function SceneForgeStudio({ projectDir = null }: SceneForgeStudioProps) {
                   <SceneGateAnalysisPanel
                     projectDir={projectDir}
                     topicBriefMarkdown={topicBriefMarkdown}
+                    intentCheckStatus={
+                      topicIntentCheckPassed
+                        ? 'pass'
+                        : topicIntentCheck.status === 'stale'
+                          ? 'needs_more'
+                          : topicIntentCheck.status
+                    }
+                    intentCheckStale={topicIntentNeedsSave || topicIntentCheckStale}
                     initialAnalysisMarkdown={topicAnalysisMarkdown}
                     busy={topicGateAnalyzing}
                     onAnalyzed={() => void refreshProjectState()}

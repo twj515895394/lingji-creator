@@ -19,6 +19,8 @@
 
 额外要求：
 
+- 正式主交付必须中文主导：`script_summary`、`story_beats`、`beat_table` 说明、`video_generation_unit_plan` 的 narrative_goal、`script_body`、`performance_handoff`、`storyboard_handoff`、`risk_notes`、`next_action` 的正文全部使用简体中文。
+- 仅允许保留少量英文字段名与 ID，例如 `beat_id`、`vgu_id`、`narrative_goal`、`pacing_profile`、`shot_density_hint`、`boundary_lock`；不允许把正文写成英文模板。
 - 先服从已确认的 story beats，再做剧本级细化。
 - 输出要可录制、可表演、可分镜，不是小说化散文。
 - 当上下文里存在时长、分段或风格约束时，必须显式继承，不能重开创作方向。

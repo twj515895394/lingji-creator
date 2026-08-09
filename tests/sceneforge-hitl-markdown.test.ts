@@ -2,10 +2,12 @@ import { describe, expect, it } from 'vitest';
 import {
   buildAdaptationSelectionMarkdown,
   buildGateConfirmationsMarkdown,
+  buildTopicIntentCheckMarkdown,
   buildTopicAnalysisMarkdown,
   parseAdaptationDirectionsFromMarkdown,
   parseGateScoresFromMarkdown,
   parseGateHITLFromArtifacts,
+  parseTopicIntentCheckFromMarkdown,
   parseTopicAnalysisFromMarkdown,
   isTopicGateStyleBlockingDownstream,
 } from '../src/sceneforge/lib/scene-hitl-markdown';
@@ -138,6 +140,108 @@ go
       productionLevelSuggestion: null,
       scoreState: { items: [], rawSection: null },
       styleCandidates: [],
+    });
+  });
+
+  it('builds and parses topic intent check markdown with suggestions', () => {
+    const markdown = buildTopicIntentCheckMarkdown({
+      status: 'needs_more',
+      summary: '当前描述还不足以稳定推导整段视频方向。',
+      intentHash: 'abc123',
+      missingDimensions: [
+        {
+          id: 'narrative_hook',
+          label: '改编角度 / 叙事抓手',
+          reason: '没有说明从哪个冲突或切口切入',
+        },
+        {
+          id: 'style_direction',
+          label: '目标画面或风格倾向',
+          reason: '没有说明画面偏动画、实拍还是纪实',
+        },
+      ],
+      suggestions: [
+        {
+          dimensionId: 'narrative_hook',
+          tips: [
+            '你最想放大的冲突、反差或情绪点是什么？',
+            '如果只能保留一个记忆点，希望观众记住什么？',
+          ],
+        },
+        {
+          dimensionId: 'style_direction',
+          tips: ['更偏动画、实拍、纪实、夸张喜剧还是治愈感？'],
+        },
+      ],
+    });
+
+    expect(parseTopicIntentCheckFromMarkdown(markdown)).toEqual({
+      status: 'needs_more',
+      summary: '当前描述还不足以稳定推导整段视频方向。',
+      intentHash: 'abc123',
+      missingDimensions: [
+        {
+          id: 'narrative_hook',
+          label: '改编角度 / 叙事抓手',
+          reason: '没有说明从哪个冲突或切口切入',
+        },
+        {
+          id: 'style_direction',
+          label: '目标画面或风格倾向',
+          reason: '没有说明画面偏动画、实拍还是纪实',
+        },
+      ],
+      suggestions: [
+        {
+          dimensionId: 'narrative_hook',
+          tips: [
+            '你最想放大的冲突、反差或情绪点是什么？',
+            '如果只能保留一个记忆点，希望观众记住什么？',
+          ],
+        },
+        {
+          dimensionId: 'style_direction',
+          tips: ['更偏动画、实拍、纪实、夸张喜剧还是治愈感？'],
+        },
+      ],
+    });
+  });
+
+  it('returns an honest empty topic intent check state for legacy projects', () => {
+    expect(parseTopicIntentCheckFromMarkdown('# 创作意图检查\n\n暂无')).toEqual({
+      status: 'unknown',
+      summary: null,
+      intentHash: null,
+      missingDimensions: [],
+      suggestions: [],
+    });
+  });
+
+  it('parses pass-state topic intent suggestions as optional advice', () => {
+    const markdown = buildTopicIntentCheckMarkdown({
+      status: 'pass',
+      summary: '当前创作意图已经足够明确，可以继续。',
+      intentHash: 'pass123',
+      missingDimensions: [],
+      suggestions: [
+        {
+          dimensionId: 'expression_goal',
+          tips: ['可以顺手补一句想让观众感到热血还是轻松，让后续节奏更稳。'],
+        },
+      ],
+    });
+
+    expect(parseTopicIntentCheckFromMarkdown(markdown)).toEqual({
+      status: 'pass',
+      summary: '当前创作意图已经足够明确，可以继续。',
+      intentHash: 'pass123',
+      missingDimensions: [],
+      suggestions: [
+        {
+          dimensionId: 'expression_goal',
+          tips: ['可以顺手补一句想让观众感到热血还是轻松，让后续节奏更稳。'],
+        },
+      ],
     });
   });
 });

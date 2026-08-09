@@ -65,6 +65,10 @@ import {
   type SceneTopicGateAnalysisResult,
 } from './topic-gate-analysis';
 import {
+  createTopicIntentDirectLlmChecker,
+  type SceneTopicIntentCheckResult,
+} from './topic-intent-check';
+import {
   formatMissingRequiredInputsMessage,
   hasBlockingMissingRequiredInputs,
   listMissingRequiredStageInputs,
@@ -382,11 +386,23 @@ export interface SceneAnalyzeTopicGateInput {
   projectDir: string;
 }
 
+export interface SceneCheckTopicIntentInput {
+  projectDir: string;
+  topicBriefMarkdown?: string;
+}
+
 export interface SceneUpdateStyleSelectionInput extends SceneProjectStyleSelection {
   projectDir: string;
 }
 
 interface SceneForgeServiceDeps {
+  checkTopicIntent?: (
+    input: {
+      topicBriefMarkdown: string;
+      sourceMaterialMarkdown?: string | null;
+      adaptationSelectionMarkdown?: string | null;
+    },
+  ) => Promise<SceneTopicIntentCheckResult>;
   analyzeTopicGate?: (
     input: {
       topicBriefMarkdown: string;
@@ -443,9 +459,22 @@ async function writeHandoffIfCapable(projectDir: string, stage: SceneStageId): P
 }
 
 export class SceneForgeService {
+  private readonly checkTopicIntentWithLlm: NonNullable<SceneForgeServiceDeps['checkTopicIntent']>;
   private readonly analyzeTopicGateWithLlm: NonNullable<SceneForgeServiceDeps['analyzeTopicGate']>;
 
   constructor(deps: SceneForgeServiceDeps = {}) {
+    this.checkTopicIntentWithLlm =
+      deps.checkTopicIntent ??
+      createTopicIntentDirectLlmChecker({
+        loadSettings: async () => {
+          try {
+            return await loadFullHeadlessAISettings(app.getPath('userData'));
+          } catch {
+            return null;
+          }
+        },
+        generateText,
+      }).check;
     this.analyzeTopicGateWithLlm =
       deps.analyzeTopicGate ??
       createTopicGateDirectLlmAnalyzer({
@@ -749,6 +778,51 @@ export class SceneForgeService {
 
   async readArtifact(projectDir: string, artifactId: string) {
     return readSceneArtifact(projectDir, artifactId);
+  }
+
+  async checkTopicIntent(input: SceneCheckTopicIntentInput): Promise<SceneTopicIntentCheckResult> {
+    const artifacts = await listSceneArtifacts(input.projectDir);
+    const topicBriefArtifact = artifacts.find((artifact) => artifact.id === 'topic_gate.topic_brief');
+    let topicBriefMarkdown = input.topicBriefMarkdown?.trim() ?? '';
+    if (!topicBriefMarkdown && !topicBriefArtifact) {
+      throw new SceneForgeServiceError(
+        'UNSUPPORTED_STAGE_DRAFT',
+        '请先填写选题描述，再确认选题描述。',
+      );
+    }
+    if (!topicBriefMarkdown && topicBriefArtifact) {
+      topicBriefMarkdown = (await readSceneArtifact(input.projectDir, topicBriefArtifact.id)).content;
+    }
+    const sourceMaterialArtifact = artifacts.find((artifact) => artifact.id === 'source_intake.source_material');
+    const adaptationSelectionArtifact = artifacts.find(
+      (artifact) => artifact.id === 'source_intake.adaptation_selection',
+    );
+    const sourceMaterialMarkdown = sourceMaterialArtifact
+      ? (await readSceneArtifact(input.projectDir, sourceMaterialArtifact.id)).content
+      : null;
+    const adaptationSelectionMarkdown = adaptationSelectionArtifact
+      ? (await readSceneArtifact(input.projectDir, adaptationSelectionArtifact.id)).content
+      : null;
+
+    const result = await this.checkTopicIntentWithLlm({
+      topicBriefMarkdown,
+      sourceMaterialMarkdown,
+      adaptationSelectionMarkdown,
+    });
+
+    await writeSceneArtifact({
+      projectDir: input.projectDir,
+      stage: 'topic_gate',
+      artifactKey: result.artifactKey,
+      kind: 'final',
+      title: '创作意图检查',
+      content: result.content,
+      role: 'support_direction_asset',
+      coreAsset: false,
+      readableByDownstream: false,
+    });
+
+    return result;
   }
 
   async analyzeTopicGate(input: SceneAnalyzeTopicGateInput): Promise<SceneTopicGateAnalysisResult> {

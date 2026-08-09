@@ -5,7 +5,10 @@ import path from 'node:path';
 import { createSceneForgeProject } from '../electron/sceneforge/project/scene-project-file';
 import { SceneForgeService } from '../electron/sceneforge/service';
 import { listSceneArtifacts, readSceneArtifact } from '../electron/sceneforge/artifacts/scene-artifact-store';
-import { buildTopicAnalysisMarkdown } from '../src/sceneforge/lib/scene-hitl-markdown';
+import {
+  buildTopicAnalysisMarkdown,
+  buildTopicIntentCheckMarkdown,
+} from '../src/sceneforge/lib/scene-hitl-markdown';
 import { buildTopicBriefMarkdown } from '../src/sceneforge/lib/topic-gate-form';
 
 let tmpDir: string;
@@ -20,6 +23,47 @@ afterEach(async () => {
 });
 
 describe('SceneForge topic gate llm analysis', () => {
+  it('requires a saved topic brief before intent check', async () => {
+    const service = new SceneForgeService({
+      checkTopicIntent: vi.fn(),
+    });
+
+    await expect(service.checkTopicIntent({ projectDir: tmpDir })).rejects.toThrow(
+      '请先填写选题描述，再确认选题描述。',
+    );
+  });
+
+  it('writes intent_check artifact after checker succeeds', async () => {
+    const service = new SceneForgeService({
+      checkTopicIntent: vi.fn().mockResolvedValue({
+        artifactKey: 'intent_check',
+        content: buildTopicIntentCheckMarkdown({
+          status: 'pass',
+          summary: '当前创作意图已经足够明确，可以进入选题分析。',
+          intentHash: 'deadbeef',
+          missingDimensions: [],
+          suggestions: [],
+        }),
+      }),
+    });
+
+    const result = await service.checkTopicIntent({
+      projectDir: tmpDir,
+      topicBriefMarkdown: buildTopicBriefMarkdown({
+        intent: '桥段重构',
+        totalDurationSec: 20,
+        segmentDurationSec: 10,
+      }),
+    });
+
+    expect(result.artifactKey).toBe('intent_check');
+    const artifacts = await listSceneArtifacts(tmpDir);
+    expect(artifacts.some((artifact) => artifact.id === 'topic_gate.intent_check')).toBe(true);
+    const persisted = await readSceneArtifact(tmpDir, 'topic_gate.intent_check');
+    expect(persisted.content).toContain('status: pass');
+    expect(persisted.content).toContain('summary: 当前创作意图已经足够明确，可以进入选题分析。');
+  });
+
   it('requires a saved topic brief before analysis', async () => {
     const service = new SceneForgeService({
       analyzeTopicGate: vi.fn(),

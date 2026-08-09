@@ -28,13 +28,34 @@ const DESIGN_FORBIDDEN_POSTER_MARKERS = [
   'character poster',
 ] as const;
 
-const SCENE_PROMPTS_REQUIRED_MARKERS = [
-  '主场景空间布局',
-  '角色默认站位',
-  '核心道具位置',
-  '道具状态矩阵',
-  '出入口与运动轴线',
+const SCENE_PROMPTS_REQUIRED_GROUPS = [
+  {
+    label: '主场景空间布局',
+    markers: ['主场景空间布局', '主场景：', '主场景:', '场景空间布局'],
+  },
+  {
+    label: '角色默认站位',
+    markers: ['角色默认站位', '角色站位', '默认站位', '站位：', '站位:'],
+  },
+  {
+    label: '核心道具位置',
+    markers: ['核心道具位置', '关键道具位置', '道具位置'],
+  },
+  {
+    label: '道具状态矩阵',
+    markers: ['道具状态矩阵', '状态矩阵'],
+  },
+  {
+    label: '出入口与运动轴线',
+    markers: ['出入口与运动轴线', '运动轴线'],
+  },
 ] as const;
+
+function listMissingScenePromptMarkers(content: string): string[] {
+  return SCENE_PROMPTS_REQUIRED_GROUPS.filter(
+    (group) => !group.markers.some((marker) => content.includes(marker)),
+  ).map((group) => group.label);
+}
 
 function isFaceMicroExpressionOptional(content: string): boolean {
   const normalized = content.replace(/\s+/g, '');
@@ -209,9 +230,7 @@ export async function validateDesignStage(projectDir: string): Promise<SceneVali
     }
 
     if (artifactKey === 'scene_prompts') {
-      const missingMarkers = SCENE_PROMPTS_REQUIRED_MARKERS.filter(
-        (marker) => !content.includes(marker),
-      );
+      const missingMarkers = listMissingScenePromptMarkers(content);
       if (missingMarkers.length > 0) {
         errors.push({
           code: 'SCENE_DESIGN_SCENE_PROMPTS_MISSING_LAYOUT_MARKERS',

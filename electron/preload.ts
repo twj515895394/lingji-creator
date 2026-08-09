@@ -181,6 +181,9 @@ contextBridge.exposeInMainWorld('electronAPI', {
   ) => ipcRenderer.invoke('sceneforge:get-stage-context', projectDir, stage, options),
   sceneSubmitStageDraft: (input: import('../src/lib/electron-api').SceneSubmitStageDraftInput) =>
     ipcRenderer.invoke('sceneforge:submit-stage-draft', input),
+  sceneCheckTopicIntent: (
+    input: import('../src/lib/electron-api').SceneCheckTopicIntentInput,
+  ) => ipcRenderer.invoke('sceneforge:check-topic-intent', input),
   sceneAnalyzeTopicGate: (
     input: import('../src/lib/electron-api').SceneAnalyzeTopicGateInput,
   ) => ipcRenderer.invoke('sceneforge:analyze-topic-gate', input),

@@ -60,6 +60,49 @@ function countMatches(text: string, pattern: RegExp): number {
   return text.match(pattern)?.length ?? 0;
 }
 
+function isVguBlockStart(line: string): boolean {
+  const normalized = stripInlineMarkdownForParsing(line.trim());
+  return /^(?:#{1,6}\s*)?(?:[-*+]\s*)?(?:vgu_id\s*:\s*)?VGU[-_\s]*0*\d+\b/i.test(normalized);
+}
+
+function extractVguBlocks(text: string): string[] {
+  const lines = text.split('\n');
+  const blocks: string[] = [];
+  let current: string[] = [];
+
+  for (const line of lines) {
+    if (isVguBlockStart(line)) {
+      if (current.length > 0) {
+        blocks.push(current.join('\n').trim());
+      }
+      current = [line];
+      continue;
+    }
+    if (current.length > 0) {
+      current.push(line);
+    }
+  }
+
+  if (current.length > 0) {
+    blocks.push(current.join('\n').trim());
+  }
+  return blocks.filter(Boolean);
+}
+
+function hasVguCoreBinding(block: string): boolean {
+  const normalized = stripInlineMarkdownForParsing(block);
+  const hasBeatBinding =
+    /linked_beat_ids|beat_id|对应\s*beat|对应\s*beats?|覆盖\s*beat|承接\s*beat|beat[_-]?\d+/i.test(
+      normalized,
+    );
+  const hasDurationBinding =
+    /target_duration_seconds|duration|时长/i.test(normalized) ||
+    extractTimeRanges(normalized).length > 0;
+  const hasNarrativeGoal =
+    /narrative[_\s]*goal|叙事目标|叙事重点|叙事意图/i.test(normalized);
+  return hasBeatBinding || hasDurationBinding || hasNarrativeGoal;
+}
+
 const ALLOWED_SEGMENT_DURATIONS = new Set([5, 6, 8, 10, 15]);
 
 function stripInlineMarkdownForParsing(text: string): string {
@@ -240,13 +283,9 @@ export function validateScriptDraftSemantic(content: string): SemanticValidation
     });
   }
 
-  const vguCount = countMatches(videoPlanBody, /(?:###\s*)?VGU[_\s-]?\d+/gi);
-  const videoPlanForLink = stripInlineMarkdownForParsing(videoPlanBody);
-  const hasVguLink =
-    /linked_beat_ids|beat_id|对应\s*beat|target_duration_seconds|duration|时长|narrative\s*goal|叙事目标|continuity\s*focus|action_continuity_focus|emotion_continuity_focus/i.test(
-      videoPlanForLink,
-    );
-  if (vguCount < 2 || !hasVguLink) {
+  const vguBlocks = extractVguBlocks(videoPlanBody);
+  const qualifiedVguCount = vguBlocks.filter((block) => hasVguCoreBinding(block)).length;
+  if (vguBlocks.length < 2 || qualifiedVguCount < 2) {
     issues.push({
       code: 'SCRIPT_VIDEO_PLAN_TOO_THIN',
       message: 'video_generation_unit_plan 需至少包含 2 个 VGU，并说明 beat 对应或时长/叙事目标。',

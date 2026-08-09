@@ -14,6 +14,7 @@
 
 输出时请确保：
 
+- `script_draft` 是中文主导正文；除 section 键名、`beat_id` / `vgu_id` 和少量字段名外，不要把 narrative、beat 标题、script_body 或 handoff 写成英文
 - `story_beats` 中至少有 3 个 `beat_id`
 - `segment_strategy` 明确写出 `segment_duration_seconds` 与各段 `segment_time_range`
 - `video_generation_unit_plan` 至少有 2 个 VGU，并说明 beat 对应或时长/叙事目标，同时写出 `pacing_profile` 与 `shot_density_hint`

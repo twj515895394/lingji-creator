@@ -14,8 +14,56 @@ export const SEGMENT_DURATION_OPTIONS: Array<{ value: TopicBriefFormValues['segm
 
 const SEGMENT_SET = new Set([5, 6, 8, 10, 15]);
 
+function normalizeTopicIntent(intent: string): string {
+  return intent
+    .replace(/\r\n/g, '\n')
+    .split('\n')
+    .map((line) => line.trim())
+    .join('\n')
+    .trim();
+}
+
+export function createTopicIntentHash(intent: string): string {
+  const normalized = normalizeTopicIntent(intent);
+  return createStableHash(normalized);
+}
+
+function createStableHash(input: string): string {
+  let hash = 2166136261;
+  for (let index = 0; index < input.length; index += 1) {
+    hash ^= input.charCodeAt(index);
+    hash = Math.imul(hash, 16777619);
+  }
+  return (hash >>> 0).toString(16).padStart(8, '0');
+}
+
+export function createTopicBriefHash(values: TopicBriefFormValues): string {
+  const normalizedIntent = normalizeTopicIntent(values.intent);
+  const totalDurationSec =
+    values.totalDurationSec != null && Number.isFinite(values.totalDurationSec) && values.totalDurationSec > 0
+      ? Math.round(values.totalDurationSec)
+      : 0;
+  return createStableHash(
+    JSON.stringify({
+      intent: normalizedIntent,
+      totalDurationSec,
+      segmentDurationSec: values.segmentDurationSec,
+    }),
+  );
+}
+
+export function isTopicBriefFormComplete(values: TopicBriefFormValues): boolean {
+  return Boolean(
+    normalizeTopicIntent(values.intent) &&
+      values.totalDurationSec != null &&
+      Number.isFinite(values.totalDurationSec) &&
+      values.totalDurationSec > 0 &&
+      SEGMENT_SET.has(values.segmentDurationSec),
+  );
+}
+
 export function buildTopicBriefMarkdown(values: TopicBriefFormValues): string {
-  const intent = values.intent.trim() || '（待补充创作意图）';
+  const intent = normalizeTopicIntent(values.intent) || '（待补充创作意图）';
   const total =
     values.totalDurationSec != null && values.totalDurationSec > 0
       ? String(Math.round(values.totalDurationSec))
@@ -49,7 +97,7 @@ go
 
 export function parseTopicBriefForm(markdown: string): TopicBriefFormValues {
   const intentMatch = markdown.match(/##\s*创作意图\s*\n([\s\S]*?)(?=\n##\s|$)/i);
-  const intent = (intentMatch?.[1] ?? '').trim().replace(/^（待补充.*）$/, '');
+  const intent = normalizeTopicIntent(intentMatch?.[1] ?? '').replace(/^（待补充.*）$/, '');
 
   const totalMatch = markdown.match(/total_duration_sec:\s*(\d+)/i);
   const totalParsed = totalMatch ? Number.parseInt(totalMatch[1], 10) : null;

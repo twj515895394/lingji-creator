@@ -25,6 +25,11 @@ export interface SceneAnalyzeTopicGateIpcInput {
   projectDir: string;
 }
 
+export interface SceneCheckTopicIntentIpcInput {
+  projectDir: string;
+  topicBriefMarkdown?: string;
+}
+
 export interface SceneUpdateStyleSelectionIpcInput {
   projectDir: string;
   selectedStyleProfileId: string | null;

@@ -3,6 +3,7 @@ import { SceneForgeService, type SceneSubmitStageDraftInput } from './service';
 import type { SceneApprovalPolicy, SceneStageId } from './types';
 import type {
   SceneAnalyzeTopicGateIpcInput,
+  SceneCheckTopicIntentIpcInput,
   SceneGetStageContextOptions,
   SceneRunStageIpcInput,
   SceneStageRunProgressPayload,
@@ -47,6 +48,13 @@ export function registerSceneForgeIpc(): void {
     'sceneforge:submit-stage-draft',
     async (_event, input: SceneSubmitStageDraftInput) => {
       return service.submitStageDraft(input);
+    },
+  );
+
+  ipcMain.handle(
+    'sceneforge:check-topic-intent',
+    async (_event, input: SceneCheckTopicIntentIpcInput) => {
+      return service.checkTopicIntent(input);
     },
   );
 

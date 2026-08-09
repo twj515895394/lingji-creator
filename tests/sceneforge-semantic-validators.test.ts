@@ -207,6 +207,50 @@ describe('semantic support stage validators', () => {
       expect(result.issues.some((i) => i.code === 'SCRIPT_BOUNDARY_LOCK_TOO_THIN')).toBe(true);
     });
 
+    it('accepts VGU blocks with narrative_goal and natural beat coverage prose', () => {
+      const content = [
+        '# 剧本草案',
+        '',
+        '## segment_strategy',
+        'segment_duration_seconds: 10',
+        'segment_time_range: 0s-10s',
+        '',
+        '## story_beats',
+        '- beat_id: beat_01',
+        '  beat_summary: 对峙启动。',
+        '- beat_id: beat_02',
+        '  beat_summary: crossover 升级。',
+        '- beat_id: beat_03',
+        '  beat_summary: 防守失衡。',
+        '- beat_id: beat_04',
+        '  beat_summary: 360 度扣篮。',
+        '- beat_id: beat_05',
+        '  beat_summary: 全场欢腾。',
+        '',
+        '## video_generation_unit_plan',
+        '- VGU1: narrative_goal = 覆盖beat_01至beat_03，从对峙经 crossover 升级到防守者失衡； pacing_profile = balanced； shot_density_hint = 中密度。',
+        '- VGU2: narrative_goal = 覆盖beat_04至beat_05，从360度扣篮执行到观众欢腾结局； pacing_profile = kinetic； shot_density_hint = 高密度。',
+        '',
+        '## script_body',
+        '## 段一',
+        '旁白：夜场灯光压下来，球声先响起。',
+        '动作：进攻者持球停顿，先观察，再连续变向。',
+        '',
+        '## 段二',
+        '旁白：一瞬间突破，情绪被扣篮点燃。',
+        '动作：防守者失衡倒地，进攻者跃起完成旋转扣篮。',
+        '',
+        '## performance_handoff',
+        '- 停顿、视线锁定、变向节奏和扣篮前蓄力都要明确保留。',
+        '',
+        '## storyboard_handoff',
+        '- 镜头需保持球、站位与动作连续性，扣篮后立刻切观众反应。',
+        '- boundary_lock: shots_must_not_cross_segment_boundary',
+      ].join('\n');
+
+      expect(validateScriptDraftSemantic(content).ok).toBe(true);
+    });
+
     it('accepts paren-english suffixes and common chinese translation variants from real cooking drafts', () => {
       const content = [
         '# 剧本草案 (Script Draft)',

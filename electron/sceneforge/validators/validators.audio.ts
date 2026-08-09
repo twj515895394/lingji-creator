@@ -46,9 +46,19 @@ function hasDialogueOrNarrationPlanMarker(content: string): boolean {
 function declaresNoDialogueOrNarration(content: string): boolean {
   return (
     /无台词/u.test(content) ||
+    /无对话/u.test(content) ||
+    /无对话或旁白/u.test(content) ||
     /无对白/u.test(content) ||
     /无旁白/u.test(content) ||
+    /无人声/u.test(content) ||
+    /无人声状态/u.test(content) ||
+    /无口播/u.test(content) ||
+    /无人声漂移/u.test(content) ||
+    /无指定说话者/u.test(content) ||
+    /人声(?:元素)?锁定为空/u.test(content) ||
+    /维持无人声状态/u.test(content) ||
     /no[\s-]?dialogue/i.test(content) ||
+    /no[\s-]?voice/i.test(content) ||
     /non[\s-]?verbal\s+vocal/i.test(content) ||
     /纯视觉叙事/u.test(content) ||
     /(?:全片|本片).{0,12}无台词/u.test(content)

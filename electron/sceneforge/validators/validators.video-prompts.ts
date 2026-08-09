@@ -79,6 +79,8 @@ const VIDEO_PROP_STATE_FALLBACK_PATTERN =
 const VIDEO_DIRECTOR_PROMPT_MIN_CHARS = 120;
 const COPY_BLOCK_ID_PATTERN = /^pack-\d{2}$/;
 const VIDEO_COPY_BLOCK_PATTERN = /<copy-block\b([^>]*)>([\s\S]*?)<\/copy-block>/gi;
+const VIDEO_STORYBOARD_ARROW_JARGON_PATTERN =
+  /红色人物运动箭头|蓝色摄影机运动箭头|Color\s*Legend|箭头图例|箭头规则/i;
 
 type SceneCopyBlock = {
   type: string;
@@ -391,6 +393,16 @@ export async function validateVideoPromptsStage(projectDir: string): Promise<Sce
       message: 'Video Prompts 缺少“控制故事板 Pack XX / 风格故事板 Pack XX”主辅参考声明。',
       suggestion:
         '请在【故事板关键帧参考规则】中显式写出控制/风格故事板 Pack 的主辅参考（可用「将“控制故事板 Pack XX”作为…主参考；将“风格故事板 Pack XX”作为…辅助参考」，或用「动作与连续性主参考: 控制故事板 Pack XX」「渲染与氛围辅助参考: 风格故事板 Pack XX」）。',
+    });
+  }
+
+  if (VIDEO_STORYBOARD_ARROW_JARGON_PATTERN.test(cnPack)) {
+    errors.push({
+      code: 'SCENE_VIDEO_PROMPTS_STORYBOARD_ARROW_JARGON_DRIFT',
+      level: 'error',
+      message: 'Video Prompts 仍直接携带 storyboard 控制板术语（红蓝箭头 / Color Legend），未转写成视频运动描述。',
+      suggestion:
+        '请把这类表述改写为“人物运动方向”“动作路径”“摄像机运动方向”“固定机位”“镜头轻微跟随”等视频模型可执行语言，不要把箭头图例原样写进正式视频提示词。',
     });
   }
 
